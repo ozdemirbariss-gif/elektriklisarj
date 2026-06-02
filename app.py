@@ -30,16 +30,15 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 🔥 YENİ: FIREBASE VERİ TABANI BAĞLANTISI
+# 🔥 FIREBASE VERİ TABANI BAĞLANTISI (GÜNCELLENDİ)
 # ==========================================
-# 🚨 LÜTFEN AŞAĞIDAKİ LİNKİ KENDİ FIREBASE REALTIME DATABASE LİNKİNLE DEĞİŞTİR!
-FIREBASE_DB_URL = "https://sarjbul-turkiye-default-rtdb.europe-west1.firebasedatabase.app/"
+FIREBASE_DB_URL = "https://elektriklisarj-27adb-default-rtdb.europe-west1.firebasedatabase.app/"
 
 def yorum_gonder(istasyon_id, kullanıcı_adı, yorum_metni, durum):
     if kullanıcı_adı and yorum_metni:
         # İstasyon ismini temiz bir veri tabanı yoluna dönüştürüyoruz
         clean_id = "".join(c for c in istasyon_id if c.isalnum() or c in (' ', '_', '-')).rstrip()
-        url = f"{https://console.firebase.google.com/project/elektriklisarj-27adb/database/elektriklisarj-27adb-default-rtdb/data/~2Fyorumlar/{clean_id}.json"
+        url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
         yeni_yorum = {
             "kullanici": kullanıcı_adı,
             "yorum": yorum_metni,
@@ -169,7 +168,7 @@ if mesafeli_liste:
                     st.markdown(f"[↗️ Google Maps]({harita_linki})")
                 
                 st.markdown("---")
-                # 💬 YENİ: YORUM FORMU ALANI
+                # 💬 YORUM FORMU ALANI
                 st.write("💬 **İstasyon Durum Bildirimi Yap**")
                 nick = st.text_input("Adınız / Nickname", key=f"nick_{index}", max_chars=15)
                 yorum_txt = st.text_area("İstasyon şu an ne durumda?", key=f"txt_{index}", max_chars=100, placeholder="Örn: Cihaz çalışıyor, sıra yok.")
@@ -182,7 +181,7 @@ if mesafeli_liste:
                     else:
                         st.error("Lütfen adınızı ve yorumunuzu doldurun.")
                 
-                # 📜 YENİ: GEÇMİŞ YORUMLARI LİSTELEME
+                # 📜 GEÇMİŞ YORUMLARI LİSTELEME
                 st.write("📢 **Son Sürücü Yorumları:**")
                 gelen_yorumlar = yorumlari_getir(row['isim'])
                 if gelen_yorumlar:
