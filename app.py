@@ -5,6 +5,7 @@ import math
 import requests
 import folium
 from streamlit_folium import st_folium
+from datetime import datetime
 
 # --- 📱 MOBİL VE PWA AYARLARI ---
 st.set_page_config(
@@ -28,6 +29,41 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# ==========================================
+# 🔥 YENİ: FIREBASE VERİ TABANI BAĞLANTISI
+# ==========================================
+# 🚨 LÜTFEN AŞAĞIDAKİ LİNKİ KENDİ FIREBASE REALTIME DATABASE LİNKİNLE DEĞİŞTİR!
+FIREBASE_DB_URL = "https://sarjbul-turkiye-default-rtdb.europe-west1.firebasedatabase.app/"
+
+def yorum_gonder(istasyon_id, kullanıcı_adı, yorum_metni, durum):
+    if kullanıcı_adı and yorum_metni:
+        # İstasyon ismini temiz bir veri tabanı yoluna dönüştürüyoruz
+        clean_id = "".join(c for c in istasyon_id if c.isalnum() or c in (' ', '_', '-')).rstrip()
+        url = f"{https://console.firebase.google.com/project/elektriklisarj-27adb/database/elektriklisarj-27adb-default-rtdb/data/~2Fyorumlar/{clean_id}.json"
+        yeni_yorum = {
+            "kullanici": kullanıcı_adı,
+            "yorum": yorum_metni,
+            "durum": durum,
+            "tarih": datetime.now().strftime("%d.%m.%Y %H:%M")
+        }
+        try:
+            requests.post(url, json=yeni_yorum, timeout=5)
+            return True
+        except Exception:
+            pass
+    return False
+
+def yorumlari_getir(istasyon_id):
+    clean_id = "".join(c for c in istasyon_id if c.isalnum() or c in (' ', '_', '-')).rstrip()
+    url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
+    try:
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200 and res.json():
+            return res.json().values()
+    except Exception:
+        pass
+    return []
+
 # Mesafe Hesaplama Formülü
 def mesafe_hesapla(lat1, lon1, lat2, lon2):
     R = 6371.0
@@ -39,7 +75,7 @@ def mesafe_hesapla(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
-# OSRM API Kullanarak İki Nokta Arası Rota Koordinatlarını Çeken Fonksiyon
+# OSRM Rota Motoru
 def rota_koordinatlarini_al(start_lat, start_lon, end_lat, end_lon):
     url = f"http://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}?overview=full&geometries=geojson"
     try:
@@ -47,7 +83,6 @@ def rota_koordinatlarini_al(start_lat, start_lon, end_lat, end_lon):
         if response.status_code == 200:
             data = response.json()
             if data.get("routes"):
-                # OSRM GeoJSON formatında [Boylam, Enlem] döner, Folium için bunu [Enlem, Boylam] yapacağız
                 coords = data["routes"][0]["geometry"]["coordinates"]
                 return [[lat, lon] for lon, lat in coords]
     except Exception:
@@ -89,7 +124,6 @@ maks_menzil = (kalan_enerji / tuketim) * 100.0
 st.info(f"🔋 **Mevcut Şarjınızla Gidebileceğiniz Maksimum Menzil: {maks_menzil:.1f} km**")
 st.markdown("---")
 
-# Tıklanan rotayı hafızada tutmak için Streamlit Session State kullanıyoruz
 if "secilen_istasyon_koordinat" not in st.session_state:
     st.session_state.secilen_istasyon_koordinat = None
 
@@ -116,41 +150,58 @@ if mesafeli_liste:
         
     st.markdown("---")
     
-    # EKRAN DÜZENİ (Sol: Harita, Sağ: Liste)
     sol_panel, sag_panel = st.columns([2, 1])
     
     with sag_panel:
-        st.subheader("📋 İstasyon Listesi")
+        st.subheader("📋 İstasyon Listesi & Sosyal Durum")
         for index, row in df_filtrelenmis.head(10).iterrows():
             durum_emoji = "✅" if "Ulaşılabilir" in row['Menzil Durumu'] else "❌"
             with st.expander(f"{durum_emoji} {row['isim']} ({row['Mesafe (km)']} km)"):
-                st.write(f"**Menzil Durumu:** {row['Menzil Durumu']}")
-                st.caption(f"⚡ Hız: {row['hiz']}")
-                st.write(f"📍 {row['adres']}")
+                st.caption(f"⚡ Hız: {row['hiz']} | 📍 {row['adres']}")
                 
-                # 🛠️ YENİ: Uygulama içi Rota Butonu
-                if st.button("🗺️ Haritada Rotayı Çiz", key=f"btn_{index}"):
-                    st.session_state.secilen_istasyon_koordinat = (row['enlem'], row['boylam'])
-                    st.rerun()
-                    
-                harita_linki = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={row['enlem']},{row['boylam']}"
-                st.markdown(f"[↗️ Dışarıda Aç (Google Maps)]({harita_linki})")
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if st.button("🗺️ Rotayı Çiz", key=f"btn_{index}"):
+                        st.session_state.secilen_istasyon_koordinat = (row['enlem'], row['boylam'])
+                        st.rerun()
+                with col_btn2:
+                    harita_linki = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={row['enlem']},{row['boylam']}"
+                    st.markdown(f"[↗️ Google Maps]({harita_linki})")
+                
+                st.markdown("---")
+                # 💬 YENİ: YORUM FORMU ALANI
+                st.write("💬 **İstasyon Durum Bildirimi Yap**")
+                nick = st.text_input("Adınız / Nickname", key=f"nick_{index}", max_chars=15)
+                yorum_txt = st.text_area("İstasyon şu an ne durumda?", key=f"txt_{index}", max_chars=100, placeholder="Örn: Cihaz çalışıyor, sıra yok.")
+                ist_durum = st.radio("İstasyon Çalışıyor mu?", ["Sorunsuz Gözüküyor 👍", "Arızalı / Kapalı 👎"], key=f"rad_{index}")
+                
+                if st.button("Yorumu Paylaş", key=f"send_{index}"):
+                    if yorum_gonder(row['isim'], nick, yorum_txt, ist_durum):
+                        st.success("Yorumunuz başarıyla paylaşıldı!")
+                        st.rerun()
+                    else:
+                        st.error("Lütfen adınızı ve yorumunuzu doldurun.")
+                
+                # 📜 YENİ: GEÇMİŞ YORUMLARI LİSTELEME
+                st.write("📢 **Son Sürücü Yorumları:**")
+                gelen_yorumlar = yorumlari_getir(row['isim'])
+                if gelen_yorumlar:
+                    for y in gelen_yorumlar:
+                        st.markdown(f"**👤 {y['kullanici']}** ({y['tarih']}) -> *{y['durum']}*")
+                        st.caption(f"> {y['yorum']}")
+                else:
+                    st.caption("Bu istasyona henüz yorum yapılmamış. İlk yorumu sen yap!")
                 
     with sol_panel:
         st.subheader("🗺️ İnteraktif Navigasyon Haritası")
-        st.caption("🔵 Mavi: Menzil Dahili | 🔴 Kırmızı: Menzil Dışı | 🟢 Yeşil Ev: Sizin Konumunuz")
-        
-        # 🎨 Premium Görünüm İçin Haritayı Oluşturuyoruz (Cartodb Dark Matter - Gece Modu)
         m = folium.Map(location=[user_lat, user_lon], zoom_start=11, tiles="Cartodb dark_matter")
         
-        # Kullanıcının Kendi Konumuna Yeşil Ev İkonu Koyuyoruz
         folium.Marker(
             [user_lat, user_lon],
             popup="Sizin Konumunuz",
             icon=folium.Icon(color="green", icon="home", prefix="fa")
         ).add_to(m)
         
-        # İstasyon Pinlerini Haritaya Ekleme
         for _, row in df_filtrelenmis.iterrows():
             folium.CircleMarker(
                 location=[row['enlem'], row['boylam']],
@@ -162,27 +213,13 @@ if mesafeli_liste:
                 popup=f"{row['isim']} ({row['Mesafe (km)']} km)"
             ).add_to(m)
             
-        # 🗺️ Eğer Kullanıcı Bir İstasyona Tıkladıysa Rotayı Çiziyoruz
         if st.session_state.secilen_istasyon_koordinat:
             dest_lat, dest_lon = st.session_state.secilen_istasyon_koordinat
             rota_noktalari = rota_koordinatlarini_al(user_lat, user_lon, dest_lat, dest_lon)
-            
             if rota_noktalari:
-                # Haritaya kalın, parlayan bir rota çizgisi ekliyoruz
-                folium.PolyLine(
-                    locations=rota_noktalari,
-                    color="#00FFCC",  # Neon Turkuaz Rota Çizgisi
-                    weight=5,
-                    opacity=0.8
-                ).add_to(m)
+                folium.PolyLine(locations=rota_noktalari, color="#00FFCC", weight=5, opacity=0.8).add_to(m)
+                folium.Marker([dest_lat, dest_lon], icon=folium.Icon(color="white", icon="flag", prefix="fa")).add_to(m)
                 
-                # Hedef istasyonun üzerine özel bir bitiş bayrağı pini koyuyoruz
-                folium.Marker(
-                    [dest_lat, dest_lon],
-                    icon=folium.Icon(color="white", icon="flag", prefix="fa")
-                ).add_to(m)
-                
-        # Haritayı Ekrana Çizdir
         st_folium(m, width="100%", height=500, key="main_map")
 else:
     st.warning("⚠️ Belirttiğiniz kriterlere uygun şarj istasyonu bulunamadı.")
