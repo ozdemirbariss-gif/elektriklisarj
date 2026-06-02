@@ -4,7 +4,29 @@ import json
 import math
 
 # Sayfa Yapılandırması
-st.set_page_config(page_title="⚡ ŞarjBul - Türkiye", page_icon="⚡", layout="wide")
+# --- 📱 MOBİL VE PWA AYARLARI ---
+st.set_page_config(
+    page_title="⚡ ŞarjBul - Türkiye", 
+    page_icon="⚡", 
+    layout="wide",
+    initial_sidebar_state="collapsed"  # Mobilde yan menüyü gizleyerek ekranı genişletir
+)
+
+# Telefonlarda tarayıcı çubuğunu gizlemek ve tam ekran uygulama hissi vermek için HTML enjekte ediyoruz
+st.markdown("""
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        /* Mobil cihazlarda haritanın ve butonların daha rahat tıklanması için boşlukları optimize ediyoruz */
+        .block-container {
+            padding-top: 2rem !important;
+            padding-bottom: 2rem !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 # Mesafe Hesaplama Formülü
 def mesafe_hesapla(lat1, lon1, lat2, lon2):
