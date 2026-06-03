@@ -67,7 +67,7 @@ st.markdown("""
         }
         .stButton>button:hover { border-color: #34c759; color: #34c759; }
         
-        /* Google / Apple Maps Link Butonu Tasarımı */
+        /* Harici Navigasyon Link Butonu Tasarımı */
         .nav-link-btn {
             display: flex;
             align-items: center;
@@ -102,7 +102,6 @@ def zaman_oncesi(tarih_str):
     try:
         eski_zaman = datetime.strptime(tarih_str, "%d.%m %H:%M")
         simdi = datetime.now()
-        # Yıl bilgisini eşitleme (Firebase sadece gün.ay saat:dakika tuttuğu için)
         eski_zaman = eski_zaman.replace(year=simdi.year)
         
         fark = simdi - eski_zaman
@@ -175,19 +174,27 @@ st.markdown('<div class="ana-baslik">Elektirikli Şarj Bul</div>', unsafe_allow_
 st.markdown('<div class="alt-baslik">Konumunuza en yakın aktif istasyon listelenir.</div>', unsafe_allow_html=True)
 
 # ==========================================
-# 📡 1. ÖNERİ: GERÇEK ZAMANLI CANLI GPS ENTEGRASYONU
+# 📡 GERÇEK ZAMANLI GPS ENTEGRASYONU VE GÜVENLİK DUVARI
 # ==========================================
-# Tarayıcıdan kullanıcının anlık koordinatlarını talep eder
-konum_verisi = get_geolocation()
+try:
+    konum_verisi = get_geolocation()
+except Exception:
+    st.error("Sistem konum servislerine erişemedi. Lütfen tarayıcınızın adres çubuğundaki kilit ikonuna basarak konum izni verdiğinizden emin olun.")
+    st.stop()
 
 if not konum_verisi:
-    st.info("Canlı konumunuza erişebilmek için lütfen GPS izni verin.")
+    st.info("Konumunuza en yakın istasyonu bulabilmemiz için lütfen çıkan panelden konum izni verin.")
+    st.markdown("""
+        <div style='text-align:center; color:#636366; font-size:12px; margin-top:20px; line-height:1.4;'>
+            Not: Eğer Instagram, X veya WhatsApp içerisinden giriş yaptıysanız, uygulama içi tarayıcılar GPS iznini engelleyebilir. Lütfen bağlantıyı kopyalayıp doğrudan Safari veya Chrome üzerinde açın.
+        </div>
+    """, unsafe_allow_html=True)
     st.stop()
 
 user_lat = konum_verisi['coords']['latitude']
 user_lon = konum_verisi['coords']['longitude']
 
-# MENZİL HESAPLAMA (Minimalist panel)
+# MENZİL HESAPLAMA (Minimalist Panel)
 with st.expander("Menzil Durumu", expanded=False):
     col_b1, col_b2, col_b3 = st.columns(3)
     with col_b1: batarya = st.number_input("Batarya (kWh)", value=60)
@@ -224,14 +231,11 @@ if en_uygun_istasyon:
     </div>
     """, unsafe_allow_html=True)
     
-    # Eylem Butonları
+    # Eylem Alanı
     c1, c2 = st.columns(2)
     
     with c1:
-        # ==========================================
-        # 2. ÖNERİ: DOĞRUDAN CİHAZ NAVİGASYONUNA FÜZELEME
-        # ==========================================
-        # Kullanıcının işletim sistemine göre en doğru navigasyon linkini oluşturur
+        # Cihazın kendi harici harita uygulamasını canlı tetikleyen doğrudan link
         g_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={en_uygun_istasyon['enlem']},{en_uygun_istasyon['boylam']}&travelmode=driving"
         st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>', unsafe_allow_html=True)
         
@@ -247,12 +251,9 @@ if en_uygun_istasyon:
             
             st.markdown("---")
             
-            # ==========================================
-            # 3. ÖNERİ: DİNAMİK GÖRECELİ ZAMAN DAMGASI LİSTELEME
-            # ==========================================
+            # Dinamik Zaman Damgalı Son Yorumlar
             yorumlar = yorumlari_getir(en_uygun_istasyon['isim'])
             if yorumlar:
-                # Son eklenen yorumları en yeni üste gelecek şekilde listeler
                 for y in sorted(yorumlar, key=lambda x: x.get('tarih', ''), reverse=True)[:3]:
                     zaman_etiketi = zaman_oncesi(y.get('tarih', ''))
                     st.markdown(f"**{y['kullanici']}** ({y['durum']}) • *{zaman_etiketi}*")
