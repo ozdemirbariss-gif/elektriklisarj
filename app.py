@@ -3,23 +3,22 @@ import pandas as pd
 import json
 import math
 import requests
-import folium
-from streamlit_folium import st_folium
 from datetime import datetime
+from streamlit_js_eval import get_geolocation
 
 # --- 📱 MOBİL VE MİNİMALİST SAYFA AYARLARI ---
 st.set_page_config(
-    page_title="Elektrikli Şarj Bul", 
+    page_title="Elektirikli Şarj Bul", 
     page_icon="⚡", 
     layout="centered", 
     initial_sidebar_state="collapsed"
 )
 
-# 🎨 Gelişmiş CSS: Tamamen ortalanmış, emojisiz, premium tipografi ve kart tasarımı
+# 🎨 PREMIUM CSS: Tamamen ortalanmış, emojisiz, OLED dostu tipografi ve kart tasarımı
 st.markdown("""
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        /* Sidebar'ı tamamen görünmez yapıyoruz */
+        /* Kenar çubuklarını tamamen devre dışı bırakma */
         [data-testid="stSidebar"] { display: none !important; }
         [data-testid="collapsedControl"] { display: none !important; }
         
@@ -64,12 +63,30 @@ st.markdown("""
             background-color: #1c1c1e; 
             color: #ffffff; 
             border: 1px solid #2c2c2e;
+            width: 100%;
         }
         .stButton>button:hover { border-color: #34c759; color: #34c759; }
+        
+        /* Google / Apple Maps Link Butonu Tasarımı */
+        .nav-link-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            border-radius: 12px; 
+            height: 46px; 
+            font-weight: 600; 
+            background-color: #1c1c1e; 
+            color: #ffffff !important; 
+            border: 1px solid #2c2c2e;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        .nav-link-btn:hover { border-color: #34c759; color: #34c759 !important; }
     </style>
 """, unsafe_allow_html=True)
 
-# Mesafe Hesaplama
+# İki Nokta Arası Mesafe Hesaplama
 def mesafe_hesapla(lat1, lon1, lat2, lon2):
     R = 6371.0
     phi1 = math.radians(lat1)
@@ -80,20 +97,36 @@ def mesafe_hesapla(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
-# OSRM Rota Motoru
-@st.cache_data(show_spinner=False)
-def rota_koordinatlarini_al(start_lat, start_lon, end_lat, end_lon):
-    url = f"http://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}?overview=full&geometries=geojson"
+# Dinamik Göreceli Zaman Damgası Hesaplayıcı
+def zaman_oncesi(tarih_str):
     try:
-        response = requests.get(url, timeout=2)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get("routes"):
-                return [[lat, lon] for lon, lat in data["routes"][0]["geometry"]["coordinates"]]
-    except: pass
-    return None
+        eski_zaman = datetime.strptime(tarih_str, "%d.%m %H:%M")
+        simdi = datetime.now()
+        # Yıl bilgisini eşitleme (Firebase sadece gün.ay saat:dakika tuttuğu için)
+        eski_zaman = eski_zaman.replace(year=simdi.year)
+        
+        fark = simdi - eski_zaman
+        saniye = fark.total_seconds()
+        
+        if saniye < 0:
+            return "Az önce"
+        
+        dakika = int(saniye / 60)
+        saat = int(dakika / 60)
+        gun = int(saat / 24)
+        
+        if dakika < 1:
+            return "Az önce"
+        elif dakika < 60:
+            return f"{dakika} dakika önce"
+        elif saat < 24:
+            return f"{saat} saat önce"
+        else:
+            return f"{gun} gün önce"
+    except:
+        return tarih_str
 
-# Firebase Veri Tabanı Bağlantısı
+# Firebase Bağlantısı
 FIREBASE_DB_URL = "https://elektriklisarj-27adb-default-rtdb.europe-west1.firebasedatabase.app/"
 
 def yorum_gonder(istasyon_id, kullanici, yorum_metni, durum):
@@ -104,7 +137,7 @@ def yorum_gonder(istasyon_id, kullanici, yorum_metni, durum):
             "kullanici": kullanici, "yorum": yorum_metni, "durum": durum,
             "tarih": datetime.now().strftime("%d.%m %H:%M")
         }
-        try: requests.post(url, json=yeni_yorum, timeout=2); return True
+        try: requests.post(url, json=yeni_yorum, timeout=3); return True
         except: pass
     return False
 
@@ -112,7 +145,7 @@ def istasyon_arizali_mi(istasyon_id):
     clean_id = "".join(c for c in istasyon_id if c.isalnum() or c in (' ', '_', '-')).rstrip()
     url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
     try:
-        res = requests.get(url, timeout=2)
+        res = requests.get(url, timeout=3)
         if res.status_code == 200 and res.json():
             bildirimler = list(res.json().values())
             if "Arızalı" in bildirimler[-1].get("durum", ""):
@@ -124,7 +157,7 @@ def yorumlari_getir(istasyon_id):
     clean_id = "".join(c for c in istasyon_id if c.isalnum() or c in (' ', '_', '-')).rstrip()
     url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
     try:
-        res = requests.get(url, timeout=2)
+        res = requests.get(url, timeout=3)
         if res.status_code == 200 and res.json(): return res.json().values()
     except: pass
     return []
@@ -137,15 +170,24 @@ except FileNotFoundError:
     st.error("Veri dosyası bulunamadı.")
     st.stop()
 
-# --- 📍 SABİT KULLANICI KONUMU (Görünmez Arka Plan) ---
-user_lat = 38.4192
-user_lon = 27.1287
-
-# --- 🚀 ANA EKRAN GEOMETRİSİ ---
+# --- 🚀 BAŞLIK ALANI ---
 st.markdown('<div class="ana-baslik">Elektirikli Şarj Bul</div>', unsafe_allow_html=True)
 st.markdown('<div class="alt-baslik">Konumunuza en yakın aktif istasyon listelenir.</div>', unsafe_allow_html=True)
 
-# MENZİL HESAPLAMA (Göz yormayan ince çizgiler)
+# ==========================================
+# 📡 1. ÖNERİ: GERÇEK ZAMANLI CANLI GPS ENTEGRASYONU
+# ==========================================
+# Tarayıcıdan kullanıcının anlık koordinatlarını talep eder
+konum_verisi = get_geolocation()
+
+if not konum_verisi:
+    st.info("Canlı konumunuza erişebilmek için lütfen GPS izni verin.")
+    st.stop()
+
+user_lat = konum_verisi['coords']['latitude']
+user_lon = konum_verisi['coords']['longitude']
+
+# MENZİL HESAPLAMA (Minimalist panel)
 with st.expander("Menzil Durumu", expanded=False):
     col_b1, col_b2, col_b3 = st.columns(3)
     with col_b1: batarya = st.number_input("Batarya (kWh)", value=60)
@@ -153,11 +195,8 @@ with st.expander("Menzil Durumu", expanded=False):
     with col_b3: tuketim = st.number_input("Tüketim", value=17.0)
 maks_menzil = ((batarya * (sarj_yuzdesi / 100.0)) / tuketim) * 100.0
 
-if "harita_acik" not in st.session_state:
-    st.session_state.harita_acik = False
-
 # ==========================================
-# 🧠 TÜM TÜRKİYE'DE EN YAKIN AKTİF İSTASYONU BULMA
+# 🧠 TÜM TÜRKİYE'DE MUTLAK EN YAKIN AKTİF İSTASYONU BULMA
 # ==========================================
 en_uygun_istasyon = None
 en_yakin_mesafe = float('inf')
@@ -165,7 +204,6 @@ en_yakin_mesafe = float('inf')
 for ist in istasyonlar_verisi:
     km = mesafe_hesapla(user_lat, user_lon, ist["enlem"], ist["boylam"])
     
-    # Çap sınırı yok; menzil yeten ve arızalı olmayan mutlak en yakın istasyon seçilir
     if km <= maks_menzil:
         if km < en_yakin_mesafe:
             if not istasyon_arizali_mi(ist["isim"]):
@@ -174,26 +212,9 @@ for ist in istasyonlar_verisi:
                 en_uygun_istasyon["Mesafe"] = round(km, 1)
 
 # ==========================================
-# 🎯 DİNAMİK KAPALI HARİTA KATMANI
+# 🎯 REY-BAN / APPLE SADELİĞİNDE TEK ÖNERİ KARTI
 # ==========================================
 if en_uygun_istasyon:
-    if st.session_state.harita_acik:
-        m = folium.Map(location=[(user_lat + en_uygun_istasyon['enlem'])/2, (user_lon + en_uygun_istasyon['boylam'])/2], zoom_start=13, tiles="Cartodb dark_matter")
-        folium.Marker([user_lat, user_lon], icon=folium.Icon(color="green", icon="user", prefix="fa")).add_to(m)
-        folium.Marker([en_uygun_istasyon['enlem'], en_uygun_istasyon['boylam']], icon=folium.Icon(color="blue", icon="flash", prefix="fa")).add_to(m)
-        
-        rota = rota_koordinatlarini_al(user_lat, user_lon, en_uygun_istasyon['enlem'], en_uygun_istasyon['boylam'])
-        if rota:
-            folium.PolyLine(locations=rota, color="#00FFCC", weight=6, opacity=0.9).add_to(m)
-            
-        st_folium(m, width="100%", height=300, key=f"map_{en_uygun_istasyon['isim']}")
-        
-        if st.button("Haritayı Kapat"):
-            st.session_state.harita_acik = False
-            st.rerun()
-        st.markdown("---")
-
-    # 👑 PREMIUM TEK ÖNERİ KARTI
     st.markdown(f"""
     <div class="oneri-kart">
         <div class="istasyon-isim">{en_uygun_istasyon['isim']}</div>
@@ -203,16 +224,18 @@ if en_uygun_istasyon:
     </div>
     """, unsafe_allow_html=True)
     
-    # Eylem Alanı
-    c1, c2, c3 = st.columns(3)
+    # Eylem Butonları
+    c1, c2 = st.columns(2)
+    
     with c1:
-        if st.button("Rotayı Çiz"):
-            st.session_state.harita_acik = True
-            st.rerun()
+        # ==========================================
+        # 2. ÖNERİ: DOĞRUDAN CİHAZ NAVİGASYONUNA FÜZELEME
+        # ==========================================
+        # Kullanıcının işletim sistemine göre en doğru navigasyon linkini oluşturur
+        g_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={en_uygun_istasyon['enlem']},{en_uygun_istasyon['boylam']}&travelmode=driving"
+        st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>', unsafe_allow_html=True)
+        
     with c2:
-        g_link = f"http://googleusercontent.com/maps.google.com/5{en_uygun_istasyon['enlem']},{en_uygun_istasyon['boylam']}"
-        st.markdown(f"[<button style='width:100%; border:none; padding:12px; border-radius:12px; background-color:#1c1c1e; color:white; font-weight:600; height:46px; cursor:pointer; border: 1px solid #2c2c2e;'>Google Maps</button>]({g_link})", unsafe_allow_html=True)
-    with c3:
         with st.popover("Durum Bildir"):
             st.write("İstasyon Durumu")
             nick = st.text_input("Kullanıcı Adı", max_chars=12)
@@ -223,10 +246,17 @@ if en_uygun_istasyon:
                     st.rerun()
             
             st.markdown("---")
+            
+            # ==========================================
+            # 3. ÖNERİ: DİNAMİK GÖRECELİ ZAMAN DAMGASI LİSTELEME
+            # ==========================================
             yorumlar = yorumlari_getir(en_uygun_istasyon['isim'])
             if yorumlar:
+                # Son eklenen yorumları en yeni üste gelecek şekilde listeler
                 for y in sorted(yorumlar, key=lambda x: x.get('tarih', ''), reverse=True)[:3]:
-                    st.markdown(f"**{y['kullanici']}** ({y['durum']}): {y['yorum']}")
+                    zaman_etiketi = zaman_oncesi(y.get('tarih', ''))
+                    st.markdown(f"**{y['kullanici']}** ({y['durum']}) • *{zaman_etiketi}*")
+                    st.caption(f"> {y['yorum']}")
             else:
                 st.caption("Bildirim bulunmuyor.")
 else:
