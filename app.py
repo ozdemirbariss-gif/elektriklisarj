@@ -174,15 +174,21 @@ st.markdown('<div class="ana-baslik">Elektirikli Şarj Bul</div>', unsafe_allow_
 st.markdown('<div class="alt-baslik">Konumunuza en yakın aktif istasyon listelenir.</div>', unsafe_allow_html=True)
 
 # ==========================================
-# 📡 GERÇEK ZAMANLI GPS ENTEGRASYONU VE GÜVENLİK DUVARI
+# 📡 GÜVENLİ VE HATA KORUMALI GPS ENTEGRASYONU
 # ==========================================
+user_lat, user_lon = None, None
+
 try:
     konum_verisi = get_geolocation()
+    # KeyError ihtimaline karşı veri yapısını güvenli bir şekilde kontrol ediyoruz
+    if konum_verisi and 'coords' in konum_verisi:
+        user_lat = konum_verisi['coords'].get('latitude')
+        user_lon = konum_verisi['coords'].get('longitude')
 except Exception:
-    st.error("Sistem konum servislerine erişemedi. Lütfen tarayıcınızın adres çubuğundaki kilit ikonuna basarak konum izni verdiğinizden emin olun.")
-    st.stop()
+    pass
 
-if not konum_verisi:
+# Eğer konum bilgisi alınamadıysa veya eksik geldiyse uygulamayı çökertmek yerine yönlendiriyoruz
+if not user_lat or not user_lon:
     st.info("Konumunuza en yakın istasyonu bulabilmemiz için lütfen çıkan panelden konum izni verin.")
     st.markdown("""
         <div style='text-align:center; color:#636366; font-size:12px; margin-top:20px; line-height:1.4;'>
@@ -190,9 +196,6 @@ if not konum_verisi:
         </div>
     """, unsafe_allow_html=True)
     st.stop()
-
-user_lat = konum_verisi['coords']['latitude']
-user_lon = konum_verisi['coords']['longitude']
 
 # MENZİL HESAPLAMA (Minimalist Panel)
 with st.expander("Menzil Durumu", expanded=False):
@@ -219,7 +222,7 @@ for ist in istasyonlar_verisi:
                 en_uygun_istasyon["Mesafe"] = round(km, 1)
 
 # ==========================================
-# 🎯 REY-BAN / APPLE SADELİĞİNDE TEK ÖNERİ KARTI
+# 🎯 PREMIUM TEK ÖNERİ KARTI
 # ==========================================
 if en_uygun_istasyon:
     st.markdown(f"""
@@ -235,7 +238,7 @@ if en_uygun_istasyon:
     c1, c2 = st.columns(2)
     
     with c1:
-        # Cihazın kendi harici harita uygulamasını canlı tetikleyen doğrudan link
+        # Harici harita uygulamasını tetikleyen doğrudan link
         g_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={en_uygun_istasyon['enlem']},{en_uygun_istasyon['boylam']}&travelmode=driving"
         st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>', unsafe_allow_html=True)
         
