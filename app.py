@@ -7,32 +7,25 @@ import folium
 from streamlit_folium import st_folium
 from datetime import datetime
 
-# --- 📱 MOBİL VE KULLANICI DOSTU SAYFA AYARLARI ---
+# --- 📱 MOBIL VE PREMIUM TASARIM AYARLARI ---
 st.set_page_config(
-    page_title="⚡ ŞarjBul", 
+    page_title="⚡ ŞarjBul Pro", 
     page_icon="⚡", 
-    layout="wide",
+    layout="centered", # Ekranı daraltarak mobil/kapalı mimari hissi verir
     initial_sidebar_state="collapsed"
 )
 
-# Arayüzü daha modern ve temiz yapmak için özel CSS dokunuşları
+# Arayüzü tamamen sadeleştiren modern CSS dokunuşları
 st.markdown("""
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        .block-container {
-            padding: 1rem !important;
-        }
-        .stButton>button {
-            width: 100%;
-            border-radius: 8px;
-        }
-        div.stDataFrame {
-            width: 100%;
-        }
+        .block-container { padding: 1rem !important; max-width: 600px !important; }
+        .stButton>button { border-radius: 12px; height: 45px; font-weight: bold; }
+        .card { background-color: #1e1e1e; padding: 15px; border-radius: 12px; margin-bottom: 10px; border-left: 5px solid #00FFCC; }
     </style>
 """, unsafe_allow_html=True)
 
-# İki nokta arası mesafe hesaplama
+# Mesafe Hesaplama
 def mesafe_hesapla(lat1, lon1, lat2, lon2):
     R = 6371.0
     phi1 = math.radians(lat1)
@@ -43,11 +36,12 @@ def mesafe_hesapla(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
-# OSRM Rota Hesaplayıcı
+# OSRM Hızlı Rota Motoru (Sislenme problemini önlemek için optimize edildi)
+@st.cache_data(show_spinner=False)
 def rota_koordinatlarini_al(start_lat, start_lon, end_lat, end_lon):
     url = f"http://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}?overview=full&geometries=geojson"
     try:
-        response = requests.get(url, timeout=3)
+        response = requests.get(url, timeout=2)
         if response.status_code == 200:
             data = response.json()
             if data.get("routes"):
@@ -65,27 +59,20 @@ def yorum_gonder(istasyon_id, kullanici, yorum_metni, durum):
         clean_id = "".join(c for c in istasyon_id if c.isalnum() or c in (' ', '_', '-')).rstrip()
         url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
         yeni_yorum = {
-            "kullanici": kullanici,
-            "yorum": yorum_metni,
-            "durum": durum,
+            "kullanici": kullanici, "yorum": yorum_metni, "durum": durum,
             "tarih": datetime.now().strftime("%d.%m %H:%M")
         }
-        try:
-            requests.post(url, json=yeni_yorum, timeout=3)
-            return True
-        except:
-            pass
+        try: requests.post(url, json=yeni_yorum, timeout=2); return True
+        except: pass
     return False
 
 def yorumlari_getir(istasyon_id):
     clean_id = "".join(c for c in istasyon_id if c.isalnum() or c in (' ', '_', '-')).rstrip()
     url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
     try:
-        res = requests.get(url, timeout=3)
-        if res.status_code == 200 and res.json():
-            return res.json().values()
-    except:
-        pass
+        res = requests.get(url, timeout=2)
+        if res.status_code == 200 and res.json(): return res.json().values()
+    except: pass
     return []
 
 # --- 📁 VERİ YÜKLEME ---
@@ -96,119 +83,116 @@ except FileNotFoundError:
     st.error("⚠️ Veri dosyası bulunamadı!")
     st.stop()
 
-# --- 📍 SOL MENÜ (Gerekli Ayarlar) ---
-st.sidebar.header("⚙️ Ayarlar")
+# --- ⚙️ ARKA PLAN AYARLARI (GİZLİ MENÜ) ---
 user_lat = st.sidebar.number_input("Enlem", value=38.4192, format="%.4f")
 user_lon = st.sidebar.number_input("Boylam", value=27.1287, format="%.4f")
 max_mesafe = st.sidebar.slider("Arama Çapı (KM)", min_value=5, max_value=200, value=50)
-
 hiz_secenekleri = ["Standart (AC)", "Hızlı (DC)", "Ultra Hızlı (DC)"]
 secilen_hizlar = st.sidebar.multiselect("Şarj Hızı", hiz_secenekleri, default=hiz_secenekleri)
 
-# --- 🚀 ANA SAYFA ---
-st.title("⚡ ŞarjBul")
+# --- 🚀 ANA EKRAN BAŞLANGICI ---
+st.title("⚡ ŞarjBul Türkiye")
 
-# Kolaylaştırılmış Menzil Paneli
-st.write("### 🚗 Menzil Filtresi")
-col_b1, col_b2, col_b3 = st.columns(3)
-with col_b1:
-    batarya = st.number_input("Batarya (kWh)", min_value=10, max_value=120, value=60)
-with col_b2:
-    sarj_yuzdesi = st.slider("Mevcut Şarj %", min_value=1, max_value=100, value=40)
-with col_b3:
-    tuketim = st.number_input("Tüketim (kWh/100km)", min_value=10.0, max_value=25.0, value=17.0)
+# 🚗 MENZİL DURUM KATMANI
+with st.expander("🔋 Araç ve Menzil Ayarları", expanded=True):
+    col1, col2 = st.columns(2)
+    with col1:
+        batarya = st.number_input("Batarya Kapasitesi (kWh)", value=60, step=5)
+        tuketim = st.number_input("Ortalama Tüketim (kWh/100km)", value=17.0, step=1.0)
+    with col2:
+        sarj_yuzdesi = st.slider("Mevcut Şarj %", min_value=1, max_value=100, value=40)
+    
+    kalan_enerji = batarya * (sarj_yuzdesi / 100.0)
+    maks_menzil = (kalan_enerji / tuketim) * 100.0
+    st.info(f"📍 **Mevcut şarj ile maksimum menziliniz: {maks_menzil:.1f} km**")
 
-kalan_enerji = batarya * (sarj_yuzdesi / 100.0)
-maks_menzil = (kalan_enerji / tuketim) * 100.0
-st.info(f"🔋 **Gidebileceğiniz kalan menzil: {maks_menzil:.1f} km**")
+# Eylem Hafızası (Session State)
+if "aktif_istasyon" not in st.session_state:
+    st.session_state.aktif_istasyon = None
 
-# Hafıza Yönetimi
-if "secilen_istasyon" not in st.session_state:
-    st.session_state.secilen_istasyon = None
-
-# İstasyon Filtreleme
-mesafeli_liste = []
+# İstasyonları Hesaplama ve Filtreleme
+uygun_istasyonlar = []
 for ist in istasyonlar_verisi:
     km = mesafe_hesapla(user_lat, user_lon, ist["enlem"], ist["boylam"])
     if km <= max_mesafe and ist["hiz"] in secilen_hizlar:
         ist_kopyasi = ist.copy()
-        ist_kopyasi["Mesafe (km)"] = round(km, 1)
-        ist_kopyasi["Ulasilabilir"] = km <= maks_menzil
-        ist_kopyasi["renk"] = "blue" if km <= maks_menzil else "red"
-        mesafeli_liste.append(ist_kopyasi)
+        ist_kopyasi["Mesafe"] = round(km, 1)
+        ist_kopyasi["Menzil_Yeterli"] = km <= maks_menzil
+        uygun_istasyonlar.append(ist_kopyasi)
 
-if mesafeli_liste:
-    df_filtrelenmis = pd.DataFrame(mesafeli_liste).sort_values(by="Mesafe (km)")
+df = pd.DataFrame(uygun_istasyonlar).sort_values(by="Mesafe")
+
+# ==========================================
+# 🗺️ KAPALI MİMARİ: DİNAMİK HARİTA KATMANI
+# ==========================================
+# Kullanıcı bir emir verene kadar bu katman tamamen gizlidir!
+if st.session_state.aktif_istasyon:
+    st.write("### 🗺️ Canlı Navigasyon Ekranı")
     
+    ist_isim, ilat, ilon, ikm = st.session_state.aktif_istasyon
+    
+    # Haritayı tam hedefe odaklanmış olarak başlatıyoruz
+    m = folium.Map(location=[(user_lat + ilat)/2, (user_lon + ilon)/2], zoom_start=12, tiles="Cartodb dark_matter")
+    
+    # Kullanıcı ve Hedef Pinleri
+    folium.Marker([user_lat, user_lon], popup="Buradasınız", icon=folium.Icon(color="green", icon="user", prefix="fa")).add_to(m)
+    folium.Marker([ilat, ilon], popup=ist_isim, icon=folium.Icon(color="blue", icon="flash", prefix="fa")).add_to(m)
+    
+    # Anlık Rota Çizimi
+    rota = rota_koordinatlarini_al(user_lat, user_lon, ilat, ilon)
+    if rota:
+        folium.PolyLine(locations=rota, color="#00FFCC", weight=6, opacity=0.9).add_to(m)
+        
+    # Haritayı ekrana bas (Donma ve sislenmeyi engellemek için özelleştirilmiş key)
+    st_folium(m, width="100%", height=350, key=f"map_{ist_isim}")
+    
+    if st.button("❌ Haritayı Kapat ve Listeye Dön"):
+        st.session_state.aktif_istasyon = None
+        st.rerun()
     st.markdown("---")
+
+# --- 📋 KULLANICI DOSTU SADE İSTASYON LİSTESİ ---
+st.write(f"### 📍 Yakındaki İstasyonlar ({len(df.head(5))} Adet)")
+
+for index, row in df.head(5).iterrows():
+    emoji = "🟢 Ulaşılabilir" if row['Menzil_Yeterli'] else "🔴 Menzil Yetersiz"
     
-    # İKİ PANEL (Sol: Harita, Sağ: Liste)
-    sol_panel, sag_panel = st.columns([1.8, 1.2])
-    
-    with sol_panel:
-        st.write("### 🗺️ Harita")
-        m = folium.Map(location=[user_lat, user_lon], zoom_start=12, tiles="Cartodb dark_matter")
+    # Şık, kapalı kart tasarımı
+    with st.container():
+        st.markdown(f"""
+        <div class="card">
+            <h4>{row['isim']}</h4>
+            <p style='margin: 0; color: #bbbbbb;'>⚡ Hız: {row['hiz']} | 📏 Mesafe: {row['Mesafe']} km</p>
+            <p style='margin: 5px 0 0 0; font-size: 13px; color: {'#00FFCC' if row['Menzil_Yeterli'] else '#FF5555'};'><strong>{emoji}</strong></p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        # Kullanıcı Pini
-        folium.Marker([user_lat, user_lon], popup="Buradasınız", icon=folium.Icon(color="green", icon="user", prefix="fa")).add_to(m)
-        
-        # İstasyon Pinleri
-        for _, row in df_filtrelenmis.iterrows():
-            folium.CircleMarker(
-                location=[row['enlem'], row['boylam']],
-                radius=6, color=row['renk'], fill=True, fill_color=row['renk'], fill_opacity=0.7,
-                popup=f"{row['isim']} ({row['Mesafe (km)']} km)"
-            ).add_to(m)
-            
-        # Rota Çizimi
-        if st.session_state.secilen_istasyon:
-            slat, slon = st.session_state.secilen_istasyon
-            rota = rota_koordinatlarini_al(user_lat, user_lon, slat, slon)
-            if rota:
-                folium.PolyLine(locations=rota, color="#00FFCC", weight=5, opacity=0.8).add_to(m)
-                folium.Marker([slat, slon], icon=folium.Icon(color="white", icon="flag", prefix="fa")).add_to(m)
-                
-        st_folium(m, width="100%", height=450, key="map")
-        
-    with sag_panel:
-        st.write(f"### 📋 İstasyonlar ({len(df_filtrelenmis)} Adet)")
-        
-        # En yakın 5 istasyonu sade listeleme
-        for index, row in df_filtrelenmis.head(5).iterrows():
-            emoji = "🔵" if row['Ulasilabilir'] else "🔴"
-            with st.expander(f"{emoji} {row['isim']} ({row['Mesafe (km)']} km)"):
-                st.write(f"ℹ️ **Adres:** {row['adres']}")
-                st.write(f"⚡ **Hız/Tip:** {row['hiz']}")
-                
-                # Eylemler için sade butonlar
-                c1, c2 = st.columns(2)
-                with c1:
-                    if st.button("🗺️ Rotayı Göster", key=f"r_{index}"):
-                        st.session_state.secilen_istasyon = (row['enlem'], row['boylam'])
+        # Kartın hemen altındaki temiz kontrol butonları
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            if st.button("🗺️ Rotayı Çiz", key=f"route_{index}"):
+                # Kullanıcı emir verdi: Harita katmanını tetikliyoruz
+                st.session_state.aktif_istasyon = (row['isim'], row['enlem'], row['boylam'], row['Mesafe'])
+                st.rerun()
+        with c2:
+            g_link = f"http://googleusercontent.com/maps.google.com/3{row['enlem']},{row['boylam']}"
+            st.markdown(f"[<button style='width:100%; border:none; padding:10px; border-radius:12px; background-color:#2e2e2e; color:white; font-weight:bold; height:45px; cursor:pointer;'>↗️ Google</button>]({g_link})", unsafe_allow_html=True)
+        with c3:
+            with st.popover("💬 Durum"):
+                st.write("💬 **Durum Bildir**")
+                nick = st.text_input("Nick", key=f"n_{index}", max_chars=12)
+                yorum_txt = st.text_input("Yorum", key=f"t_{index}")
+                durum = st.radio("Durum", ["Çalışıyor 👍", "Arızalı 👎"], key=f"d_{index}", horizontal=True)
+                if st.button("Gönder", key=f"s_{index}"):
+                    if yorum_gonder(row['isim'], nick, yorum_txt, durum):
+                        st.success("Paylaşıldı!")
                         st.rerun()
-                with c2:
-                    g_link = f"https://www.google.com/maps/dir/?api=1&destination={row['enlem']},{row['boylam']}"
-                    st.markdown(f"[<button style='width:100%; border:none; padding:6px; border-radius:8px; background-color:#2e2e2e; color:white; cursor:pointer;'>↗️ Google Maps</button>]({g_link})", unsafe_allow_html=True)
                 
-                # 💬 Sosyal Alanı Sadeleştirme (İç içe expander ile gizledik)
-                with st.container():
-                    st.markdown("---")
-                    with st.expander("💬 Sürücü Yorumları & Durum Bildir bildir"):
-                        nick = st.text_input("Nick", key=f"n_{index}", max_chars=12)
-                        yorum_txt = st.text_input("Durum nedir?", key=f"t_{index}", placeholder="Örn: Çalışıyor, boş.")
-                        durum = st.radio("Durum", ["Çalışıyor 👍", "Arızalı 👎"], key=f"d_{index}", horizontal=True)
-                        
-                        if st.button("Gönder", key=f"s_{index}"):
-                            if yorum_gonder(row['isim'], nick, yorum_txt, durum):
-                                st.success("Yayınlandı!")
-                                st.rerun()
-                        
-                        # Geçmiş yorumları oku
-                        yorumlar = yorumlari_getir(row['isim'])
-                        if yorumlar:
-                            for y in yorumlar:
-                                st.markdown(f"**{y['kullanici']}** ({y['durum']}): {y['yorum']}")
-                        else:
-                            st.caption("Yorum yok.")
-else:
-    st.warning("İstasyon bulunamadı.")
+                st.markdown("---")
+                st.write("📢 **Son Bildirimler:**")
+                yorumlar = yorumlari_getir(row['isim'])
+                if yorumlar:
+                    for y in yorumlar:
+                        st.markdown(f"**{y['kullanici']}** ({y['durum']}): {y['yorum']}")
+                else:
+                    st.caption("Bildirim yok.")
