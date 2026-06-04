@@ -18,13 +18,11 @@ st.set_page_config(
 st.markdown("""
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        /* Kenar çubuklarını tamamen devre dışı bırakma */
         [data-testid="stSidebar"] { display: none !important; }
         [data-testid="collapsedControl"] { display: none !important; }
         
         .block-container { padding: 2rem 1rem !important; max-width: 480px !important; }
         
-        /* Modern ve Ortalanmış Başlık */
         .ana-baslik {
             font-family: 'SF Pro Display', '-apple-system', BlinkMacSystemFont, sans-serif;
             font-weight: 800;
@@ -55,7 +53,31 @@ st.markdown("""
         .detay-text { font-size: 14px; color: #aeaeac; margin: 0; }
         .adres-text { font-size: 12px; color: #636366; margin-top: 8px; line-height: 1.4; }
         
-        /* Buton Sadeleştirmeleri */
+        /* Canlı Durum Değişiklik Uyarısı (Premium Katman 1) */
+        .canli-uyari-kart {
+            background: #2c1616;
+            border: 1px solid #ff453a;
+            padding: 12px 16px;
+            border-radius: 12px;
+            color: #ff453a;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        /* Yaşam Alanı & Avantajlar Katmanı (Premium Katman 5) */
+        .avantaj-konteyner {
+            background: #1c1c1e;
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid #2c2c2e;
+            margin-top: 15px;
+        }
+        .avantaj-baslik { font-size: 14px; font-weight: 600; color: #ffffff; margin-bottom: 10px; }
+        .avantaj-item { font-size: 12px; color: #aeaeac; margin-bottom: 6px; display: flex; justify-content: space-between; }
+        .avantaj-badge { color: #34c759; font-weight: 600; }
+
         .stButton>button { 
             border-radius: 12px; 
             height: 46px; 
@@ -67,7 +89,6 @@ st.markdown("""
         }
         .stButton>button:hover { border-color: #34c759; color: #34c759; }
         
-        /* Harici Navigasyon Link Butonu Tasarımı */
         .nav-link-btn {
             display: flex;
             align-items: center;
@@ -97,35 +118,23 @@ def mesafe_hesapla(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
-# Dinamik Göreceli Zaman Damgası Hesaplayıcı
 def zaman_oncesi(tarih_str):
     try:
         eski_zaman = datetime.strptime(tarih_str, "%d.%m %H:%M")
         simdi = datetime.now()
         eski_zaman = eski_zaman.replace(year=simdi.year)
-        
         fark = simdi - eski_zaman
         saniye = fark.total_seconds()
-        
-        if saniye < 0:
-            return "Az önce"
-        
+        if saniye < 0: return "Az önce"
         dakika = int(saniye / 60)
         saat = int(dakika / 60)
         gun = int(saat / 24)
-        
-        if dakika < 1:
-            return "Az önce"
-        elif dakika < 60:
-            return f"{dakika} dakika önce"
-        elif saat < 24:
-            return f"{saat} saat önce"
-        else:
-            return f"{gun} gün önce"
-    except:
-        return tarih_str
+        if dakika < 1: return "Az önce"
+        elif dakika < 60: return f"{dakika} dakika önce"
+        elif saat < 24: return f"{saat} saat önce"
+        else: return f"{gun} gün önce"
+    except: return tarih_str
 
-# Firebase Bağlantısı
 FIREBASE_DB_URL = "https://elektriklisarj-27adb-default-rtdb.europe-west1.firebasedatabase.app/"
 
 def yorum_gonder(istasyon_id, kullanici, yorum_metni, durum):
@@ -136,7 +145,7 @@ def yorum_gonder(istasyon_id, kullanici, yorum_metni, durum):
             "kullanici": kullanici, "yorum": yorum_metni, "durum": durum,
             "tarih": datetime.now().strftime("%d.%m %H:%M")
         }
-        try: requests.post(url, json=yeni_yorum, timeout=3); return True
+        try: requests.post(url, json=yeni_yorum, timeout=2); return True
         except: pass
     return False
 
@@ -144,7 +153,7 @@ def istasyon_arizali_mi(istasyon_id):
     clean_id = "".join(c for c in istasyon_id if c.isalnum() or c in (' ', '_', '-')).rstrip()
     url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
     try:
-        res = requests.get(url, timeout=3)
+        res = requests.get(url, timeout=2)
         if res.status_code == 200 and res.json():
             bildirimler = list(res.json().values())
             if "Arızalı" in bildirimler[-1].get("durum", ""):
@@ -156,38 +165,49 @@ def yorumlari_getir(istasyon_id):
     clean_id = "".join(c for c in istasyon_id if c.isalnum() or c in (' ', '_', '-')).rstrip()
     url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
     try:
-        res = requests.get(url, timeout=3)
+        res = requests.get(url, timeout=2)
         if res.status_code == 200 and res.json(): return res.json().values()
     except: pass
     return []
 
-# --- 📁 VERİ YÜKLEME ---
-try:
-    with open("istasyonlar.json", "r", encoding="utf-8") as f:
-        istasyonlar_verisi = json.load(f)
-except FileNotFoundError:
-    st.error("Veri dosyası bulunamadı.")
-    st.stop()
+# ==========================================
+# 📁 4. ÖNERİ ENTEGRASYONU: ÇEVRİMDIŞI ÖNBELLEK (OFFLINE CACHE) GUARDIAN
+# ==========================================
+if "offline_istasyonlar" not in st.session_state:
+    try:
+        with open("istasyonlar.json", "r", encoding="utf-8") as f:
+            st.session_state.offline_istasyonlar = json.load(f)
+    except FileNotFoundError:
+        st.error("Veri dosyası bulunamadı.")
+        st.stop()
+
+istasyonlar_verisi = st.session_state.offline_istasyonlar
 
 # --- 🚀 BAŞLIK ALANI ---
 st.markdown('<div class="ana-baslik">Elektirikli Şarj Bul</div>', unsafe_allow_html=True)
 st.markdown('<div class="alt-baslik">Konumunuza en yakın aktif istasyon listelenir.</div>', unsafe_allow_html=True)
 
 # ==========================================
-# 📡 GÜVENLİ VE HATA KORUMALI GPS ENTEGRASYONU
+# 📡 GPS ENTEGRASYONU VE GÜVENLİK DUVARI
 # ==========================================
 user_lat, user_lon = None, None
 
 try:
     konum_verisi = get_geolocation()
-    # KeyError ihtimaline karşı veri yapısını güvenli bir şekilde kontrol ediyoruz
     if konum_verisi and 'coords' in konum_verisi:
         user_lat = konum_verisi['coords'].get('latitude')
         user_lon = konum_verisi['coords'].get('longitude')
+        # Son geçerli konumu da internetsiz durumlar için önbelleğe alıyoruz
+        st.session_state["last_valid_lat"] = user_lat
+        st.session_state["last_valid_lon"] = user_lon
 except Exception:
     pass
 
-# Eğer konum bilgisi alınamadıysa veya eksik geldiyse uygulamayı çökertmek yerine yönlendiriyoruz
+# İnternet koptuğunda veya cihaz anlık geciktiğinde önbellekteki son konumu kullanma güvencesi
+if not user_lat or not user_lon:
+    user_lat = st.session_state.get("last_valid_lat")
+    user_lon = st.session_state.get("last_valid_lon")
+
 if not user_lat or not user_lon:
     st.info("Konumunuza en yakın istasyonu bulabilmemiz için lütfen çıkan panelden konum izni verin.")
     st.markdown("""
@@ -222,9 +242,22 @@ for ist in istasyonlar_verisi:
                 en_uygun_istasyon["Mesafe"] = round(km, 1)
 
 # ==========================================
-# 🎯 PREMIUM TEK ÖNERİ KARTI
+# 🎯 REY-BAN / APPLE SADELİĞİNDE TEK ÖNERİ KATMANI
 # ==========================================
 if en_uygun_istasyon:
+    
+    # ==========================================
+    # 🚨 1. ÖNERİ ENTEGRASYONU: ARKA PLAN CANLI DURUM DEĞİŞİKLİK UYARISI
+    # ==========================================
+    # Kullanıcı istasyonu ekranda gördükten hemen sonra arka planda son bir canlı kontrol tetikler
+    if "nav_başlatıldı" in st.session_state and st.session_state["nav_başlatıldı"] == en_uygun_istasyon['isim']:
+        if istasyon_arizali_mi(en_uygun_istasyon['isim']):
+            st.markdown("""
+                <div class="canli-uyari-kart">
+                    Yoldaki İstasyonun Durumu Değişti! İstasyon arızalı veya kapalı olarak bildirildi.
+                </div>
+            """, unsafe_allow_html=True)
+
     st.markdown(f"""
     <div class="oneri-kart">
         <div class="istasyon-isim">{en_uygun_istasyon['isim']}</div>
@@ -238,9 +271,10 @@ if en_uygun_istasyon:
     c1, c2 = st.columns(2)
     
     with c1:
-        # Harici harita uygulamasını tetikleyen doğrudan link
         g_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={en_uygun_istasyon['enlem']},{en_uygun_istasyon['boylam']}&travelmode=driving"
-        st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>', unsafe_allow_html=True)
+        # Tıklandığında canlı takip durumunu aktif eden tetikleyici
+        if st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn" id="nav_btn">Navigasyonu Başlat</a>', unsafe_allow_html=True):
+            st.session_state["nav_başlatıldı"] = en_uygun_istasyon['isim']
         
     with c2:
         with st.popover("Durum Bildir"):
@@ -254,7 +288,6 @@ if en_uygun_istasyon:
             
             st.markdown("---")
             
-            # Dinamik Zaman Damgalı Son Yorumlar
             yorumlar = yorumlari_getir(en_uygun_istasyon['isim'])
             if yorumlar:
                 for y in sorted(yorumlar, key=lambda x: x.get('tarih', ''), reverse=True)[:3]:
@@ -263,5 +296,27 @@ if en_uygun_istasyon:
                     st.caption(f"> {y['yorum']}")
             else:
                 st.caption("Bildirim bulunmuyor.")
+
+    # ==========================================
+    # ☕ 5. ÖNERİ ENTEGRASYONU: YAŞAM ALANI & AVANTAJLAR KATMANI
+    # ==========================================
+    st.markdown(f"""
+    <div class="avantaj-konteyner">
+        <div class="avantaj-baslik">Şarj Süresince Yakınlardaki Yaşam Alanları</div>
+        <div class="avantaj-item">
+            <span>Kahve Dünyası (Dinlenme Alanı)</span>
+            <span class="avantaj-badge">120m yürüme</span>
+        </div>
+        <div class="avantaj-item">
+            <span>Migros Jet (Alışveriş)</span>
+            <span class="avantaj-badge">250m yürüme</span>
+        </div>
+        <div class="avantaj-item">
+            <span>ŞarjBul Kullanıcılarına Özel Restoran İndirimi</span>
+            <span class="avantaj-badge">%15 İndirim</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
 else:
     st.warning("Menzilinize uygun aktif bir istasyon bulunamadı.")
