@@ -468,14 +468,14 @@ for ist in istasyonlar_verisi:
 
 # Mesafeye göre sırala, en yakın 3'ü al
 uygun_istasyonlar.sort(key=lambda x: x["Mesafe"])
-en_yakin_3 = uygun_istasyonlar[:3]
+en_yakin_2 = uygun_istasyonlar[:2]
 
 
 # ==========================================
 # 🎯 KART VE SEÇENEKLERİN GÖSTERİMİ
 # ==========================================
-if en_yakin_3:
-    for sira, istasyon in enumerate(en_yakin_3):
+if en_yakin_2:
+    for sira, istasyon in enumerate(en_yakin_2):
         # İlk kart ana öneri, diğerleri yedek olarak etiketleniyor
         etiket = "🥇 En Yakın İstasyon" if sira == 0 else f"#{sira + 1} Yedek İstasyon"
 
