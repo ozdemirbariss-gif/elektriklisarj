@@ -6,119 +6,117 @@ import requests
 from datetime import datetime
 from streamlit_js_eval import get_geolocation
 
-# --- 📱 MOBİL VE MİNİMALİST SAYFA AYARLARI ---
+# --- 📱 MOBİL VE PREMIUM SAYFA AYARLARI ---
 st.set_page_config(
-    page_title="Elektirikli Şarj Bul", 
-    page_icon="⚡", 
+    page_title="ŞarjBul", 
     layout="centered", 
     initial_sidebar_state="collapsed"
 )
 
-# 🎨 PREMIUM CSS: "Glow & Glassmorphism" Lüks Tasarım Katmanı
+# 🎨 PREMIUM CSS: "Executive White & Navy" Tasarım Katmanı
 st.markdown('''
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        /* Kenar çubuklarını ve Streamlit elementlerini gizleme */
+        /* Standart Streamlit elementlerini gizleme */
         [data-testid="stSidebar"] { display: none !important; }
         [data-testid="collapsedControl"] { display: none !important; }
         [data-testid="stHeader"] { display: none !important; }
         
-        /* Arka Plan: Deep Space Black */
-        .stApp { background-color: #060708 !important; }
-        .block-container { padding: 1.5rem 1rem !important; max-width: 440px !important; }
+        /* Arka Plan: Clean Luxury Light Gray/White */
+        .stApp { background-color: #f8f9fa !important; }
+        .block-container { padding: 2rem 1rem !important; max-width: 440px !important; }
         
-        /* Modern ve Ortalanmış Başlık */
-        .ana-baslik {
-            font-family: 'SF Pro Display', '-apple-system', BlinkMacSystemFont, sans-serif;
-            font-weight: 800;
-            font-size: 26px;
-            letter-spacing: -0.5px;
-            text-align: center;
-            color: #f5f5f7;
-            margin-top: 10px;
-            margin-bottom: 2px;
-        }
-        .alt-baslik {
-            font-family: '-apple-system', sans-serif;
-            font-size: 13px;
-            text-align: center;
-            color: #6c727a;
+        /* 🏛️ BAŞLIK İÇİN LÜKS TABLO MİMARİSİ */
+        .title-table {
+            width: 100%;
+            border-collapse: collapse;
             margin-bottom: 25px;
+            border: 2px solid #0f172a;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
         }
-        
-        /* ✨ GLASSMORPHISM & NEON GLOW PANEL MİMARİSİ */
-        .glass-panel {
-            background: rgba(17, 19, 24, 0.75) !important;
-            backdrop-filter: blur(20px) !important;
-            -webkit-backdrop-filter: blur(20px) !important;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 24px;
-            padding: 24px;
-            margin-bottom: 20px;
-            box-shadow: 0 0 30px rgba(0, 230, 118, 0.05), 0 10px 30px rgba(0,0,0,0.5);
-        }
-        
-        /* İstasyon Detay Metinleri */
-        .istasyon-isim { font-size: 22px; font-weight: 700; color: #f5f5f7; margin: 0 0 6px 0; letter-spacing: -0.3px; }
-        .mesafe-text { 
-            font-size: 15px; 
-            font-weight: 700; 
-            color: #00e676; 
-            margin: 0 0 6px 0; 
-            text-transform: uppercase; 
+        .title-cell {
+            background-color: #0f172a;
+            color: #ffffff;
+            font-family: 'Inter', '-apple-system', sans-serif;
+            font-weight: 800;
+            font-size: 24px;
             letter-spacing: 0.5px;
-            text-shadow: 0 0 10px rgba(0, 230, 118, 0.3);
+            text-align: center;
+            padding: 14px;
+            text-transform: uppercase;
         }
-        .detay-text { font-size: 13px; color: #9aa2ae; margin: 0; }
-        .adres-text { font-size: 12px; color: #6c727a; margin-top: 12px; line-height: 1.4; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 12px; }
-        
-        /* Panel İçi İnce Ayrım Çizgisi */
-        .panel-bolucu {
-            border-top: 1px solid rgba(255, 255, 255, 0.06);
-            margin: 18px 0;
+        .subtitle-cell {
+            background-color: #ffffff;
+            color: #475569;
+            font-family: 'Inter', '-apple-system', sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            text-align: center;
+            padding: 10px;
+            border-top: 1px solid #e2e8f0;
+            letter-spacing: 0.2px;
         }
         
-        /* Yaşam Alanları Tasarımı */
-        .panel-alt-baslik { font-size: 13px; font-weight: 600; color: #f5f5f7; margin-bottom: 12px; letter-spacing: 0.2px; }
-        .avantaj-item { font-size: 12px; color: #9aa2ae; margin-bottom: 8px; display: flex; justify-content: space-between; }
-        .avantaj-badge { color: #00e676; font-weight: 600; }
-        
-        /* Canlı Durum Değişiklik Uyarısı */
-        .canli-uyari-kart {
-            background: rgba(255, 69, 58, 0.1);
-            backdrop-filter: blur(10px);
-            border: 1px solid #ff453a;
-            padding: 12px 16px;
+        /* 💳 EXECUTIVE WHITE & NAVY KART MİMARİSİ */
+        .premium-card {
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            border-top: 5px solid #0f172a !important;
             border-radius: 16px;
-            color: #ff453a;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+            margin-bottom: 20px;
+        }
+        
+        /* Kart İçi Tipografi */
+        .istasyon-isim { font-size: 20px; font-weight: 700; color: #0f172a; margin: 0 0 6px 0; letter-spacing: -0.3px; }
+        .mesafe-text { font-size: 14px; font-weight: 700; color: #1e40af; margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+        .detay-text { font-size: 13px; color: #475569; margin: 0; font-weight: 500; }
+        .adres-text { font-size: 12px; color: #64748b; margin-top: 14px; line-height: 1.5; border-top: 1px solid #f1f5f9; padding-top: 14px; }
+        
+        /* Ayrım Çizgisi ve Alt Alanlar */
+        .panel-bolucu { border-top: 1px solid #f1f5f9; margin: 18px 0; }
+        .panel-alt-baslik { font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+        .avantaj-item { font-size: 12px; color: #475569; margin-bottom: 8px; display: flex; justify-content: space-between; font-weight: 500; }
+        .avantaj-badge { color: #1e40af; font-weight: 700; }
+        
+        /* Canlı Durum Değişiklik Uyarısı (Kurumsal Alarm) */
+        .canli-uyari-kart {
+            background: #fef2f2;
+            border: 1px solid #ef4444;
+            padding: 12px 16px;
+            border-radius: 12px;
+            color: #991b1b;
             font-size: 13px;
             font-weight: 600;
             margin-bottom: 15px;
             text-align: center;
-            box-shadow: 0 0 20px rgba(255, 69, 58, 0.1);
         }
 
-        /* Streamlit Expander (Menzil Paneli) Düzenlemesi */
+        /* Streamlit Elementlerinin Kurumsal Adaptasyonu */
         .streamlit-expanderHeader {
-            background-color: rgba(17, 19, 24, 0.5) !important;
-            backdrop-filter: blur(10px) !important;
-            border: 1px solid rgba(255, 255, 255, 0.05) !important;
-            border-radius: 16px !important;
-            padding: 10px 15px !important;
+            background-color: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 12px !important;
+            padding: 12px 16px !important;
+            color: #0f172a !important;
+            font-weight: 600 !important;
         }
         
-        /* Premium Buton Mimarisi */
+        /* Lacivert Buton Tasarımları */
         .stButton>button { 
-            border-radius: 14px; 
-            height: 48px; 
+            border-radius: 10px; 
+            height: 46px; 
             font-weight: 600; 
-            background-color: rgba(26, 29, 36, 0.8); 
-            color: #f5f5f7; 
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            background-color: #0f172a; 
+            color: #ffffff; 
+            border: 1px solid #0f172a;
             width: 100%;
             transition: all 0.2s ease;
         }
-        .stButton>button:hover { border-color: #00e676; color: #00e676; box-shadow: 0 0 15px rgba(0, 230, 118, 0.15); }
+        .stButton>button:hover { background-color: #1e3a8a; border-color: #1e3a8a; color: #ffffff; box-shadow: 0 4px 12px rgba(30, 58, 138, 0.15); }
         
         /* Navigasyon Link Butonu */
         .nav-link-btn {
@@ -126,24 +124,24 @@ st.markdown('''
             align-items: center;
             justify-content: center;
             text-decoration: none;
-            border-radius: 14px; 
-            height: 48px; 
+            border-radius: 10px; 
+            height: 46px; 
             font-weight: 600; 
-            background-color: rgba(26, 29, 36, 0.8); 
-            color: #f5f5f7 !important; 
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            background-color: #0f172a; 
+            color: #ffffff !important; 
+            border: 1px solid #0f172a;
             box-sizing: border-box;
             font-size: 14px;
             transition: all 0.2s ease;
         }
-        .nav-link-btn:hover { border-color: #00e676; color: #00e676 !important; box-shadow: 0 0 15px rgba(0, 230, 118, 0.15); }
+        .nav-link-btn:hover { background-color: #1e3a8a; border-color: #1e3a8a; color: #ffffff !important; box-shadow: 0 4px 12px rgba(30, 58, 138, 0.15); }
 
-        /* Hızlı Bildirim Buton Düzenlemeleri */
-        .rapor-calisiyor>button { border-color: #00e676 !important; color: #00e676 !important; background: transparent !important; }
-        .rapor-calisiyor>button:hover { background-color: rgba(0, 230, 118, 0.08) !important; }
+        /* Hızlı Durum Bildirim Butonları (Yumuşatılmış Renk Tonları) */
+        .rapor-calisiyor>button { border-color: #2563eb !important; color: #2563eb !important; background: #eff6ff !important; }
+        .rapor-calisiyor>button:hover { background-color: #dbeafe !important; }
         
-        .rapor-arizali>button { border-color: #ff453a !important; color: #ff453a !important; background: transparent !important; }
-        .rapor-arizali>button:hover { background-color: rgba(255, 69, 58, 0.08) !important; }
+        .rapor-arizali>button { border-color: #dc2626 !important; color: #dc2626 !important; background: #fef2f2 !important; }
+        .rapor-arizali>button:hover { background-color: #fee2e2 !important; }
     </style>
 ''', unsafe_allow_html=True)
 
@@ -224,9 +222,19 @@ if "offline_istasyonlar" not in st.session_state:
 
 istasyonlar_verisi = st.session_state.offline_istasyonlar
 
-# --- 🚀 MOBİL BAŞLIK ALANI ---
-st.markdown('<div class="ana-baslik">⚡ ŞarjBul</div>', unsafe_allow_html=True)
-st.markdown('<div class="alt-baslik">En yakın aktif şarj rotanız</div>', unsafe_allow_html=True)
+# ==========================================
+# 🏛️ TABLO İÇİNDE BAŞLIK ALANI
+# ==========================================
+st.markdown('''
+    <table class="title-table">
+        <tr>
+            <td class="title-cell">ŞarjBul</td>
+        </tr>
+        <tr>
+            <td class="subtitle-cell">En yakın aktif şarj rotanız</td>
+        </tr>
+    </table>
+''', unsafe_allow_html=True)
 
 # ==========================================
 # 📡 GPS ENTEGRASYONU VE GÜVENLİK DUVARI
@@ -250,7 +258,7 @@ if not user_lat or not user_lon:
 if not user_lat or not user_lon:
     st.info("Konumunuza en yakın istasyonu bulabilmemiz için lütfen çıkan panelden konum izni verin.")
     st.markdown("""
-        <div style='text-align:center; color:#6c727a; font-size:12px; margin-top:20px; line-height:1.4;'>
+        <div style='text-align:center; color:#64748b; font-size:12px; margin-top:20px; line-height:1.4;'>
             Not: Eğer Instagram, X veya WhatsApp içerisinden giriş yaptıysanız, uygulama içi tarayıcılar GPS iznini engelleyebilir. Lütfen bağlantıyı kopyalayıp doğrudan Safari veya Chrome üzerinde açın.
         </div>
     """, unsafe_allow_html=True)
@@ -259,7 +267,7 @@ if not user_lat or not user_lon:
 # ==========================================
 # 🚗 AKILLI ARAÇ SEÇİM MENÜSÜ
 # ==========================================
-with st.expander("📱 Araç / Menzil Ayarı", expanded=False):
+with st.expander("Araç ve Menzil Ayarları", expanded=False):
     ARAC_KATALOGU = {
         "Tesla Model Y Long Range": {"batarya": 75.0, "tuketim": 16.9},
         "Togg T10X Uzun Menzil": {"batarya": 88.5, "tuketim": 16.9},
@@ -295,19 +303,18 @@ for ist in istasyonlar_verisi:
             en_uygun_istasyon["Mesafe"] = round(km, 1)
 
 # ==========================================
-# 🎯 GLOW & GLASSMORPHISM ENTEGRE PANEL
+# 🎯 EXECUTIVE WHITE & NAVY ENTEGRE PANEL
 # ==========================================
 if en_uygun_istasyon:
     
-    # Canlı Durum Değişiklik Kontrolü
     if "nav_başlatıldı" in st.session_state and st.session_state["nav_başlatıldı"] == en_uygun_istasyon['isim']:
         if istasyon_arizali_mi(en_uygun_istasyon['isim']):
-            st.markdown(f'<div class="canli-uyari-kart">Yoldaki İstasyonun Durumu Değişti! İstasyon arızalı bildirildi.</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="canli-uyari-kart">Yoldaki istasyonun durumu değişti! İstasyon arızalı bildirildi.</div>', unsafe_allow_html=True)
 
-    # PANEL BAŞLANGICI
+    # PREMIUM BEYAZ VE LACİVERT PANEL BAŞLANGICI
     st.markdown(f"""
-    <div class="glass-panel">
-        <div class="mesafe-text">✦ {en_uygun_istasyon['Mesafe']} km uzaklıkta</div>
+    <div class="premium-card">
+        <div class="mesafe-text">{en_uygun_istasyon['Mesafe']} km uzaklıkta</div>
         <div class="istasyon-isim">{en_uygun_istasyon['isim']}</div>
         <div class="detay-text">Şarj Hızı: {en_uygun_istasyon['hiz']}</div>
         <div class="adres-text">{en_uygun_istasyon['adres']}</div>
@@ -315,7 +322,7 @@ if en_uygun_istasyon:
         <div class="panel-alt-baslik">Yakındaki Yaşam Alanları</div>
         <div class="avantaj-item"><span>Kahve Dünyası (Dinlenme)</span><span class="avantaj-badge">120m</span></div>
         <div class="avantaj-item"><span>Migros Jet (Alışveriş)</span><span class="avantaj-badge">250m</span></div>
-        <div class="avantaj-item"><span>ŞarjBul Sürücü Avantajı</span><span class="avantaj-badge">%15 İndirim</span></div>
+        <div class="avantaj-item"><span>Sürücü Avantajı</span><span class="avantaj-badge">%15 İndirim</span></div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -329,7 +336,7 @@ if en_uygun_istasyon:
         
     with c2:
         with st.popover("Durum Bildir"):
-            st.write("Tek Dokunuşla Hızlı Bildir")
+            st.write("Tek dokunuşla hızlı bildirim gönderin")
             col_btn1, col_btn2 = st.columns(2)
             with col_btn1:
                 st.markdown('<div class="rapor-calisiyor">', unsafe_allow_html=True)
@@ -344,9 +351,9 @@ if en_uygun_istasyon:
                 st.markdown('</div>', unsafe_allow_html=True)
             
             st.markdown("---")
-            st.caption("Detay Eklemek İster Misiniz?")
+            st.caption("Detay eklemek ister misiniz?")
             nick = st.text_input("Kullanıcı Adı", max_chars=12, key="inp_nick")
-            yorum_txt = st.text_input("Arıza Notu", key="inp_txt")
+            yorum_txt = st.text_input("Durum Notu", key="inp_txt")
             if st.button("Detaylı Gönder", key="btn_detail"):
                 if yorum_gonder(en_uygun_istasyon['isim'], nick, yorum_txt, "Durum Güncellemesi"): st.rerun()
             
