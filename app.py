@@ -14,55 +14,48 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 🎨 PREMIUM CSS: "Midnight Cyber" Lüks Gece Sürüşü Renk Paleti
+# 🎨 PREMIUM CSS: Tamamen ortalanmış, emojisiz, OLED dostu tipografi ve kart tasarımı
 st.markdown("""
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        /* Kenar çubuklarını ve Streamlit elementlerini gizleme */
         [data-testid="stSidebar"] { display: none !important; }
         [data-testid="collapsedControl"] { display: none !important; }
         
-        /* Arka Plan: Ultra Deep Black (#08090a) */
-        .stApp { background-color: #08090a !important; }
         .block-container { padding: 2rem 1rem !important; max-width: 480px !important; }
         
-        /* Modern ve Ortalanmış Başlık - Apple Silver (#f5f5f7) */
         .ana-baslik {
             font-family: 'SF Pro Display', '-apple-system', BlinkMacSystemFont, sans-serif;
             font-weight: 800;
             font-size: 32px;
             letter-spacing: -0.5px;
             text-align: center;
-            color: #f5f5f7;
+            color: #ffffff;
             margin-bottom: 5px;
         }
         .alt-baslik {
             font-family: '-apple-system', sans-serif;
             font-size: 14px;
             text-align: center;
-            color: #6c727a;
+            color: #888888;
             margin-bottom: 25px;
         }
         
-        /* Cyber Slate Blue Premium Kart Tasarımı (#111318) */
+        /* Premium Kart Tasarımı */
         .oneri-kart { 
-            background: #111318; 
+            background: #161618; 
             padding: 24px; 
             border-radius: 16px; 
-            border: 1px solid #1f242e;
+            border: 1px solid #2c2c2e;
             margin-bottom: 20px; 
-            box-shadow: 0 4px 24px rgba(0,0,0,0.4);
         }
-        .istasyon-isim { font-size: 20px; font-weight: 700; color: #f5f5f7; margin: 0 0 8px 0; }
+        .istasyon-isim { font-size: 20px; font-weight: 700; color: #ffffff; margin: 0 0 8px 0; }
+        .mesafe-text { font-size: 16px; font-weight: 600; color: #34c759; margin: 0 0 4px 0; }
+        .detay-text { font-size: 14px; color: #aeaeac; margin: 0; }
+        .adres-text { font-size: 12px; color: #636366; margin-top: 8px; line-height: 1.4; }
         
-        /* Neon Cyber Green (#00e676) */
-        .mesafe-text { font-size: 16px; font-weight: 600; color: #00e676; margin: 0 0 4px 0; }
-        .detay-text { font-size: 14px; color: #9aa2ae; margin: 0; }
-        .adres-text { font-size: 12px; color: #6c727a; margin-top: 8px; line-height: 1.4; }
-        
-        /* Canlı Durum Değişiklik Uyarısı */
+        /* Canlı Durum Değişiklik Uyarısı (Premium Katman 1) */
         .canli-uyari-kart {
-            background: #221214;
+            background: #2c1616;
             border: 1px solid #ff453a;
             padding: 12px 16px;
             border-radius: 12px;
@@ -73,32 +66,29 @@ st.markdown("""
             text-align: center;
         }
         
-        /* Yaşam Alanı & Avantajlar Katmanı */
+        /* Yaşam Alanı & Avantajlar Katmanı (Premium Katman 5) */
         .avantaj-konteyner {
-            background: #111318;
+            background: #1c1c1e;
             border-radius: 12px;
             padding: 16px;
-            border: 1px solid #1f242e;
+            border: 1px solid #2c2c2e;
             margin-top: 15px;
         }
-        .avantaj-baslik { font-size: 14px; font-weight: 600; color: #f5f5f7; margin-bottom: 10px; }
-        .avantaj-item { font-size: 12px; color: #9aa2ae; margin-bottom: 6px; display: flex; justify-content: space-between; }
-        .avantaj-badge { color: #00e676; font-weight: 600; }
+        .avantaj-baslik { font-size: 14px; font-weight: 600; color: #ffffff; margin-bottom: 10px; }
+        .avantaj-item { font-size: 12px; color: #aeaeac; margin-bottom: 6px; display: flex; justify-content: space-between; }
+        .avantaj-badge { color: #34c759; font-weight: 600; }
 
-        /* Buton Mimarisi */
         .stButton>button { 
             border-radius: 12px; 
             height: 46px; 
             font-weight: 600; 
-            background-color: #111318; 
-            color: #f5f5f7; 
-            border: 1px solid #1f242e;
+            background-color: #1c1c1e; 
+            color: #ffffff; 
+            border: 1px solid #2c2c2e;
             width: 100%;
-            transition: all 0.2s ease;
         }
-        .stButton>button:hover { border-color: #00e676; color: #00e676; background-color: #151922; }
+        .stButton>button:hover { border-color: #34c759; color: #34c759; }
         
-        /* Navigasyon Link Butonu */
         .nav-link-btn {
             display: flex;
             align-items: center;
@@ -107,14 +97,13 @@ st.markdown("""
             border-radius: 12px; 
             height: 46px; 
             font-weight: 600; 
-            background-color: #111318; 
-            color: #f5f5f7 !important; 
-            border: 1px solid #1f242e;
+            background-color: #1c1c1e; 
+            color: #ffffff !important; 
+            border: 1px solid #2c2c2e;
             box-sizing: border-box;
             font-size: 14px;
-            transition: all 0.2s ease;
         }
-        .nav-link-btn:hover { border-color: #00e676; color: #00e676 !important; background-color: #151922; }
+        .nav-link-btn:hover { border-color: #34c759; color: #34c759 !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -181,7 +170,9 @@ def yorumlari_getir(istasyon_id):
     except: pass
     return []
 
-# --- 📁 ÇEVRİMDIŞI ÖNBELLEK (OFFLINE CACHE) ---
+# ==========================================
+# 📁 4. ÖNERİ ENTEGRASYONU: ÇEVRİMDIŞI ÖNBELLEK (OFFLINE CACHE) GUARDIAN
+# ==========================================
 if "offline_istasyonlar" not in st.session_state:
     try:
         with open("istasyonlar.json", "r", encoding="utf-8") as f:
@@ -206,11 +197,13 @@ try:
     if konum_verisi and 'coords' in konum_verisi:
         user_lat = konum_verisi['coords'].get('latitude')
         user_lon = konum_verisi['coords'].get('longitude')
+        # Son geçerli konumu da internetsiz durumlar için önbelleğe alıyoruz
         st.session_state["last_valid_lat"] = user_lat
         st.session_state["last_valid_lon"] = user_lon
 except Exception:
     pass
 
+# İnternet koptuğunda veya cihaz anlık geciktiğinde önbellekteki son konumu kullanma güvencesi
 if not user_lat or not user_lon:
     user_lat = st.session_state.get("last_valid_lat")
     user_lon = st.session_state.get("last_valid_lon")
@@ -218,7 +211,7 @@ if not user_lat or not user_lon:
 if not user_lat or not user_lon:
     st.info("Konumunuza en yakın istasyonu bulabilmemiz için lütfen çıkan panelden konum izni verin.")
     st.markdown("""
-        <div style='text-align:center; color:#6c727a; font-size:12px; margin-top:20px; line-height:1.4;'>
+        <div style='text-align:center; color:#636366; font-size:12px; margin-top:20px; line-height:1.4;'>
             Not: Eğer Instagram, X veya WhatsApp içerisinden giriş yaptıysanız, uygulama içi tarayıcılar GPS iznini engelleyebilir. Lütfen bağlantıyı kopyalayıp doğrudan Safari veya Chrome üzerinde açın.
         </div>
     """, unsafe_allow_html=True)
@@ -253,7 +246,10 @@ for ist in istasyonlar_verisi:
 # ==========================================
 if en_uygun_istasyon:
     
-    # Canlı Durum Değişiklik Kontrolü
+    # ==========================================
+    # 🚨 1. ÖNERİ ENTEGRASYONU: ARKA PLAN CANLI DURUM DEĞİŞİKLİK UYARISI
+    # ==========================================
+    # Kullanıcı istasyonu ekranda gördükten hemen sonra arka planda son bir canlı kontrol tetikler
     if "nav_başlatıldı" in st.session_state and st.session_state["nav_başlatıldı"] == en_uygun_istasyon['isim']:
         if istasyon_arizali_mi(en_uygun_istasyon['isim']):
             st.markdown("""
@@ -276,6 +272,7 @@ if en_uygun_istasyon:
     
     with c1:
         g_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={en_uygun_istasyon['enlem']},{en_uygun_istasyon['boylam']}&travelmode=driving"
+        # Tıklandığında canlı takip durumunu aktif eden tetikleyici
         if st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn" id="nav_btn">Navigasyonu Başlat</a>', unsafe_allow_html=True):
             st.session_state["nav_başlatıldı"] = en_uygun_istasyon['isim']
         
@@ -291,7 +288,6 @@ if en_uygun_istasyon:
             
             st.markdown("---")
             
-            # Dinamik Zaman Damgalı Son Yorumlar
             yorumlar = yorumlari_getir(en_uygun_istasyon['isim'])
             if yorumlar:
                 for y in sorted(yorumlar, key=lambda x: x.get('tarih', ''), reverse=True)[:3]:
@@ -301,7 +297,9 @@ if en_uygun_istasyon:
             else:
                 st.caption("Bildirim bulunmuyor.")
 
-    # YAŞAM ALANI & AVANTAJLAR KATMANI
+    # ==========================================
+    # ☕ 5. ÖNERİ ENTEGRASYONU: YAŞAM ALANI & AVANTAJLAR KATMANI
+    # ==========================================
     st.markdown(f"""
     <div class="avantaj-konteyner">
         <div class="avantaj-baslik">Şarj Süresince Yakınlardaki Yaşam Alanları</div>
