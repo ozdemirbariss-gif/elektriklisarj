@@ -66,34 +66,45 @@ def arizali_istasyon_setini_getir():
     except: pass
     return arizali_set
 
-# Esnek Veri Okuyucu (Büyük/küçük harf bağımsız)
+# Esnek Veri Okuyucu: Artık iç içe (nested) verileri de tarıyor
 def esnek_deger_oku(sozluk, olasi_anahtarlar):
     if not isinstance(sozluk, dict): return None
+    # 1. Seviye Tarama (Doğrudan anahtarlar)
     for k, v in sozluk.items():
         if str(k).lower() in olasi_anahtarlar:
             return v
+    # 2. Seviye Tarama (Alt objelerin içi, örn: "location": {"lat": 38.0})
+    for k, v in sozluk.items():
+        if isinstance(v, dict):
+            for alt_k, alt_v in v.items():
+                if str(alt_k).lower() in olasi_anahtarlar:
+                    return alt_v
     return None
 
-# --- 📁 AKILLI VERİ MODELİ KORUMASI ---
+# --- 📁 AKILLI VERİ MODELİ KORUMASI (FIREBASE DESTEKLİ) ---
 if "offline_istasyonlar" not in st.session_state:
     try:
         with open("istasyonlar.json", "r", encoding="utf-8") as f:
             raw_data = json.load(f)
-            # JSON formatını otomatik düzelt (dict içindeyse listeyi bul)
-            if isinstance(raw_data, dict):
-                liste_bulundu = False
-                for k, v in raw_data.items():
-                    if isinstance(v, list):
-                        st.session_state.offline_istasyonlar = v
-                        liste_bulundu = True
-                        break
-                if not liste_bulundu: st.session_state.offline_istasyonlar = [raw_data]
-            elif isinstance(raw_data, list):
-                st.session_state.offline_istasyonlar = raw_data
-            else:
-                st.session_state.offline_istasyonlar = []
-    except:
-        st.error("istasyonlar.json dosyası yüklenemedi.")
+            
+            istasyonlar = []
+            if isinstance(raw_data, list):
+                istasyonlar = raw_data
+            elif isinstance(raw_data, dict):
+                # Firebase formatını düzleştirme: {"-Nxyz": {istasyon_verisi}, "-Nabc": {istasyon_verisi}}
+                for key, value in raw_data.items():
+                    if isinstance(value, dict):
+                        value["_firebase_id"] = key  # ID'yi kaybetmemek için ekliyoruz
+                        istasyonlar.append(value)
+                    elif isinstance(value, list):
+                        istasyonlar.extend(value)
+                
+                if not istasyonlar and raw_data.keys():
+                    istasyonlar = [raw_data]
+            
+            st.session_state.offline_istasyonlar = istasyonlar
+    except Exception as e:
+        st.error(f"istasyonlar.json dosyası yüklenemedi. Hata: {str(e)}")
         st.stop()
 
 # ==========================================
@@ -150,7 +161,7 @@ with st.expander("Araç ve Menzil Ayarları", expanded=False):
 maks_menzil = ((batarya * (sarj_yuzdesi / 100.0)) / tuketim) * 100.0
 
 # ==========================================
-# 🧠 MATRİS HESAPLAMA (Zırhlı Çekirdek)
+# 🧠 MATRİS HESAPLAMA
 # ==========================================
 en_yakin_istasyon = None
 en_yakin_mesafe = float('inf')
@@ -159,15 +170,13 @@ aktif_arizali_set = arizali_istasyon_setini_getir()
 u_lat, u_lon = st.session_state.user_coords
 
 for ist in st.session_state.offline_istasyonlar:
-    # Verileri kılı kırk yararak okuyoruz
-    raw_lat = esnek_deger_oku(ist, ["enlem", "lat", "latitude", "y"])
-    raw_lon = esnek_deger_oku(ist, ["boylam", "lon", "lng", "longitude", "x"])
+    raw_lat = esnek_deger_oku(ist, ["enlem", "lat", "latitude", "y", "koordinat_x"])
+    raw_lon = esnek_deger_oku(ist, ["boylam", "lon", "lng", "longitude", "x", "koordinat_y"])
     
     if raw_lat is None or raw_lon is None:
         continue
         
     try:
-        # Hatalı string (virgüllü) girişleri temizle
         if isinstance(raw_lat, str): raw_lat = raw_lat.replace(',', '.')
         if isinstance(raw_lon, str): raw_lon = raw_lon.replace(',', '.')
         i_lat, i_lon = float(raw_lat), float(raw_lon)
@@ -176,14 +185,13 @@ for ist in st.session_state.offline_istasyonlar:
         
     km = mesafe_hesapla(u_lat, u_lon, i_lat, i_lon)
     
-    i_isim = esnek_deger_oku(ist, ["isim", "name", "title", "ad", "şirket", "sirket"]) or "Şarj İstasyonu"
+    i_isim = esnek_deger_oku(ist, ["isim", "name", "title", "ad", "şirket", "sirket", "firma"]) or "Şarj İstasyonu"
     clean_id = "".join(c for c in str(i_isim) if c.isalnum() or c in (' ', '_', '-')).rstrip()
     
     if clean_id not in aktif_arizali_set:
         if km < en_yakin_mesafe:
             en_yakin_mesafe = km
             en_yakin_istasyon = ist.copy()
-            # Güvenli değişkenleri içine yazdır
             en_yakin_istasyon["Safe_Lat"] = i_lat
             en_yakin_istasyon["Safe_Lon"] = i_lon
             en_yakin_istasyon["Safe_Isim"] = str(i_isim)
@@ -195,8 +203,8 @@ for ist in st.session_state.offline_istasyonlar:
 if en_yakin_istasyon:
     km_uzaklik = en_yakin_istasyon["Mesafe_KM"]
     ist_isim = en_yakin_istasyon["Safe_Isim"]
-    ist_hiz = esnek_deger_oku(en_yakin_istasyon, ["hiz", "speed", "güç", "guc"]) or "Bilinmiyor"
-    ist_adres = esnek_deger_oku(en_yakin_istasyon, ["adres", "address", "lokasyon"]) or "Adres Bilgisi Yok"
+    ist_hiz = esnek_deger_oku(en_yakin_istasyon, ["hiz", "speed", "güç", "guc", "kw"]) or "Bilinmiyor"
+    ist_adres = esnek_deger_oku(en_yakin_istasyon, ["adres", "address", "lokasyon", "ilce"]) or "Adres Bilgisi Yok"
     
     hedef_lat = en_yakin_istasyon["Safe_Lat"]
     hedef_lon = en_yakin_istasyon["Safe_Lon"]
@@ -226,4 +234,11 @@ if en_yakin_istasyon:
         """, unsafe_allow_html=True)
         st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn warning-btn">🗺️ Menzili Göze Al ve Rotala</a>', unsafe_allow_html=True)
 else:
-    st.info("ℹ️ Sistemde listelenebilecek aktif bir şarj istasyonu kaydı bulunamadı. JSON dosyasındaki veri anahtarlarını veya yapısını kontrol ediniz.")
+    toplam_kayit = len(st.session_state.offline_istasyonlar)
+    st.info(f"ℹ️ Veritabanında toplam **{toplam_kayit}** kayıt bulundu ancak hiçbiri şarj istasyonu formatında işlenemedi.")
+    
+    # KOD YİNE ÇALIŞMAZSA SORUNU ŞIP DİYE ÇÖZMENİ SAĞLAYACAK DEBUG PANELİ
+    if toplam_kayit > 0:
+        with st.expander("🛠️ Geliştirici Modu (JSON Verisi Nasıl Görünüyor?)"):
+            st.markdown("Aşağıdaki veri, uygulamanın `istasyonlar.json` içinden okuyabildiği **ilk kayıttır**. Enlem ve boylam değerlerinin hangi isimle yazıldığını buradan teyit edebilirsin:")
+            st.json(st.session_state.offline_istasyonlar[:1])
