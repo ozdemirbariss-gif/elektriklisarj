@@ -17,16 +17,13 @@ st.set_page_config(
 st.markdown('''
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        /* Standart Streamlit elementlerini gizleme */
         [data-testid="stSidebar"] { display: none !important; }
         [data-testid="collapsedControl"] { display: none !important; }
         [data-testid="stHeader"] { display: none !important; }
         
-        /* Arka Plan: Clean Luxury Light Gray/White */
         .stApp { background-color: #f8f9fa !important; }
         .block-container { padding: 2rem 1rem !important; max-width: 440px !important; }
         
-        /* 🏛️ BAŞLIK İÇİN LÜKS TABLO MİMARİSİ */
         .title-table {
             width: 100%;
             border-collapse: collapse;
@@ -59,7 +56,6 @@ st.markdown('''
             letter-spacing: 0.2px;
         }
         
-        /* Tema Çakışmasını Önleyen Global Input Renk Sabitleyicileri */
         .stSelectbox label p, .stSlider label p, .stNumberInput label p, .stTextInput label p {
             color: #0f172a !important;
             font-weight: 600 !important;
@@ -74,7 +70,6 @@ st.markdown('''
             background-color: #ffffff !important;
         }
         
-        /* 💳 EXECUTIVE WHITE & NAVY KART MİMARİSİ */
         .premium-card {
             background: #ffffff !important;
             border: 1px solid #e2e8f0 !important;
@@ -85,19 +80,16 @@ st.markdown('''
             margin-bottom: 20px;
         }
         
-        /* Kart İçi Tipografi */
         .istasyon-isim { font-size: 20px; font-weight: 700; color: #0f172a !important; margin: 0 0 6px 0; letter-spacing: -0.3px; }
         .mesafe-text { font-size: 14px; font-weight: 700; color: #1e40af !important; margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
         .detay-text { font-size: 13px; color: #475569 !important; margin: 0; font-weight: 500; }
         .adres-text { font-size: 12px; color: #64748b !important; margin-top: 14px; line-height: 1.5; border-top: 1px solid #f1f5f9; padding-top: 14px; }
         
-        /* Ayrım Çizgisi ve Alt Alanlar */
         .panel-bolucu { border-top: 1px solid #f1f5f9; margin: 18px 0; }
         .panel-alt-baslik { font-size: 13px; font-weight: 700; color: #0f172a !important; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
         .avantaj-item { font-size: 12px; color: #475569 !important; margin-bottom: 8px; display: flex; justify-content: space-between; font-weight: 500; }
         .avantaj-badge { color: #1e40af !important; font-weight: 700; }
         
-        /* Canlı Durum Değişiklik Uyarısı (Kurumsal Alarm) */
         .canli-uyari-kart {
             background: #fef2f2 !important;
             border: 1px solid #ef4444 !important;
@@ -110,7 +102,6 @@ st.markdown('''
             text-align: center;
         }
 
-        /* Streamlit Elementlerinin Kurumsal Adaptasyonu */
         .streamlit-expanderHeader {
             background-color: #ffffff !important;
             border: 1px solid #e2e8f0 !important;
@@ -120,7 +111,6 @@ st.markdown('''
             font-weight: 600 !important;
         }
         
-        /* Lacivert Buton Tasarımları */
         .stButton>button { 
             border-radius: 10px; 
             height: 46px; 
@@ -133,7 +123,6 @@ st.markdown('''
         }
         .stButton>button:hover { background-color: #1e3a8a; border-color: #1e3a8a; color: #ffffff !important; box-shadow: 0 4px 12px rgba(30, 58, 138, 0.15); }
         
-        /* Navigasyon Link Butonu */
         .nav-link-btn {
             display: flex;
             align-items: center;
@@ -151,7 +140,6 @@ st.markdown('''
         }
         .nav-link-btn:hover { background-color: #1e3a8a; border-color: #1e3a8a; color: #ffffff !important; box-shadow: 0 4px 12px rgba(30, 58, 138, 0.15); }
 
-        /* Hızlı Durum Bildirim Butonları */
         .rapor-calisiyor>button { border-color: #2563eb !important; color: #2563eb !important; background: #eff6ff !important; }
         .rapor-calisiyor>button:hover { background-color: #dbeafe !important; }
         
@@ -160,7 +148,6 @@ st.markdown('''
     </style>
 ''', unsafe_allow_html=True)
 
-# İki Nokta Arası Mesafe Hesaplama
 def mesafe_hesapla(lat1, lon1, lat2, lon2):
     R = 6371.0
     phi1 = math.radians(lat1)
@@ -205,17 +192,21 @@ def yorum_gonder(istasyon_id, kullanici, yorum_metni, durum):
     except: pass
     return False
 
-def istasyon_arizali_mi(istasyon_id):
-    clean_id = "".join(c for c in istasyon_id if c.isalnum() or c in (' ', '_', '-')).rstrip()
-    url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
+# 🚀 OPTİMİZASYON: Tüm arızalı istasyonları tek istekte getiren yeni fonksiyon
+def arizali_istasyon_setini_getir():
+    url = f"{FIREBASE_DB_URL}yorumlar.json"
+    arizali_set = set()
     try:
-        res = requests.get(url, timeout=2)
+        res = requests.get(url, timeout=2.5)
         if res.status_code == 200 and res.json():
-            bildirimler = list(res.json().values())
-            if "Arızalı" in bildirimler[-1].get("durum", ""):
-                return True
+            tum_veri = res.json()
+            for clean_id, yorum_paketleri in tum_veri.items():
+                if yorum_paketleri and isinstance(yorum_paketleri, dict):
+                    sirali_yorumlar = sorted(yorum_paketleri.values(), key=lambda x: x.get('tarih', ''))
+                    if sirali_yorumlar and "Arızalı" in sirali_yorumlar[-1].get("durum", ""):
+                        arizali_set.add(clean_id)
     except: pass
-    return False
+    return arizali_set
 
 def yorumlari_getir(istasyon_id):
     clean_id = "".join(c for c in istasyon_id if c.isalnum() or c in (' ', '_', '-')).rstrip()
@@ -242,12 +233,8 @@ istasyonlar_verisi = st.session_state.offline_istasyonlar
 # ==========================================
 st.markdown('''
     <table class="title-table">
-        <tr>
-            <td class="title-cell">ŞarjBul</td>
-        </tr>
-        <tr>
-            <td class="subtitle-cell">En yakın aktif şarj rotanız</td>
-        </tr>
+        <tr><td class="title-cell">ŞarjBul</td></tr>
+        <tr><td class="subtitle-cell">En yakın aktif şarj rotanız</td></tr>
     </table>
 ''', unsafe_allow_html=True)
 
@@ -270,7 +257,6 @@ if not user_lat or not user_lon:
     user_lat = st.session_state.get("last_valid_lat")
     user_lon = st.session_state.get("last_valid_lon")
 
-# ⚠️ Tema Bağımsız Durum Bildirim Paneli (Eğer GPS Bekleniyorsa)
 if not user_lat or not user_lon:
     st.markdown("""
     <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-left: 5px solid #2563eb; padding: 16px; border-radius: 12px; margin-top: 10px; margin-bottom: 20px;">
@@ -315,10 +301,15 @@ st.markdown("<div style='margin-bottom:15px;'></div>", unsafe_allow_html=True)
 en_uygun_istasyon = None
 en_yakin_mesafe = float('inf')
 
+# Döngü öncesi Firebase'den güncel arızalı istasyon ID'lerini tek seferde çekiyoruz
+aktif_arizali_set = arizali_istasyon_setini_getir()
+
 for ist in istasyonlar_verisi:
     km = mesafe_hesapla(user_lat, user_lon, ist["enlem"], ist["boylam"])
     if km <= maks_menzil and km < en_yakin_mesafe:
-        if not istasyon_arizali_mi(ist["isim"]):
+        clean_id = "".join(c for c in ist["isim"] if c.isalnum() or c in (' ', '_', '-')).rstrip()
+        # Firebase ağ kontrolü yerine RAM üzerindeki set'ten anlık sorgulama (O(1))
+        if clean_id not in aktif_arizali_set:
             en_yakin_mesafe = km
             en_uygun_istasyon = ist.copy()
             en_uygun_istasyon["Mesafe"] = round(km, 1)
@@ -327,12 +318,11 @@ for ist in istasyonlar_verisi:
 # 🎯 EXECUTIVE WHITE & NAVY ENTEGRE PANEL
 # ==========================================
 if en_uygun_istasyon:
-    
+    clean_id = "".join(c for c in en_uygun_istasyon['isim'] if c.isalnum() or c in (' ', '_', '-')).rstrip()
     if "nav_başlatıldı" in st.session_state and st.session_state["nav_başlatıldı"] == en_uygun_istasyon['isim']:
-        if istasyon_arizali_mi(en_uygun_istasyon['isim']):
+        if clean_id in aktif_arizali_set:
             st.markdown(f'<div class="canli-uyari-kart">Yoldaki istasyonun durumu değişti! İstasyon arızalı bildirildi.</div>', unsafe_allow_html=True)
 
-    # PREMIUM BEYAZ VE LACİVERT PANEL BAŞLANGICI
     st.markdown(f"""
     <div class="premium-card">
         <div class="mesafe-text">{en_uygun_istasyon['Mesafe']} km uzaklıkta</div>
@@ -347,11 +337,9 @@ if en_uygun_istasyon:
     </div>
     """, unsafe_allow_html=True)
     
-    # Eylem Butonları
     c1, c2 = st.columns(2)
     
     with c1:
-        # Evrensel Google Maps Yönlendirme API Linki
         g_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={en_uygun_istasyon['enlem']},{en_uygun_istasyon['boylam']}&travelmode=driving"
         if st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>', unsafe_allow_html=True):
             st.session_state["nav_başlatıldı"] = en_uygun_istasyon['isim']
@@ -387,7 +375,6 @@ if en_uygun_istasyon:
                     st.markdown(f"**{y['kullanici']}** ({y['durum']}) • *{zaman_etiketi}*")
                     st.caption(f"> {y['yorum']}")
 else:
-    # ⚠️ Tema Bağımsız İstasyon Bulunamadı Kartı
     st.markdown("""
     <div style="background-color: #fff1f2; border: 1px solid #fecdd3; border-left: 5px solid #e11d48; padding: 16px; border-radius: 12px; margin-top: 10px;">
         <div style="color: #9f1239; font-weight: 700; font-size: 14px; margin-bottom: 4px; text-transform: uppercase;">Menzil Aşımı / İstasyon Bulunamadı</div>
