@@ -73,7 +73,7 @@ st.markdown("""
             text-align: center;
         }
         
-        /* Yaşam Alanı & Avantajlar Katmanı */
+        /* Yaşam Alanı & Avantajlar Kartı */
         .avantaj-konteyner {
             background: #111318;
             border-radius: 12px;
@@ -115,6 +115,13 @@ st.markdown("""
             transition: all 0.2s ease;
         }
         .nav-link-btn:hover { border-color: #00e676; color: #00e676 !important; background-color: #151922; }
+
+        /* Hızlı Raporlama Butonları İçin Özel Renkler */
+        .rapor-calisiyor>button { border-color: #00e676 !important; color: #00e676 !important; }
+        .rapor-calisiyor>button:hover { background-color: rgba(0, 230, 118, 0.1) !important; }
+        
+        .rapor-arizali>button { border-color: #ff453a !important; color: #ff453a !important; }
+        .rapor-arizali>button:hover { background-color: rgba(255, 69, 58, 0.1) !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -149,15 +156,18 @@ def zaman_oncesi(tarih_str):
 FIREBASE_DB_URL = "https://elektriklisarj-27adb-default-rtdb.europe-west1.firebasedatabase.app/"
 
 def yorum_gonder(istasyon_id, kullanici, yorum_metni, durum):
-    if kullanici and yorum_metni:
-        clean_id = "".join(c for c in istasyon_id if c.isalnum() or c in (' ', '_', '-')).rstrip()
-        url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
-        yeni_yorum = {
-            "kullanici": kullanici, "yorum": yorum_metni, "durum": durum,
-            "tarih": datetime.now().strftime("%d.%m %H:%M")
-        }
-        try: requests.post(url, json=yeni_yorum, timeout=2); return True
-        except: pass
+    clean_id = "".join(c for c in istasyon_id if c.isalnum() or c in (' ', '_', '-')).rstrip()
+    url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
+    
+    username = kullanici.strip() if kullanici and kullanici.strip() else "Anonim Sürücü"
+    note = yorum_metni.strip() if yorum_metni and yorum_metni.strip() else f"İstasyon durumu bildirildi: {durum}"
+    
+    yeni_yorum = {
+        "kullanici": username, "yorum": note, "durum": durum,
+        "tarih": datetime.now().strftime("%d.%m %H:%M")
+    }
+    try: requests.post(url, json=yeni_yorum, timeout=2); return True
+    except: pass
     return False
 
 def istasyon_arizali_mi(istasyon_id):
@@ -224,12 +234,31 @@ if not user_lat or not user_lon:
     """, unsafe_allow_html=True)
     st.stop()
 
-# MENZİL HESAPLAMA (Minimalist Panel)
+# ==========================================
+# 🚗 1. BAŞLIK / 2. ÖNERİ ENTEGRASYONU: AKILLI ARAÇ SEÇİM MENÜSÜ
+# ==========================================
 with st.expander("Menzil Durumu", expanded=False):
+    # Popüler elektrikli araç kütüphanesi veri tabanı
+    ARAC_KATALOGU = {
+        "Tesla Model Y Long Range": {"batarya": 75.0, "tuketim": 16.9},
+        "Togg T10X Uzun Menzil": {"batarya": 88.5, "tuketim": 16.9},
+        "BYD Atto 3": {"batarya": 60.4, "tuketim": 16.0},
+        "Renault Megane E-Tech": {"batarya": 60.0, "tuketim": 15.5},
+        "MG4 Electric Long Range": {"batarya": 64.0, "tuketim": 16.6},
+        "Özel Araç (Manuel Giriş)": {"batarya": 60.0, "tuketim": 17.0}
+    }
+    
+    secilen_arac = st.selectbox("Aracınızı Seçin", list(ARAC_KATALOGU.keys()))
+    varsayilan_degerler = ARAC_KATALOGU[secilen_arac]
+    
     col_b1, col_b2, col_b3 = st.columns(3)
-    with col_b1: batarya = st.number_input("Batarya (kWh)", value=60)
-    with col_b2: sarj_yuzdesi = st.slider("Şarj %", min_value=1, max_value=100, value=30)
-    with col_b3: tuketim = st.number_input("Tüketim", value=17.0)
+    with col_b1: 
+        batarya = st.number_input("Batarya (kWh)", value=varsayilan_degerler["batarya"])
+    with col_b2: 
+        sarj_yuzdesi = st.slider("Şarj %", min_value=1, max_value=100, value=30)
+    with col_b3: 
+        tuketim = st.number_input("Tüketim", value=varsayilan_degerler["tuketim"])
+        
 maks_menzil = ((batarya * (sarj_yuzdesi / 100.0)) / tuketim) * 100.0
 
 # ==========================================
@@ -281,12 +310,31 @@ if en_uygun_istasyon:
         
     with c2:
         with st.popover("Durum Bildir"):
-            st.write("İstasyon Durumu")
-            nick = st.text_input("Kullanıcı Adı", max_chars=12)
-            yorum_txt = st.text_input("Mevcut Durum")
-            durum = st.radio("İstasyon Durumu", ["Sorunsuz / Boş", "Arızalı / Kapalı"], horizontal=True)
-            if st.button("Gönder"):
-                if yorum_gonder(en_uygun_istasyon['isim'], nick, yorum_txt, durum):
+            st.write("Tek Dokunuşla Hızlı Durum Bildir")
+            
+            # ⚡ 1. BAŞLIK / 1. ÖNERİ ENTEGRASYONU: SÜRTÜNMESİZ BİLDİRİM BUTONLARI
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                st.markdown('<div class="rapor-calisiyor">', unsafe_allow_html=True)
+                if st.button("Sorunsuz / Boş", key="btn_ok"):
+                    if yorum_gonder(en_uygun_istasyon['isim'], "Anonim Sürücü", "", "Sorunsuz / Boş"):
+                        st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+            with col_btn2:
+                st.markdown('<div class="rapor-arizali">', unsafe_allow_html=True)
+                if st.button("Arızalı / Kapalı", key="btn_fail"):
+                    if yorum_gonder(en_uygun_istasyon['isim'], "Anonim Sürücü", "", "Arızalı / Kapalı"):
+                        st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            # İsteğe Bağlı Detay Alanı
+            st.markdown("---")
+            st.caption("Detay Eklemek İster Misiniz? (İsteğe Bağlı)")
+            nick = st.text_input("Kullanıcı Adı (Boş kalabilir)", max_chars=12, key="inp_nick")
+            yorum_txt = st.text_input("Not / Arıza Detayı", key="inp_txt")
+            if st.button("Detaylı Bildirim Gönder", key="btn_detail"):
+                if yorum_gonder(en_uygun_istasyon['isim'], nick, yorum_txt, "Durum Güncellemesi"):
                     st.rerun()
             
             st.markdown("---")
