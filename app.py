@@ -279,7 +279,7 @@ def yakin_cevre_getir(enlem, boylam, yaricap_m=400):
     yaricap_m: metre cinsinden arama yarıçapı (varsayılan 400m)
     """
     sorgu = f"""
-    [out:json][timeout:8];
+    [out:json][timeout:12];
     (
       node["amenity"~"cafe|restaurant|fast_food|parking|pharmacy|atm|toilets"](around:{yaricap_m},{enlem},{boylam});
       node["shop"~"supermarket|convenience|mall"](around:{yaricap_m},{enlem},{boylam});
@@ -289,7 +289,7 @@ def yakin_cevre_getir(enlem, boylam, yaricap_m=400):
     """
     try:
         res = requests.post(OVERPASS_URL, data={"data": sorgu},
-                            headers=OVERPASS_HEADERS, timeout=8.0)
+                            headers=OVERPASS_HEADERS, timeout=12.0)
         if res.status_code != 200:
             return []
 
@@ -373,45 +373,6 @@ st.markdown('''
         <tr><td class="subtitle-cell">En yakın aktif şarj rotanız</td></tr>
     </table>
 ''', unsafe_allow_html=True)
-
-
-# ==========================================
-# 🔧 OVERPASS DEBUG PANELİ
-# Sorun tespit edilince bu bloğu silin
-# ==========================================
-with st.expander("🔧 Overpass API Debug", expanded=False):
-    if st.button("Bağlantıyı Test Et"):
-        test_url = "https://overpass-api.de/api/interpreter"
-        # Ankara Kızılay koordinatları — sabit test noktası
-        test_sorgu = """
-        [out:json][timeout:8];
-        node["amenity"="cafe"](around:300,39.9208,32.8541);
-        out body 3;
-        """
-        st.write("📡 İstek gönderiliyor...")
-        try:
-            r = requests.post(test_url, data={"data": test_sorgu}, headers=OVERPASS_HEADERS, timeout=10.0)
-            st.write(f"**HTTP Durum Kodu:** `{r.status_code}`")
-            st.write(f"**Yanıt süresi:** `{r.elapsed.total_seconds():.2f}s`")
-
-            if r.status_code == 200:
-                veri = r.json()
-                eleman_sayisi = len(veri.get("elements", []))
-                st.success(f"✅ Bağlantı başarılı! {eleman_sayisi} yer bulundu.")
-                if eleman_sayisi > 0:
-                    st.json(veri["elements"][0])  # İlk elemanı göster
-                else:
-                    st.warning("⚠️ Bağlantı çalışıyor ama sonuç boş. OSM'de veri eksik olabilir.")
-            else:
-                st.error(f"❌ Sunucu hata döndürdü: {r.status_code}")
-                st.code(r.text[:500])
-
-        except requests.exceptions.Timeout:
-            st.error("⏱️ HATA: Zaman aşımı (timeout). Overpass sunucusu yanıt vermedi.")
-        except requests.exceptions.ConnectionError as e:
-            st.error(f"🚫 HATA: Bağlantı kurulamadı. Streamlit Cloud muhtemelen engelliyor.\n\n`{e}`")
-        except Exception as e:
-            st.error(f"❓ Beklenmeyen hata: `{type(e).__name__}: {e}`")
 
 
 # ==========================================
@@ -519,7 +480,9 @@ if en_yakin_3:
         etiket = "🥇 En Yakın İstasyon" if sira == 0 else f"#{sira + 1} Yedek İstasyon"
 
         # Overpass API'den yakın çevre bilgisi çek (önbellekli, günde 1 kez)
-        yakin_yerler = yakin_cevre_getir(istasyon["enlem"], istasyon["boylam"])
+        # İlk yüklemede spinner göster, sonraki açılışlarda cache'den anında gelir
+        with st.spinner("Yakın çevre yükleniyor..."):
+            yakin_yerler = yakin_cevre_getir(istasyon["enlem"], istasyon["boylam"])
 
         if yakin_yerler:
             yakin_html = '<div class="panel-bolucu"></div><div class="panel-alt-baslik">Yakındaki Yerler</div>'
