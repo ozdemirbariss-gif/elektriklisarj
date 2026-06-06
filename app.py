@@ -153,6 +153,13 @@ def zaman_oncesi(tarih_str):
         else: return f"{gun} gün önce"
     except: return tarih_str
 
+def yorum_tarihi_parse(tarih_str):
+    try:
+        dt = datetime.strptime(tarih_str, "%d.%m %H:%M")
+        return dt.replace(year=datetime.now().year)
+    except:
+        return datetime.min
+        
 FIREBASE_DB_URL = "https://elektriklisarj-27adb-default-rtdb.europe-west1.firebasedatabase.app/"
 
 def yorum_gonder(istasyon_id, kullanici, yorum_metni, durum):
@@ -181,8 +188,20 @@ def arizali_istasyon_setini_getir():
             tum_veri = res.json()
             for clean_id, yorum_paketleri in tum_veri.items():
                 if yorum_paketleri and isinstance(yorum_paketleri, dict):
-                    sirali_yorumlar = sorted(yorum_paketleri.values(), key=lambda x: x.get('tarih', ''))
-                    if sirali_yorumlar and "Arızalı" in sirali_yorumlar[-1].get("durum", ""):
+
+                    sirali_yorumlar = sorted(
+                        yorum_paketleri.values(),
+                        key=lambda x: yorum_tarihi_parse(x.get('tarih', ''))
+                    )
+
+                    son5 = sirali_yorumlar[-5:]
+
+                    arizali_sayisi = sum(
+                        1 for y in son5
+                        if "Arızalı" in y.get("durum", "")
+                    )
+
+                    if arizali_sayisi >= 3:
                         arizali_set.add(clean_id)
     except: pass
     return arizali_set
@@ -228,17 +247,17 @@ try:
     if isinstance(konum_verisi, dict) and 'coords' in konum_verisi:
         user_lat = konum_verisi['coords'].get('latitude')
         user_lon = konum_verisi['coords'].get('longitude')
-        if user_lat and user_lon:
-            st.session_state["last_valid_lat"] = user_lat
-            st.session_state["last_valid_lon"] = user_lon
+    if user_lat is not None and user_lon is not None:
+        st.session_state["last_valid_lat"] = user_lat
+        st.session_state["last_valid_lon"] = user_lon
 except Exception:
     pass
 
-if not user_lat or not user_lon:
+if user_lat is None or user_lon is None:
     user_lat = st.session_state.get("last_valid_lat")
     user_lon = st.session_state.get("last_valid_lon")
 
-if not user_lat or not user_lon:
+if user_lat is None or user_lon is None:
     st.markdown("""
     <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-left: 5px solid #2563eb; padding: 16px; border-radius: 12px; margin-bottom: 15px;">
         <div style="color: #1e40af; font-weight: 700; font-size: 14px; margin-bottom: 4px; text-transform: uppercase;">Konum İzni Bekleniyor</div>
