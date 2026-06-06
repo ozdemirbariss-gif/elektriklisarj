@@ -13,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 🎨 PREMIUM CSS: "Executive White & Navy" Hatasızlaştırma Katmanı
+# 🎨 PREMIUM CSS: Executive White & Navy Mobil Optimizasyonu
 st.markdown('''
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
@@ -22,12 +22,12 @@ st.markdown('''
         [data-testid="stHeader"] { display: none !important; }
         
         .stApp { background-color: #f8f9fa !important; }
-        .block-container { padding: 2rem 1rem !important; max-width: 440px !important; }
+        .block-container { padding: 1.5rem 1rem !important; max-width: 440px !important; }
         
         .title-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
             border: 2px solid #0f172a;
             border-radius: 8px;
             overflow: hidden;
@@ -65,10 +65,6 @@ st.markdown('''
             color: #0f172a !important;
             border: 1px solid #e2e8f0 !important;
         }
-        input {
-            color: #0f172a !important;
-            background-color: #ffffff !important;
-        }
         
         .premium-card {
             background: #ffffff !important;
@@ -101,27 +97,6 @@ st.markdown('''
             margin-bottom: 15px;
             text-align: center;
         }
-
-        .streamlit-expanderHeader {
-            background-color: #ffffff !important;
-            border: 1px solid #e2e8f0 !important;
-            border-radius: 12px !important;
-            padding: 12px 16px !important;
-            color: #0f172a !important;
-            font-weight: 600 !important;
-        }
-        
-        .stButton>button { 
-            border-radius: 10px; 
-            height: 46px; 
-            font-weight: 600; 
-            background-color: #0f172a; 
-            color: #ffffff !important; 
-            border: 1px solid #0f172a;
-            width: 100%;
-            transition: all 0.2s ease;
-        }
-        .stButton>button:hover { background-color: #1e3a8a; border-color: #1e3a8a; color: #ffffff !important; box-shadow: 0 4px 12px rgba(30, 58, 138, 0.15); }
         
         .nav-link-btn {
             display: flex;
@@ -136,15 +111,18 @@ st.markdown('''
             border: 1px solid #0f172a;
             box-sizing: border-box;
             font-size: 14px;
-            transition: all 0.2s ease;
         }
-        .nav-link-btn:hover { background-color: #1e3a8a; border-color: #1e3a8a; color: #ffffff !important; box-shadow: 0 4px 12px rgba(30, 58, 138, 0.15); }
-
-        .rapor-calisiyor>button { border-color: #2563eb !important; color: #2563eb !important; background: #eff6ff !important; }
-        .rapor-calisiyor>button:hover { background-color: #dbeafe !important; }
         
+        .stButton>button { 
+            border-radius: 10px; 
+            height: 46px; 
+            font-weight: 600; 
+            background-color: #0f172a; 
+            color: #ffffff !important; 
+            width: 100%;
+        }
+        .rapor-calisiyor>button { border-color: #2563eb !important; color: #2563eb !important; background: #eff6ff !important; }
         .rapor-arizali>button { border-color: #dc2626 !important; color: #dc2626 !important; background: #fef2f2 !important; }
-        .rapor-arizali>button:hover { background-color: #fee2e2 !important; }
     </style>
 ''', unsafe_allow_html=True)
 
@@ -180,24 +158,25 @@ FIREBASE_DB_URL = "https://elektriklisarj-27adb-default-rtdb.europe-west1.fireba
 def yorum_gonder(istasyon_id, kullanici, yorum_metni, durum):
     clean_id = "".join(c for c in istasyon_id if c.isalnum() or c in (' ', '_', '-')).rstrip()
     url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
-    
-    username = kullanici.strip() if kullanici and kullanici.strip() else "Anonim Sürücü"
-    note = yorum_metni.strip() if yorum_metni and yorum_metni.strip() else f"İstasyon durumu bildirildi: {durum}"
-    
     yeni_yorum = {
-        "kullanici": username, "yorum": note, "durum": durum,
-        "tarih": datetime.now().strftime("%d.%m %H:%M")
+        "kullanici": kullanici.strip() if kullanici else "Anonim Sürücü",
+        "yorum": yorum_metni.strip() if yorum_metni else f"İstasyon durumu bildirildi: {durum}",
+        "durum": durum, "tarih": datetime.now().strftime("%d.%m %H:%M")
     }
-    try: requests.post(url, json=yeni_yorum, timeout=2); return True
+    try:
+        requests.post(url, json=yeni_yorum, timeout=2)
+        st.cache_data.clear() # Yeni veri girildiğinde cache'i temizle
+        return True
     except: pass
     return False
 
-# 🚀 OPTİMİZASYON: Tüm arızalı istasyonları tek istekte getiren yeni fonksiyon
+# ⚡ OPTİMİZASYON: Mobil kilitlenmeleri önleyen 30 saniyelik Cache mekanizması
+@st.cache_data(ttl=30)
 def arizali_istasyon_setini_getir():
     url = f"{FIREBASE_DB_URL}yorumlar.json"
     arizali_set = set()
     try:
-        res = requests.get(url, timeout=2.5)
+        res = requests.get(url, timeout=2.0)
         if res.status_code == 200 and res.json():
             tum_veri = res.json()
             for clean_id, yorum_paketleri in tum_veri.items():
@@ -208,28 +187,29 @@ def arizali_istasyon_setini_getir():
     except: pass
     return arizali_set
 
+@st.cache_data(ttl=30)
 def yorumlari_getir(istasyon_id):
     clean_id = "".join(c for c in istasyon_id if c.isalnum() or c in (' ', '_', '-')).rstrip()
     url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
     try:
-        res = requests.get(url, timeout=2)
-        if res.status_code == 200 and res.json(): return res.json().values()
+        res = requests.get(url, timeout=2.0)
+        if res.status_code == 200 and res.json(): return list(res.json().values())
     except: pass
     return []
 
-# --- 📁 ÇEVRİMDIŞI ÖNBELLEK ---
+# --- 📁 ÇEVRİMDIŞI ÖNBELLEK VERİSİ ---
 if "offline_istasyonlar" not in st.session_state:
     try:
         with open("istasyonlar.json", "r", encoding="utf-8") as f:
             st.session_state.offline_istasyonlar = json.load(f)
-    except FileNotFoundError:
-        st.error("Veri dosyası bulunamadı.")
+    except:
+        st.error("istasyonlar.json dosyası bulunamadı.")
         st.stop()
 
 istasyonlar_verisi = st.session_state.offline_istasyonlar
 
 # ==========================================
-# 🏛️ TABLO İÇİNDE BAŞLIK ALANI
+# 🏛️ BAŞLIK ALANI
 # ==========================================
 st.markdown('''
     <table class="title-table">
@@ -239,17 +219,18 @@ st.markdown('''
 ''', unsafe_allow_html=True)
 
 # ==========================================
-# 📡 GPS ENTEGRASYONU VE GÜVENLİK DUVARI
+# 📡 SAFETIED GPS ENTEGRASYONU (KeyError Çözümü)
 # ==========================================
 user_lat, user_lon = None, None
 
 try:
     konum_verisi = get_geolocation()
-    if konum_verisi and 'coords' in konum_verisi:
+    if isinstance(konum_verisi, dict) and 'coords' in konum_verisi:
         user_lat = konum_verisi['coords'].get('latitude')
         user_lon = konum_verisi['coords'].get('longitude')
-        st.session_state["last_valid_lat"] = user_lat
-        st.session_state["last_valid_lon"] = user_lon
+        if user_lat and user_lon:
+            st.session_state["last_valid_lat"] = user_lat
+            st.session_state["last_valid_lon"] = user_lon
 except Exception:
     pass
 
@@ -259,20 +240,17 @@ if not user_lat or not user_lon:
 
 if not user_lat or not user_lon:
     st.markdown("""
-    <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-left: 5px solid #2563eb; padding: 16px; border-radius: 12px; margin-top: 10px; margin-bottom: 20px;">
-        <div style="color: #1e40af; font-weight: 700; font-size: 14px; margin-bottom: 4px; text-transform: uppercase;">Konum İzini Bekleniyor</div>
+    <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-left: 5px solid #2563eb; padding: 16px; border-radius: 12px; margin-bottom: 15px;">
+        <div style="color: #1e40af; font-weight: 700; font-size: 14px; margin-bottom: 4px; text-transform: uppercase;">Konum İzni Bekleniyor</div>
         <div style="color: #1e3a8a; font-size: 13px; font-weight: 500; line-height: 1.4;">
-            En yakın istasyonu hesaplayabilmemiz için lütfen tarayıcınızın veya telefonunuzun üst kısmında çıkan konum erişim talebini onaylayın.
+            Lütfen tarayıcınızın konum erişim talebini onaylayın. Uygulama içi tarayıcılardaysanız (X, Instagram), linki kopyalayıp Safari veya Chrome'da açın.
         </div>
-    </div>
-    <div style='text-align:center; color:#64748b; font-size:12px; margin-top:10px; line-height:1.4;'>
-        Not: Eğer Instagram, X veya WhatsApp içerisinden giriş yaptıysanız, uygulama içi tarayıcılar GPS iznini engelleyebilir. Lütfen bağlantıyı kopyalayıp doğrudan Safari veya Chrome üzerinde açın.
     </div>
     """, unsafe_allow_html=True)
     st.stop()
 
 # ==========================================
-# 🚗 AKILLI ARAÇ SEÇİM MENÜSÜ
+# 🚗 ARAÇ SEÇİM MENÜSÜ
 # ==========================================
 with st.expander("Araç ve Menzil Ayarları", expanded=False):
     ARAC_KATALOGU = {
@@ -280,8 +258,7 @@ with st.expander("Araç ve Menzil Ayarları", expanded=False):
         "Togg T10X Uzun Menzil": {"batarya": 88.5, "tuketim": 16.9},
         "BYD Atto 3": {"batarya": 60.4, "tuketim": 16.0},
         "Renault Megane E-Tech": {"batarya": 60.0, "tuketim": 15.5},
-        "MG4 Electric Long Range": {"batarya": 64.0, "tuketim": 16.6},
-        "Özel Araç (Manuel Giriş)": {"batarya": 60.0, "tuketim": 17.0}
+        "Özel Araç (Manuel)": {"batarya": 60.0, "tuketim": 17.0}
     }
     
     secilen_arac = st.selectbox("Model", list(ARAC_KATALOGU.keys()), label_visibility="collapsed")
@@ -291,38 +268,38 @@ with st.expander("Araç ve Menzil Ayarları", expanded=False):
     with col_b1: batarya = st.number_input("Kapasite", value=varsayilan_degerler["batarya"])
     with col_b2: sarj_yuzdesi = st.slider("Şarj %", min_value=1, max_value=100, value=30)
     with col_b3: tuketim = st.number_input("Tüketim", value=varsayilan_degerler["tuketim"])
+
+    st.markdown("---")
+    # 🎯 GPS sapmalarına ve düşük menzillere karşı bypass filtresi
+    menzil_filtresi_aktif = st.checkbox("Menzil Filtresini Uygula (Sadece ulaşabileceğim istasyonları göster)", value=True)
         
 maks_menzil = ((batarya * (sarj_yuzdesi / 100.0)) / tuketim) * 100.0
-st.markdown("<div style='margin-bottom:15px;'></div>", unsafe_allow_html=True)
 
 # ==========================================
-# 🧠 MUTLAK EN YAKIN AKTİF İSTASYONU BULMA
+# 🧠 EN YAKIN AKTİF İSTASYONU BULMA
 # ==========================================
 en_uygun_istasyon = None
 en_yakin_mesafe = float('inf')
 
-# Döngü öncesi Firebase'den güncel arızalı istasyon ID'lerini tek seferde çekiyoruz
+# Önbellekten hızlıca çekiliyor (Asla donma yapmaz)
 aktif_arizali_set = arizali_istasyon_setini_getir()
 
 for ist in istasyonlar_verisi:
     km = mesafe_hesapla(user_lat, user_lon, ist["enlem"], ist["boylam"])
-    if km <= maks_menzil and km < en_yakin_mesafe:
-        clean_id = "".join(c for c in ist["isim"] if c.isalnum() or c in (' ', '_', '-')).rstrip()
-        # Firebase ağ kontrolü yerine RAM üzerindeki set'ten anlık sorgulama (O(1))
-        if clean_id not in aktif_arizali_set:
-            en_yakin_mesafe = km
-            en_uygun_istasyon = ist.copy()
-            en_uygun_istasyon["Mesafe"] = round(km, 1)
+    
+    # Filtre aktifse menzil kontrolü yap, aktif değilse sadece en yakını bul
+    if (not menzil_filtresi_aktif) or (km <= maks_menzil):
+        if km < en_yakin_mesafe:
+            clean_id = "".join(c for c in ist["isim"] if c.isalnum() or c in (' ', '_', '-')).rstrip()
+            if clean_id not in aktif_arizali_set:
+                en_yakin_mesafe = km
+                en_uygun_istasyon = ist.copy()
+                en_uygun_istasyon["Mesafe"] = round(km, 1)
 
 # ==========================================
-# 🎯 EXECUTIVE WHITE & NAVY ENTEGRE PANEL
+# 🎯 KART VE SEÇENEKLERİN GÖSTERİMİ
 # ==========================================
 if en_uygun_istasyon:
-    clean_id = "".join(c for c in en_uygun_istasyon['isim'] if c.isalnum() or c in (' ', '_', '-')).rstrip()
-    if "nav_başlatıldı" in st.session_state and st.session_state["nav_başlatıldı"] == en_uygun_istasyon['isim']:
-        if clean_id in aktif_arizali_set:
-            st.markdown(f'<div class="canli-uyari-kart">Yoldaki istasyonun durumu değişti! İstasyon arızalı bildirildi.</div>', unsafe_allow_html=True)
-
     st.markdown(f"""
     <div class="premium-card">
         <div class="mesafe-text">{en_uygun_istasyon['Mesafe']} km uzaklıkta</div>
@@ -331,37 +308,34 @@ if en_uygun_istasyon:
         <div class="adres-text">{en_uygun_istasyon['adres']}</div>
         <div class="panel-bolucu"></div>
         <div class="panel-alt-baslik">Yakındaki Yaşam Alanları</div>
-        <div class="avantaj-item"><span>Kahve Dünyası (Dinlenme)</span><span class="avantaj-badge">120m</span></div>
-        <div class="avantaj-item"><span>Migros Jet (Alışveriş)</span><span class="avantaj-badge">250m</span></div>
-        <div class="avantaj-item"><span>Sürücü Avantajı</span><span class="avantaj-badge">%15 İndirim</span></div>
+        <div class="avantaj-item"><span>Dinlenme Alanı & Kahve</span><span class="avantaj-badge">100m</span></div>
+        <div class="avantaj-item"><span>Market / Alışveriş</span><span class="avantaj-badge">200m</span></div>
     </div>
     """, unsafe_allow_html=True)
     
     c1, c2 = st.columns(2)
-    
     with c1:
         g_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={en_uygun_istasyon['enlem']},{en_uygun_istasyon['boylam']}&travelmode=driving"
-        if st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>', unsafe_allow_html=True):
-            st.session_state["nav_başlatıldı"] = en_uygun_istasyon['isim']
+        st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>', unsafe_allow_html=True)
         
     with c2:
         with st.popover("Durum Bildir"):
-            st.write("Tek dokunuşla hızlı bildirim gönderin")
             col_btn1, col_btn2 = st.columns(2)
             with col_btn1:
                 st.markdown('<div class="rapor-calisiyor">', unsafe_allow_html=True)
                 if st.button("Sorunsuz", key="btn_ok"):
-                    if yorum_gonder(en_uygun_istasyon['isim'], "Anonim Sürücü", "", "Sorunsuz / Boş"): st.rerun()
+                    if map_id := en_uygun_istasyon['isim']:
+                        if yorum_gonder(map_id, "Anonim Sürücü", "", "Sorunsuz / Boş"): st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
                 
             with col_btn2:
                 st.markdown('<div class="rapor-arizali">', unsafe_allow_html=True)
                 if st.button("Arızalı", key="btn_fail"):
-                    if yorum_gonder(en_uygun_istasyon['isim'], "Anonim Sürücü", "", "Arızalı / Kapalı"): st.rerun()
+                    if map_id := en_uygun_istasyon['isim']:
+                        if yorum_gonder(map_id, "Anonim Sürücü", "", "Arızalı / Kapalı"): st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
             
             st.markdown("---")
-            st.caption("Detay eklemek ister misiniz?")
             nick = st.text_input("Kullanıcı Adı", max_chars=12, key="inp_nick")
             yorum_txt = st.text_input("Durum Notu", key="inp_txt")
             if st.button("Detaylı Gönder", key="btn_detail"):
@@ -372,14 +346,16 @@ if en_uygun_istasyon:
             if yorumlar:
                 for y in sorted(yorumlar, key=lambda x: x.get('tarih', ''), reverse=True)[:2]:
                     zaman_etiketi = zaman_oncesi(y.get('tarih', ''))
-                    st.markdown(f"**{y['kullanici']}** ({y['durum']}) • *{zaman_etiketi}*")
-                    st.caption(f"> {y['yorum']}")
+                    st.markdown(f"**{y.get('kullanici', 'Anonim')}** ({y.get('durum', 'Güncelleme')}) • *{zaman_etiketi}*")
+                    st.caption(f"> {y.get('yorum', '')}")
 else:
     st.markdown("""
-    <div style="background-color: #fff1f2; border: 1px solid #fecdd3; border-left: 5px solid #e11d48; padding: 16px; border-radius: 12px; margin-top: 10px;">
+    <div style="background-color: #fff1f2; border: 1px solid #fecdd3; border-left: 5px solid #e11d48; padding: 16px; border-radius: 12px;">
         <div style="color: #9f1239; font-weight: 700; font-size: 14px; margin-bottom: 4px; text-transform: uppercase;">Menzil Aşımı / İstasyon Bulunamadı</div>
         <div style="color: #4c0519; font-size: 13px; font-weight: 500; line-height: 1.4;">
-            Mevcut şarj yüzdeniz ve konumunuza göre ulaşılabilecek aktif bir şarj istasyonu bulunamadı. Lütfen yukarıdaki panelden şarj yüzdenizi veya araç modelinizi güncelleyin.
+            Mevcut şarj yüzdeniz ile ulaşılabilecek bir istasyon bulunamadı. 
+            <br><br>
+            <b>Çözüm:</b> Yukarıdaki "Araç ve Menzil Ayarları" panelini açıp <b>"Menzil Filtresini Uygula"</b> seçeneğini kapatarak en yakın istasyonları filtre olmadan görebilirsiniz.
         </div>
     </div>
     """, unsafe_allow_html=True)
