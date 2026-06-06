@@ -13,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 🎨 PREMIUM CSS: "Executive White & Navy" Tasarım Katmanı
+# 🎨 PREMIUM CSS: "Executive White & Navy" Hatasızlaştırma Katmanı
 st.markdown('''
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
@@ -38,7 +38,7 @@ st.markdown('''
         }
         .title-cell {
             background-color: #0f172a;
-            color: #ffffff;
+            color: #ffffff !important;
             font-family: 'Inter', '-apple-system', sans-serif;
             font-weight: 800;
             font-size: 24px;
@@ -49,7 +49,7 @@ st.markdown('''
         }
         .subtitle-cell {
             background-color: #ffffff;
-            color: #475569;
+            color: #475569 !important;
             font-family: 'Inter', '-apple-system', sans-serif;
             font-size: 13px;
             font-weight: 500;
@@ -57,6 +57,21 @@ st.markdown('''
             padding: 10px;
             border-top: 1px solid #e2e8f0;
             letter-spacing: 0.2px;
+        }
+        
+        /* Tema Çakışmasını Önleyen Global Input Renk Sabitleyicileri */
+        .stSelectbox label p, .stSlider label p, .stNumberInput label p, .stTextInput label p {
+            color: #0f172a !important;
+            font-weight: 600 !important;
+        }
+        div[data-baseweb="select"] > div {
+            background-color: #ffffff !important;
+            color: #0f172a !important;
+            border: 1px solid #e2e8f0 !important;
+        }
+        input {
+            color: #0f172a !important;
+            background-color: #ffffff !important;
         }
         
         /* 💳 EXECUTIVE WHITE & NAVY KART MİMARİSİ */
@@ -71,24 +86,24 @@ st.markdown('''
         }
         
         /* Kart İçi Tipografi */
-        .istasyon-isim { font-size: 20px; font-weight: 700; color: #0f172a; margin: 0 0 6px 0; letter-spacing: -0.3px; }
-        .mesafe-text { font-size: 14px; font-weight: 700; color: #1e40af; margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
-        .detay-text { font-size: 13px; color: #475569; margin: 0; font-weight: 500; }
-        .adres-text { font-size: 12px; color: #64748b; margin-top: 14px; line-height: 1.5; border-top: 1px solid #f1f5f9; padding-top: 14px; }
+        .istasyon-isim { font-size: 20px; font-weight: 700; color: #0f172a !important; margin: 0 0 6px 0; letter-spacing: -0.3px; }
+        .mesafe-text { font-size: 14px; font-weight: 700; color: #1e40af !important; margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+        .detay-text { font-size: 13px; color: #475569 !important; margin: 0; font-weight: 500; }
+        .adres-text { font-size: 12px; color: #64748b !important; margin-top: 14px; line-height: 1.5; border-top: 1px solid #f1f5f9; padding-top: 14px; }
         
         /* Ayrım Çizgisi ve Alt Alanlar */
         .panel-bolucu { border-top: 1px solid #f1f5f9; margin: 18px 0; }
-        .panel-alt-baslik { font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
-        .avantaj-item { font-size: 12px; color: #475569; margin-bottom: 8px; display: flex; justify-content: space-between; font-weight: 500; }
-        .avantaj-badge { color: #1e40af; font-weight: 700; }
+        .panel-alt-baslik { font-size: 13px; font-weight: 700; color: #0f172a !important; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+        .avantaj-item { font-size: 12px; color: #475569 !important; margin-bottom: 8px; display: flex; justify-content: space-between; font-weight: 500; }
+        .avantaj-badge { color: #1e40af !important; font-weight: 700; }
         
         /* Canlı Durum Değişiklik Uyarısı (Kurumsal Alarm) */
         .canli-uyari-kart {
-            background: #fef2f2;
-            border: 1px solid #ef4444;
+            background: #fef2f2 !important;
+            border: 1px solid #ef4444 !important;
             padding: 12px 16px;
             border-radius: 12px;
-            color: #991b1b;
+            color: #991b1b !important;
             font-size: 13px;
             font-weight: 600;
             margin-bottom: 15px;
@@ -111,12 +126,12 @@ st.markdown('''
             height: 46px; 
             font-weight: 600; 
             background-color: #0f172a; 
-            color: #ffffff; 
+            color: #ffffff !important; 
             border: 1px solid #0f172a;
             width: 100%;
             transition: all 0.2s ease;
         }
-        .stButton>button:hover { background-color: #1e3a8a; border-color: #1e3a8a; color: #ffffff; box-shadow: 0 4px 12px rgba(30, 58, 138, 0.15); }
+        .stButton>button:hover { background-color: #1e3a8a; border-color: #1e3a8a; color: #ffffff !important; box-shadow: 0 4px 12px rgba(30, 58, 138, 0.15); }
         
         /* Navigasyon Link Butonu */
         .nav-link-btn {
@@ -136,7 +151,7 @@ st.markdown('''
         }
         .nav-link-btn:hover { background-color: #1e3a8a; border-color: #1e3a8a; color: #ffffff !important; box-shadow: 0 4px 12px rgba(30, 58, 138, 0.15); }
 
-        /* Hızlı Durum Bildirim Butonları (Yumuşatılmış Renk Tonları) */
+        /* Hızlı Durum Bildirim Butonları */
         .rapor-calisiyor>button { border-color: #2563eb !important; color: #2563eb !important; background: #eff6ff !important; }
         .rapor-calisiyor>button:hover { background-color: #dbeafe !important; }
         
@@ -255,12 +270,18 @@ if not user_lat or not user_lon:
     user_lat = st.session_state.get("last_valid_lat")
     user_lon = st.session_state.get("last_valid_lon")
 
+# ⚠️ Tema Bağımsız Durum Bildirim Paneli (Eğer GPS Bekleniyorsa)
 if not user_lat or not user_lon:
-    st.info("Konumunuza en yakın istasyonu bulabilmemiz için lütfen çıkan panelden konum izni verin.")
     st.markdown("""
-        <div style='text-align:center; color:#64748b; font-size:12px; margin-top:20px; line-height:1.4;'>
-            Not: Eğer Instagram, X veya WhatsApp içerisinden giriş yaptıysanız, uygulama içi tarayıcılar GPS iznini engelleyebilir. Lütfen bağlantıyı kopyalayıp doğrudan Safari veya Chrome üzerinde açın.
+    <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-left: 5px solid #2563eb; padding: 16px; border-radius: 12px; margin-top: 10px; margin-bottom: 20px;">
+        <div style="color: #1e40af; font-weight: 700; font-size: 14px; margin-bottom: 4px; text-transform: uppercase;">Konum İzini Bekleniyor</div>
+        <div style="color: #1e3a8a; font-size: 13px; font-weight: 500; line-height: 1.4;">
+            En yakın istasyonu hesaplayabilmemiz için lütfen tarayıcınızın veya telefonunuzun üst kısmında çıkan konum erişim talebini onaylayın.
         </div>
+    </div>
+    <div style='text-align:center; color:#64748b; font-size:12px; margin-top:10px; line-height:1.4;'>
+        Not: Eğer Instagram, X veya WhatsApp içerisinden giriş yaptıysanız, uygulama içi tarayıcılar GPS iznini engelleyebilir. Lütfen bağlantıyı kopyalayıp doğrudan Safari veya Chrome üzerinde açın.
+    </div>
     """, unsafe_allow_html=True)
     st.stop()
 
@@ -365,4 +386,12 @@ if en_uygun_istasyon:
                     st.markdown(f"**{y['kullanici']}** ({y['durum']}) • *{zaman_etiketi}*")
                     st.caption(f"> {y['yorum']}")
 else:
-    st.warning("Menzilinize uygun aktif bir istasyon bulunamadı.")
+    # ⚠️ Tema Bağımsız İstasyon Bulunamadı Kartı
+    st.markdown("""
+    <div style="background-color: #fff1f2; border: 1px solid #fecdd3; border-left: 5px solid #e11d48; padding: 16px; border-radius: 12px; margin-top: 10px;">
+        <div style="color: #9f1239; font-weight: 700; font-size: 14px; margin-bottom: 4px; text-transform: uppercase;">Menzil Aşımı / İstasyon Bulunamadı</div>
+        <div style="color: #4c0519; font-size: 13px; font-weight: 500; line-height: 1.4;">
+            Mevcut şarj yüzdeniz ve konumunuza göre ulaşılabilecek aktif bir şarj istasyonu bulunamadı. Lütfen yukarıdaki panelden şarj yüzdenizi veya araç modelinizi güncelleyin.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
