@@ -13,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 🎨 PREMIUM CSS: Mobil çökme ve kaymaları engelleyen temizlenmiş stil havuzu
+# 🎨 PREMIUM CSS: Esnek ve Kilitlenmeyen Mobil Arayüz Tasarımı
 st.markdown('''
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
@@ -57,12 +57,18 @@ st.markdown('''
             border-top: 5px solid #0f172a !important;
             border-radius: 14px;
             padding: 20px;
-            margin-top: 15px;
+            margin-top: 10px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+        }
+        
+        .premium-card.warning-card {
+            border-top: 5px solid #ea580c !important;
         }
         
         .istasyon-isim { font-size: 18px; font-weight: 700; color: #0f172a !important; }
         .mesafe-text { font-size: 13px; font-weight: 700; color: #1e40af !important; text-transform: uppercase; }
+        .mesafe-text.warning-text { color: #ea580c !important; }
+        
         .adres-text { font-size: 12px; color: #64748b !important; margin-top: 10px; padding-top: 10px; border-top: 1px solid #f1f5f9; }
         
         .nav-link-btn {
@@ -77,6 +83,10 @@ st.markdown('''
             color: #ffffff !important;
             font-size: 13px;
             width: 100%;
+            margin-top: 10px;
+        }
+        .nav-link-btn.warning-btn {
+            background-color: #ea580c !important;
         }
     </style>
 ''', unsafe_allow_html=True)
@@ -91,7 +101,7 @@ def mesafe_hesapla(lat1, lon1, lat2, lon2):
 
 FIREBASE_DB_URL = "https://elektriklisarj-27adb-default-rtdb.europe-west1.firebasedatabase.app/"
 
-@st.cache_data(ttl=20)
+@st.cache_data(ttl=30)
 def arizali_istasyon_setini_getir():
     arizali_set = set()
     try:
@@ -105,22 +115,53 @@ def arizali_istasyon_setini_getir():
     except: pass
     return arizali_set
 
-# --- 📁 VERİ YÜKLEME ---
+# --- 📁 VERİ MODELİ KORUMASI ---
 if "offline_istasyonlar" not in st.session_state:
     try:
         with open("istasyonlar.json", "r", encoding="utf-8") as f:
             st.session_state.offline_istasyonlar = json.load(f)
     except:
-        st.error("istasyonlar.json bulunamadı.")
+        st.error("istasyonlar.json dosyası yüklenemedi.")
         st.stop()
 
 # ==========================================
-# 🏛️ ARAYÜZ BAŞLANGICI
+# 🔄 LIFECYCLE VE STATE YÖNETİMİ (Kilitlenmeyi Önleyen Alan)
+# ==========================================
+if "user_coords" not in st.session_state:
+    # Telefon GPS'i yanıt verene kadar arayüzün boş kalmaması için varsayılan merkez konum
+    st.session_state.user_coords = (38.4192, 27.1287) 
+    st.session_state.gps_loaded = False
+
+# Arka planda sessizce cihazın GPS'ini sorgula
+try:
+    konum_verisi = get_geolocation()
+    if isinstance(konum_verisi, dict) and 'coords' in konum_verisi:
+        coords = konum_verisi.get('coords', {})
+        if coords:
+            live_lat = coords.get('latitude')
+            live_lon = coords.get('longitude')
+            if live_lat and live_lon:
+                current_coords = (live_lat, live_lon)
+                if st.session_state.user_coords != current_coords:
+                    st.session_state.user_coords = current_coords
+                    st.session_state.gps_loaded = True
+                    st.rerun()
+except Exception:
+    pass
+
+# ==========================================
+# 🏛️ LOGO VE BAŞLIK
 # ==========================================
 st.markdown('<table class="title-table"><tr><td class="title-cell">ŞarjBul</td></tr><tr><td class="subtitle-cell">En yakın aktif şarj rotanız</td></tr></table>', unsafe_allow_html=True)
 
+# GPS durumuna göre kullanıcıyı bilgilendiren küçük şık bir badge
+if st.session_state.gps_loaded:
+    st.caption("🟢 Canlı Mobil GPS Aktif")
+else:
+    st.caption("🟡 Konum aranıyor (Varsayılan Merkez Gösteriliyor)...")
+
 # ==========================================
-# 🚗 ARAÇ VE MENZİL AYARLARI
+# 🚗 ARAÇ SEÇİMİ VE MENZİL HESABI
 # ==========================================
 with st.expander("Araç ve Menzil Ayarları", expanded=False):
     ARAC_KATALOGU = {
@@ -136,75 +177,76 @@ with st.expander("Araç ve Menzil Ayarları", expanded=False):
     with col_b1: batarya = st.number_input("Kapasite", value=vals["batarya"])
     with col_b2: sarj_yuzdesi = st.slider("Şarj %", 1, 100, 35)
     with col_b3: tuketim = st.number_input("Tüketim", value=vals["tuketim"])
-    
-    st.markdown("---")
-    menzil_filtresi_aktif = st.checkbox("Menzil Filtresini Uygula", value=True)
 
 maks_menzil = ((batarya * (sarj_yuzdesi / 100.0)) / tuketim) * 100.0
 
 # ==========================================
-# 📡 GÜVENLİ GPS VE FALLBACK YÖNETİMİ (Çökmeyi Önleyen Kritik Kısım)
+# 🧠 MATRİS HESAPLAMA (Hata Toleranslı Ana Algoritma)
 # ==========================================
-user_lat, user_lon = None, None
-
-try:
-    konum_verisi = get_geolocation()
-    if isinstance(konum_verisi, dict) and 'coords' in konum_verisi:
-        coords = konum_verisi.get('coords', {})
-        if coords:
-            user_lat = coords.get('latitude')
-            user_lon = coords.get('longitude')
-except Exception:
-    pass
-
-# GPS çalışmazsa devreye girecek kurtarma senaryosu
-if not user_lat or not user_lon:
-    st.warning("📍 Canlı konum alınamadı. Lütfen aşağıdan manuel konum seçin:")
-    sehir_secimi = st.selectbox("Bulunduğunuz Bölge", ["İzmir Merkez", "Çeşme", "Alsancak", "İstanbul Anadolu", "İstanbul Avrupa"])
-    
-    # Koordinat havuzu (Uygulamanın durmasını engeller)
-    koordinatlar = {
-        "İzmir Merkez": (38.4192, 27.1287),
-        "Çeşme": (38.3246, 26.3031),
-        "Alsancak": (38.4374, 27.1424),
-        "İstanbul Anadolu": (40.9922, 29.1244),
-        "İstanbul Avrupa": (41.0422, 28.9844)
-    }
-    user_lat, user_lon = koordinatlar[sehir_secimi]
-
-# ==========================================
-# 🧠 İSTASYON HESAPLAMA VE FİLTRELEME
-# ==========================================
-en_uygun_istasyon = None
+en_yakin_istasyon = None
 en_yakin_mesafe = float('inf')
 aktif_arizali_set = arizali_istasyon_setini_getir()
 
+u_lat, u_lon = st.session_state.user_coords
+
 for ist in st.session_state.offline_istasyonlar:
-    km = mesafe_hesapla(user_lat, user_lon, ist["enlem"], ist["boylam"])
+    # JSON anahtar kelime varyasyonlarına karşı tam koruma koruması
+    i_lat = ist.get("enlem") or ist.get("lat") or ist.get("latitude")
+    i_lon = ist.get("boylam") or ist.get("lon") or ist.get("lng") or ist.get("longitude")
     
-    if (not menzil_filtresi_aktif) or (km <= maks_menzil):
+    if i_lat is None or i_lon is None:
+        continue
+        
+    km = mesafe_hesapla(u_lat, u_lon, float(i_lat), float(i_lon))
+    
+    # İstasyon ismi okuma koruması
+    i_isim = ist.get("isim") or ist.get("name") or "Şarj İstasyonu"
+    clean_id = "".join(c for c in i_isim if c.isalnum() or c in (' ', '_', '-')).rstrip()
+    
+    if clean_id not in aktif_arizali_set:
         if km < en_yakin_mesafe:
-            clean_id = "".join(c for c in ist["isim"] if c.isalnum() or c in (' ', '_', '-')).rstrip()
-            if clean_id not in aktif_arizali_set:
-                en_yakin_mesafe = km
-                en_uygun_istasyon = ist.copy()
-                en_uygun_istasyon["Mesafe"] = round(km, 1)
+            en_yakin_mesafe = km
+            en_yakin_istasyon = ist.copy()
+            en_yakin_istasyon["Mesafe_KM"] = round(km, 1)
 
 # ==========================================
-# 🎯 SONUÇ EKRANI
+# 🎯 AKILLI VE KESİNTİSİZ SONUÇ EKRANI
 # ==========================================
-if en_uygun_istasyon:
-    st.markdown(f"""
-    <div class="premium-card">
-        <div class="mesafe-text">📍 {en_uygun_istasyon['Mesafe']} km uzaklıkta</div>
-        <div class="istasyon-isim" style="margin-top:5px;">{en_uygun_istasyon['isim']}</div>
-        <div style="font-size:13px; color:#475569; margin-top:5px;">⚡ Hız: {en_uygun_istasyon['hiz']}</div>
-        <div class="adres-text">{en_uygun_istasyon['adres']}</div>
-    </div>
-    """, unsafe_allow_html=True)
+if en_yakin_istasyon:
+    km_uzaklik = en_yakin_istasyon["Mesafe_KM"]
+    ist_isim = en_yakin_istasyon.get("isim") or en_yakin_istasyon.get("name") or "Bilinmeyen İstasyon"
+    ist_hiz = en_yakin_istasyon.get("hiz") or en_yakin_istasyon.get("speed") or "Bilinmiyor"
+    ist_adres = en_yakin_istasyon.get("adres") or en_yakin_istasyon.get("address") or "Adres Bilgisi Yok"
     
-    st.markdown("<br>", unsafe_allow_html=True)
-    g_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={en_uygun_istasyon['enlem']},{en_uygun_istasyon['boylam']}&travelmode=driving"
-    st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn">🗺️ Navigasyonu Başlat</a>', unsafe_allow_html=True)
+    # Menzil kontrolü
+    menzil_yeterli = km_uzaklik <= maks_menzil
+    
+    if menzil_yeterli:
+        # Standart Premium Görünüm (Menzil İçi)
+        st.markdown(f"""
+        <div class="premium-card">
+            <div class="mesafe-text">📍 {km_uzaklik} km uzaklıkta</div>
+            <div class="istasyon-isim" style="margin-top:5px;">{ist_isim}</div>
+            <div style="font-size:13px; color:#475569; margin-top:5px;">⚡ Güç/Hız: {ist_hiz}</div>
+            <div class="adres-text">{ist_adres}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        g_link = f"https://www.google.com/maps/dir/?api=1&origin={u_lat},{u_lon}&destination={i_lat},{i_lon}&travelmode=driving"
+        st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn">🗺️ Navigasyonu Başlat</a>', unsafe_allow_html=True)
+    else:
+        # Turuncu İkazlı Görünüm (Menzil Dışı ama İstasyon Görünüyor!)
+        st.markdown(f"""
+        <div class="premium-card warning-card">
+            <div class="mesafe-text warning-text">⚠️ MENZİLİNİZİN DIŞINDA ({km_uzaklik} km)</div>
+            <div style="font-size:11px; color:#ea580c; font-weight:600; margin-top:2px;">Mevcut bataryanız ile tahmini menziliniz: {round(maks_menzil, 1)} km</div>
+            <div class="istasyon-isim" style="margin-top:8px;">{ist_isim}</div>
+            <div style="font-size:13px; color:#475569; margin-top:5px;">⚡ Güç/Hız: {ist_hiz}</div>
+            <div class="adres-text">{ist_adres}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        g_link = f"https://www.google.com/maps/dir/?api=1&origin={u_lat},{u_lon}&destination={i_lat},{i_lon}&travelmode=driving"
+        st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn warning-btn">🗺️ Menzili Göze Al ve Rotala</a>', unsafe_allow_html=True)
 else:
-    st.error("🚨 Belirtilen menzil dahilinde aktif bir şarj istasyonu bulunamadı. Lütfen expander panelinden menzil filtresini kapatın.")
+    st.info("ℹ️ Sistemde listelenebilecek aktif bir şarj istasyonu kaydı bulunamadı.")
