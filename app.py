@@ -267,6 +267,11 @@ KATEGORI_EMOJILER = {
     "toilets": ("🚻", "Tuvalet"),
 }
 
+OVERPASS_HEADERS = {
+    "User-Agent": "SarjBul/1.0 (EV charging finder app)",
+    "Accept": "application/json",
+}
+
 @st.cache_data(ttl=86400)
 def yakin_cevre_getir(enlem, boylam, yaricap_m=400):
     """
@@ -283,7 +288,8 @@ def yakin_cevre_getir(enlem, boylam, yaricap_m=400):
     out body;
     """
     try:
-        res = requests.post(OVERPASS_URL, data={"data": sorgu}, timeout=8.0)
+        res = requests.post(OVERPASS_URL, data={"data": sorgu},
+                            headers=OVERPASS_HEADERS, timeout=8.0)
         if res.status_code != 200:
             return []
 
@@ -384,7 +390,7 @@ with st.expander("🔧 Overpass API Debug", expanded=False):
         """
         st.write("📡 İstek gönderiliyor...")
         try:
-            r = requests.post(test_url, data={"data": test_sorgu}, timeout=10.0)
+            r = requests.post(test_url, data={"data": test_sorgu}, headers=OVERPASS_HEADERS, timeout=10.0)
             st.write(f"**HTTP Durum Kodu:** `{r.status_code}`")
             st.write(f"**Yanıt süresi:** `{r.elapsed.total_seconds():.2f}s`")
 
