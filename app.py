@@ -351,6 +351,7 @@ if en_uygun_istasyon:
     c1, c2 = st.columns(2)
     
     with c1:
+        # Evrensel Google Maps Yönlendirme API Linki
         g_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={en_uygun_istasyon['enlem']},{en_uygun_istasyon['boylam']}&travelmode=driving"
         if st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>', unsafe_allow_html=True):
             st.session_state["nav_başlatıldı"] = en_uygun_istasyon['isim']
