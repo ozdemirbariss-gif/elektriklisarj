@@ -370,6 +370,45 @@ st.markdown('''
 
 
 # ==========================================
+# 🔧 OVERPASS DEBUG PANELİ
+# Sorun tespit edilince bu bloğu silin
+# ==========================================
+with st.expander("🔧 Overpass API Debug", expanded=False):
+    if st.button("Bağlantıyı Test Et"):
+        test_url = "https://overpass-api.de/api/interpreter"
+        # Ankara Kızılay koordinatları — sabit test noktası
+        test_sorgu = """
+        [out:json][timeout:8];
+        node["amenity"="cafe"](around:300,39.9208,32.8541);
+        out body 3;
+        """
+        st.write("📡 İstek gönderiliyor...")
+        try:
+            r = requests.post(test_url, data={"data": test_sorgu}, timeout=10.0)
+            st.write(f"**HTTP Durum Kodu:** `{r.status_code}`")
+            st.write(f"**Yanıt süresi:** `{r.elapsed.total_seconds():.2f}s`")
+
+            if r.status_code == 200:
+                veri = r.json()
+                eleman_sayisi = len(veri.get("elements", []))
+                st.success(f"✅ Bağlantı başarılı! {eleman_sayisi} yer bulundu.")
+                if eleman_sayisi > 0:
+                    st.json(veri["elements"][0])  # İlk elemanı göster
+                else:
+                    st.warning("⚠️ Bağlantı çalışıyor ama sonuç boş. OSM'de veri eksik olabilir.")
+            else:
+                st.error(f"❌ Sunucu hata döndürdü: {r.status_code}")
+                st.code(r.text[:500])
+
+        except requests.exceptions.Timeout:
+            st.error("⏱️ HATA: Zaman aşımı (timeout). Overpass sunucusu yanıt vermedi.")
+        except requests.exceptions.ConnectionError as e:
+            st.error(f"🚫 HATA: Bağlantı kurulamadı. Streamlit Cloud muhtemelen engelliyor.\n\n`{e}`")
+        except Exception as e:
+            st.error(f"❓ Beklenmeyen hata: `{type(e).__name__}: {e}`")
+
+
+# ==========================================
 # 📡 GPS ENTEGRASYONU
 # ==========================================
 user_lat, user_lon = None, None
