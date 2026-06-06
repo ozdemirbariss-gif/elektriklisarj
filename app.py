@@ -14,89 +14,98 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 🎨 PREMIUM CSS: "Midnight Cyber" Lüks Gece Sürüşü Renk Paleti
+# 🎨 PREMIUM CSS: "Dynamic Island / Card-Based UX" Tasarım Katmanı
 st.markdown("""
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         /* Kenar çubuklarını ve Streamlit elementlerini gizleme */
         [data-testid="stSidebar"] { display: none !important; }
         [data-testid="collapsedControl"] { display: none !important; }
+        [data-testid="stHeader"] { display: none !important; }
         
-        /* Arka Plan: Ultra Deep Black (#08090a) */
+        /* Arka Plan: Ultra Deep Black */
         .stApp { background-color: #08090a !important; }
-        .block-container { padding: 2rem 1rem !important; max-width: 480px !important; }
+        .block-container { padding: 1.5rem 1rem !important; max-width: 440px !important; }
         
-        /* Modern ve Ortalanmış Başlık - Apple Silver (#f5f5f7) */
+        /* Minimal Başlık Alanı */
         .ana-baslik {
             font-family: 'SF Pro Display', '-apple-system', BlinkMacSystemFont, sans-serif;
             font-weight: 800;
-            font-size: 32px;
+            font-size: 26px;
             letter-spacing: -0.5px;
             text-align: center;
             color: #f5f5f7;
-            margin-bottom: 5px;
+            margin-top: 10px;
+            margin-bottom: 2px;
         }
         .alt-baslik {
             font-family: '-apple-system', sans-serif;
-            font-size: 14px;
+            font-size: 13px;
             text-align: center;
             color: #6c727a;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
         
-        /* Cyber Slate Blue Premium Kart Tasarımı (#111318) */
-        .oneri-kart { 
-            background: #111318; 
-            padding: 24px; 
-            border-radius: 16px; 
+        /* 📱 DYNAMIC ISLAND / TEK PARÇA MOBİL PANEL MİMARİSİ */
+        .dynamic-island {
+            background: #111318;
             border: 1px solid #1f242e;
-            margin-bottom: 20px; 
-            box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+            border-radius: 28px;
+            padding: 22px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+            margin-bottom: 15px;
         }
-        .istasyon-isim { font-size: 20px; font-weight: 700; color: #f5f5f7; margin: 0 0 8px 0; }
         
-        /* Neon Cyber Green (#00e676) */
+        /* İstasyon Bilgi Bölümü */
+        .istasyon-isim { font-size: 22px; font-weight: 700; color: #f5f5f7; margin: 0 0 6px 0; letter-spacing: -0.3px; }
         .mesafe-text { font-size: 16px; font-weight: 600; color: #00e676; margin: 0 0 4px 0; }
-        .detay-text { font-size: 14px; color: #9aa2ae; margin: 0; }
-        .adres-text { font-size: 12px; color: #6c727a; margin-top: 8px; line-height: 1.4; }
+        .detay-text { font-size: 13px; color: #9aa2ae; margin: 0; }
+        .adres-text { font-size: 12px; color: #6c727a; margin-top: 10px; line-height: 1.4; border-top: 1px solid #1f242e; padding-top: 10px; }
+        
+        /* Panel İçi Mikro Bölüm Çizgisi */
+        .panel-bolucu {
+            border-top: 1px solid #1f242e;
+            margin: 18px 0;
+        }
+        
+        /* Yaşam Alanı Başlığı */
+        .panel-alt-baslik { font-size: 13px; font-weight: 600; color: #f5f5f7; margin-bottom: 10px; letter-spacing: 0.2px; text-transform: uppercase; }
+        .avantaj-item { font-size: 12px; color: #9aa2ae; margin-bottom: 8px; display: flex; justify-content: space-between; }
+        .avantaj-badge { color: #00e676; font-weight: 600; }
         
         /* Canlı Durum Değişiklik Uyarısı */
         .canli-uyari-kart {
             background: #221214;
             border: 1px solid #ff453a;
             padding: 12px 16px;
-            border-radius: 12px;
+            border-radius: 16px;
             color: #ff453a;
             font-size: 13px;
             font-weight: 600;
             margin-bottom: 15px;
             text-align: center;
         }
-        
-        /* Yaşam Alanı & Avantajlar Kartı */
-        .avantaj-konteyner {
-            background: #111318;
-            border-radius: 12px;
-            padding: 16px;
-            border: 1px solid #1f242e;
-            margin-top: 15px;
-        }
-        .avantaj-baslik { font-size: 14px; font-weight: 600; color: #f5f5f7; margin-bottom: 10px; }
-        .avantaj-item { font-size: 12px; color: #9aa2ae; margin-bottom: 6px; display: flex; justify-content: space-between; }
-        .avantaj-badge { color: #00e676; font-weight: 600; }
 
-        /* Buton Mimarisi */
+        /* Streamlit Expander (Menzil Paneli) İç Tasarım Makyajı */
+        .streamlit-expanderHeader {
+            background-color: #111318 !important;
+            border: 1px solid #1f242e !important;
+            border-radius: 16px !important;
+            padding: 10px 15px !important;
+        }
+        
+        /* Buton Tasarımları */
         .stButton>button { 
-            border-radius: 12px; 
-            height: 46px; 
+            border-radius: 14px; 
+            height: 48px; 
             font-weight: 600; 
-            background-color: #111318; 
+            background-color: #1a1d24; 
             color: #f5f5f7; 
-            border: 1px solid #1f242e;
+            border: 1px solid #262c3a;
             width: 100%;
             transition: all 0.2s ease;
         }
-        .stButton>button:hover { border-color: #00e676; color: #00e676; background-color: #151922; }
+        .stButton>button:hover { border-color: #00e676; color: #00e676; background-color: #1f2533; }
         
         /* Navigasyon Link Butonu */
         .nav-link-btn {
@@ -104,24 +113,24 @@ st.markdown("""
             align-items: center;
             justify-content: center;
             text-decoration: none;
-            border-radius: 12px; 
-            height: 46px; 
+            border-radius: 14px; 
+            height: 48px; 
             font-weight: 600; 
-            background-color: #111318; 
+            background-color: #1a1d24; 
             color: #f5f5f7 !important; 
-            border: 1px solid #1f242e;
+            border: 1px solid #262c3a;
             box-sizing: border-box;
             font-size: 14px;
             transition: all 0.2s ease;
         }
-        .nav-link-btn:hover { border-color: #00e676; color: #00e676 !important; background-color: #151922; }
+        .nav-link-btn:hover { border-color: #00e676; color: #00e676 !important; background-color: #1f2533; }
 
-        /* Hızlı Raporlama Butonları İçin Özel Renkler */
-        .rapor-calisiyor>button { border-color: #00e676 !important; color: #00e676 !important; }
-        .rapor-calisiyor>button:hover { background-color: rgba(0, 230, 118, 0.1) !important; }
+        /* Hızlı Raporlama Buton Biçimlendirmeleri */
+        .rapor-calisiyor>button { border-color: #00e676 !important; color: #00e676 !important; background: transparent !important; }
+        .rapor-calisiyor>button:hover { background-color: rgba(0, 230, 118, 0.08) !important; }
         
-        .rapor-arizali>button { border-color: #ff453a !important; color: #ff453a !important; }
-        .rapor-arizali>button:hover { background-color: rgba(255, 69, 58, 0.1) !important; }
+        .rapor-arizali>button { border-color: #ff453a !important; color: #ff453a !important; background: transparent !important; }
+        .rapor-arizali>button:hover { background-color: rgba(255, 69, 58, 0.08) !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -191,7 +200,7 @@ def yorumlari_getir(istasyon_id):
     except: pass
     return []
 
-# --- 📁 ÇEVRİMDIŞI ÖNBELLEK (OFFLINE CACHE) ---
+# --- 📁 ÇEVRİMDIŞI ÖNBELLEK ---
 if "offline_istasyonlar" not in st.session_state:
     try:
         with open("istasyonlar.json", "r", encoding="utf-8") as f:
@@ -202,9 +211,9 @@ if "offline_istasyonlar" not in st.session_state:
 
 istasyonlar_verisi = st.session_state.offline_istasyonlar
 
-# --- 🚀 BAŞLIK ALANI ---
-st.markdown('<div class="ana-baslik">Elektirikli Şarj Bul</div>', unsafe_allow_html=True)
-st.markdown('<div class="alt-baslik">Konumunuza en yakın aktif istasyon listelenir.</div>', unsafe_allow_html=True)
+# --- 🚀 MOBİL BAŞLIK ALANI ---
+st.markdown('<div class="ana-baslik">⚡ ŞarjBul</div>', unsafe_allow_html=True)
+st.markdown('<div class="alt-baslik">En yakın aktif şarj rotanız</div>', unsafe_allow_html=True)
 
 # ==========================================
 # 📡 GPS ENTEGRASYONU VE GÜVENLİK DUVARI
@@ -235,10 +244,9 @@ if not user_lat or not user_lon:
     st.stop()
 
 # ==========================================
-# 🚗 1. BAŞLIK / 2. ÖNERİ ENTEGRASYONU: AKILLI ARAÇ SEÇİM MENÜSÜ
+# 🚗 AKILLI ARAÇ SEÇİM MENÜSÜ (Kapsüllenmiş Tasarım)
 # ==========================================
-with st.expander("Menzil Durumu", expanded=False):
-    # Popüler elektrikli araç kütüphanesi veri tabanı
+with st.expander("📱 Araç / Menzil Ayarı", expanded=False):
     ARAC_KATALOGU = {
         "Tesla Model Y Long Range": {"batarya": 75.0, "tuketim": 16.9},
         "Togg T10X Uzun Menzil": {"batarya": 88.5, "tuketim": 16.9},
@@ -248,125 +256,93 @@ with st.expander("Menzil Durumu", expanded=False):
         "Özel Araç (Manuel Giriş)": {"batarya": 60.0, "tuketim": 17.0}
     }
     
-    secilen_arac = st.selectbox("Aracınızı Seçin", list(ARAC_KATALOGU.keys()))
+    secilen_arac = st.selectbox("Model", list(ARAC_KATALOGU.keys()), label_visibility="collapsed")
     varsayilan_degerler = ARAC_KATALOGU[secilen_arac]
     
     col_b1, col_b2, col_b3 = st.columns(3)
-    with col_b1: 
-        batarya = st.number_input("Batarya (kWh)", value=varsayilan_degerler["batarya"])
-    with col_b2: 
-        sarj_yuzdesi = st.slider("Şarj %", min_value=1, max_value=100, value=30)
-    with col_b3: 
-        tuketim = st.number_input("Tüketim", value=varsayilan_degerler["tuketim"])
+    with col_b1: batarya = st.number_input("Kapasite", value=varsayilan_degerler["batarya"])
+    with col_b2: sarj_yuzdesi = st.slider("Şarj %", min_value=1, max_value=100, value=30)
+    with col_b3: tuketim = st.number_input("Tüketim", value=varsayilan_degerler["tuketim"])
         
 maks_menzil = ((batarya * (sarj_yuzdesi / 100.0)) / tuketim) * 100.0
+st.markdown("<div style='margin-bottom:15px;'></div>", unsafe_allow_html=True)
 
 # ==========================================
-# 🧠 TÜM TÜRKİYE'DE MUTLAK EN YAKIN AKTİF İSTASYONU BULMA
+# 🧠 MUTLAK EN YAKIN AKTİF İSTASYONU BULMA
 # ==========================================
 en_uygun_istasyon = None
 en_yakin_mesafe = float('inf')
 
 for ist in istasyonlar_verisi:
     km = mesafe_hesapla(user_lat, user_lon, ist["enlem"], ist["boylam"])
-    
-    if km <= maks_menzil:
-        if km < en_yakin_mesafe:
-            if not istasyon_arizali_mi(ist["isim"]):
-                en_yakin_mesafe = km
-                en_uygun_istasyon = ist.copy()
-                en_uygun_istasyon["Mesafe"] = round(km, 1)
+    if km <= maks_menzil and km < en_yakin_mesafe:
+        if not istasyon_arizali_mi(ist["isim"]):
+            en_yakin_mesafe = km
+            en_uygun_istasyon = ist.copy()
+            en_uygun_istasyon["Mesafe"] = round(km, 1)
 
 # ==========================================
-# 🎯 REY-BAN / APPLE SADELİĞİNDE TEK ÖNERİ KATMANI
+# 🎯 DYNAMIC ISLAND / INTEGRATED MOBİL PANEL
 # ==========================================
 if en_uygun_istasyon:
     
     # Canlı Durum Değişiklik Kontrolü
     if "nav_başlatıldı" in st.session_state and st.session_state["nav_başlatıldı"] == en_uygun_istasyon['isim']:
         if istasyon_arizali_mi(en_uygun_istasyon['isim']):
-            st.markdown("""
-                <div class="canli-uyari-kart">
-                    Yoldaki İstasyonun Durumu Değişti! İstasyon arızalı veya kapalı olarak bildirildi.
-                </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f'<div class="canli-uyari-kart">Yoldaki İstasyonun Durumu Değişti! İstasyon arızalı bildirildi.</div>', unsafe_allow_html=True)
 
+    # TEK PARÇA AKILLI PANELİN BAŞLANGICI
     st.markdown(f"""
-    <div class="oneri-kart">
-        <div class="istasyon-isim">{en_uygun_istasyon['isim']}</div>
+    <div class="dynamic-island">
         <div class="mesafe-text">{en_uygun_istasyon['Mesafe']} km uzaklıkta</div>
-        <div class="detay-text">Şarj Hızı: {en_uygun_istasyon['hiz']}</div>
+        <div class="istasyon-isim">{en_uygun_istasyon['isim']}</div>
+        <div class="detay-text">Hız: {en_uygun_istasyon['hiz']}</div>
         <div class="adres-text">{en_uygun_istasyon['adres']}</div>
+        <div class="panel-bolucu"></div>
+        <div class="panel-alt-baslik">Yürüme Mesafesindeki Yaşam Alanları</div>
+        <div class="avantaj-item"><span>Kahve Dünyası (Dinlenme)</span><span class="avantaj-badge">120m</span></div>
+        <div class="avantaj-item"><span>Migros Jet (Alışveriş)</span><span class="avantaj-badge">250m</span></div>
+        <div class="avantaj-item"><span>ŞarjBul Sürücü Avantajı</span><span class="avantaj-badge">%15 İndirim</span></div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Eylem Alanı
+    # Eylem Alanı Butonları (Akıllı Panel Altı Tamamlayıcılar)
     c1, c2 = st.columns(2)
     
     with c1:
         g_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={en_uygun_istasyon['enlem']},{en_uygun_istasyon['boylam']}&travelmode=driving"
-        if st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn" id="nav_btn">Navigasyonu Başlat</a>', unsafe_allow_html=True):
+        if st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>', unsafe_allow_html=True):
             st.session_state["nav_başlatıldı"] = en_uygun_istasyon['isim']
         
     with c2:
         with st.popover("Durum Bildir"):
-            st.write("Tek Dokunuşla Hızlı Durum Bildir")
-            
-            # ⚡ 1. BAŞLIK / 1. ÖNERİ ENTEGRASYONU: SÜRTÜNMESİZ BİLDİRİM BUTONLARI
+            st.write("Tek Dokunuşla Hızlı Bildir")
             col_btn1, col_btn2 = st.columns(2)
             with col_btn1:
                 st.markdown('<div class="rapor-calisiyor">', unsafe_allow_html=True)
-                if st.button("Sorunsuz / Boş", key="btn_ok"):
-                    if yorum_gonder(en_uygun_istasyon['isim'], "Anonim Sürücü", "", "Sorunsuz / Boş"):
-                        st.rerun()
+                if st.button("Sorunsuz", key="btn_ok"):
+                    if yorum_gonder(en_uygun_istasyon['isim'], "Anonim Sürücü", "", "Sorunsuz / Boş"): st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
                 
             with col_btn2:
                 st.markdown('<div class="rapor-arizali">', unsafe_allow_html=True)
-                if st.button("Arızalı / Kapalı", key="btn_fail"):
-                    if yorum_gonder(en_uygun_istasyon['isim'], "Anonim Sürücü", "", "Arızalı / Kapalı"):
-                        st.rerun()
+                if st.button("Arızalı", key="btn_fail"):
+                    if yorum_gonder(en_uygun_istasyon['isim'], "Anonim Sürücü", "", "Arızalı / Kapalı"): st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
             
-            # İsteğe Bağlı Detay Alanı
             st.markdown("---")
-            st.caption("Detay Eklemek İster Misiniz? (İsteğe Bağlı)")
-            nick = st.text_input("Kullanıcı Adı (Boş kalabilir)", max_chars=12, key="inp_nick")
-            yorum_txt = st.text_input("Not / Arıza Detayı", key="inp_txt")
-            if st.button("Detaylı Bildirim Gönder", key="btn_detail"):
-                if yorum_gonder(en_uygun_istasyon['isim'], nick, yorum_txt, "Durum Güncellemesi"):
-                    st.rerun()
+            st.caption("Detay Eklemek İster Misiniz?")
+            nick = st.text_input("Kullanıcı Adı", max_chars=12, key="inp_nick")
+            yorum_txt = st.text_input("Arıza Notu", key="inp_txt")
+            if st.button("Detaylı Gönder", key="btn_detail"):
+                if yorum_gonder(en_uygun_istasyon['isim'], nick, yorum_txt, "Durum Güncellemesi"): st.rerun()
             
             st.markdown("---")
-            
-            # Dinamik Zaman Damgalı Son Yorumlar
             yorumlar = yorumlari_getir(en_uygun_istasyon['isim'])
             if yorumlar:
-                for y in sorted(yorumlar, key=lambda x: x.get('tarih', ''), reverse=True)[:3]:
+                for y in sorted(yorumlar, key=lambda x: x.get('tarih', ''), reverse=True)[:2]:
                     zaman_etiketi = zaman_oncesi(y.get('tarih', ''))
                     st.markdown(f"**{y['kullanici']}** ({y['durum']}) • *{zaman_etiketi}*")
                     st.caption(f"> {y['yorum']}")
-            else:
-                st.caption("Bildirim bulunmuyor.")
-
-    # YAŞAM ALANI & AVANTAJLAR KATMANI
-    st.markdown(f"""
-    <div class="avantaj-konteyner">
-        <div class="avantaj-baslik">Şarj Süresince Yakınlardaki Yaşam Alanları</div>
-        <div class="avantaj-item">
-            <span>Kahve Dünyası (Dinlenme Alanı)</span>
-            <span class="avantaj-badge">120m yürüme</span>
-        </div>
-        <div class="avantaj-item">
-            <span>Migros Jet (Alışveriş)</span>
-            <span class="avantaj-badge">250m yürüme</span>
-        </div>
-        <div class="avantaj-item">
-            <span>ŞarjBul Kullanıcılarına Özel Restoran İndirimi</span>
-            <span class="avantaj-badge">%15 İndirim</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
 else:
     st.warning("Menzilinize uygun aktif bir istasyon bulunamadı.")
