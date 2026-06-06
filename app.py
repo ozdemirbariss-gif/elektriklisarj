@@ -246,6 +246,90 @@ def arizali_istasyon_setini_getir():
     return arizali_set
 
 
+# ==========================================
+# 🗺️ OVERPASS API: Yakın çevre bilgisi (ücretsiz, OpenStreetMap)
+# ttl=86400 → günde 1 kez çekiliyor, istasyon koordinatları değişmez
+# ==========================================
+OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+
+KATEGORI_EMOJILER = {
+    "cafe": ("☕", "Kafe"),
+    "restaurant": ("🍽️", "Restoran"),
+    "fast_food": ("🍔", "Fast Food"),
+    "supermarket": ("🛒", "Süpermarket"),
+    "convenience": ("🏪", "Market"),
+    "fuel": ("⛽", "Akaryakıt"),
+    "parking": ("🅿️", "Otopark"),
+    "hotel": ("🏨", "Otel"),
+    "mall": ("🏬", "AVM"),
+    "pharmacy": ("💊", "Eczane"),
+    "atm": ("🏧", "ATM"),
+    "toilets": ("🚻", "Tuvalet"),
+}
+
+@st.cache_data(ttl=86400)
+def yakin_cevre_getir(enlem, boylam, yaricap_m=400):
+    """
+    Overpass API ile verilen koordinat çevresindeki ilgi noktalarını çeker.
+    yaricap_m: metre cinsinden arama yarıçapı (varsayılan 400m)
+    """
+    sorgu = f"""
+    [out:json][timeout:8];
+    (
+      node["amenity"~"cafe|restaurant|fast_food|parking|pharmacy|atm|toilets"](around:{yaricap_m},{enlem},{boylam});
+      node["shop"~"supermarket|convenience|mall"](around:{yaricap_m},{enlem},{boylam});
+      node["tourism"="hotel"](around:{yaricap_m},{enlem},{boylam});
+    );
+    out body;
+    """
+    try:
+        res = requests.post(OVERPASS_URL, data={"data": sorgu}, timeout=8.0)
+        if res.status_code != 200:
+            return []
+
+        elemanlar = res.json().get("elements", [])
+        sonuclar = []
+
+        for el in elemanlar:
+            tags = el.get("tags", {})
+            isim = tags.get("name", "")
+            amenity = tags.get("amenity", tags.get("shop", tags.get("tourism", "")))
+
+            if amenity not in KATEGORI_EMOJILER:
+                continue
+
+            # Mesafe hesapla
+            el_lat = el.get("lat", enlem)
+            el_lon = el.get("lon", boylam)
+            km = mesafe_hesapla(enlem, boylam, el_lat, el_lon)
+            metre = int(km * 1000)
+
+            emoji, kategori_adi = KATEGORI_EMOJILER[amenity]
+            goruntu_isim = isim if isim else kategori_adi
+
+            sonuclar.append({
+                "isim": goruntu_isim,
+                "kategori": kategori_adi,
+                "emoji": emoji,
+                "metre": metre,
+            })
+
+        # Mesafeye göre sırala, kategori başına en yakın 1 tane al (fazla kalabalık olmasın)
+        gorulmus_kategoriler = set()
+        filtrelenmis = []
+        for s in sorted(sonuclar, key=lambda x: x["metre"]):
+            if s["kategori"] not in gorulmus_kategoriler:
+                gorulmus_kategoriler.add(s["kategori"])
+                filtrelenmis.append(s)
+            if len(filtrelenmis) >= 5:  # En fazla 5 yer göster
+                break
+
+        return filtrelenmis
+
+    except Exception:
+        return []
+
+
 @st.cache_data(ttl=30)
 def yorumlari_getir(istasyon_id):
     clean_id = "".join(c for c in istasyon_id if c.isalnum() or c in (' ', '_', '-')).rstrip()
@@ -389,6 +473,20 @@ if en_yakin_3:
         # İlk kart ana öneri, diğerleri yedek olarak etiketleniyor
         etiket = "🥇 En Yakın İstasyon" if sira == 0 else f"#{sira + 1} Yedek İstasyon"
 
+        # Overpass API'den yakın çevre bilgisi çek (önbellekli, günde 1 kez)
+        yakin_yerler = yakin_cevre_getir(istasyon["enlem"], istasyon["boylam"])
+
+        if yakin_yerler:
+            yakin_html = '<div class="panel-bolucu"></div><div class="panel-alt-baslik">Yakındaki Yerler</div>'
+            for yer in yakin_yerler:
+                yakin_html += f'''
+                <div class="avantaj-item">
+                    <span>{yer["emoji"]} {yer["isim"]}</span>
+                    <span class="avantaj-badge">{yer["metre"]}m</span>
+                </div>'''
+        else:
+            yakin_html = ""
+
         st.markdown(f"""
         <div class="premium-card">
             <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">{etiket}</div>
@@ -396,6 +494,7 @@ if en_yakin_3:
             <div class="istasyon-isim">{istasyon['isim']}</div>
             <div class="detay-text">Şarj Hızı: {istasyon['hiz']}</div>
             <div class="adres-text">{istasyon['adres']}</div>
+            {yakin_html}
         </div>
         """, unsafe_allow_html=True)
 
