@@ -13,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 🎨 PREMIUM CSS: Esnek ve Kilitlenmeyen Mobil Arayüz Tasarımı
+# 🎨 PREMIUM CSS
 st.markdown('''
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
@@ -24,46 +24,12 @@ st.markdown('''
         .stApp { background-color: #f8f9fa !important; }
         .block-container { padding: 1rem !important; max-width: 440px !important; }
         
-        .title-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 15px;
-            border: 2px solid #0f172a;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        .title-cell {
-            background-color: #0f172a;
-            color: #ffffff !important;
-            font-family: '-apple-system', sans-serif;
-            font-weight: 800;
-            font-size: 22px;
-            text-align: center;
-            padding: 12px;
-            text-transform: uppercase;
-        }
-        .subtitle-cell {
-            background-color: #ffffff;
-            color: #475569 !important;
-            font-size: 12px;
-            text-align: center;
-            padding: 8px;
-            border-top: 1px solid #e2e8f0;
-        }
+        .title-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; border: 2px solid #0f172a; border-radius: 8px; overflow: hidden; }
+        .title-cell { background-color: #0f172a; color: #ffffff !important; font-family: '-apple-system', sans-serif; font-weight: 800; font-size: 22px; text-align: center; padding: 12px; text-transform: uppercase; }
+        .subtitle-cell { background-color: #ffffff; color: #475569 !important; font-size: 12px; text-align: center; padding: 8px; border-top: 1px solid #e2e8f0; }
         
-        .premium-card {
-            background: #ffffff !important;
-            border: 1px solid #e2e8f0 !important;
-            border-top: 5px solid #0f172a !important;
-            border-radius: 14px;
-            padding: 20px;
-            margin-top: 10px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.02);
-        }
-        
-        .premium-card.warning-card {
-            border-top: 5px solid #ea580c !important;
-        }
+        .premium-card { background: #ffffff !important; border: 1px solid #e2e8f0 !important; border-top: 5px solid #0f172a !important; border-radius: 14px; padding: 20px; margin-top: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
+        .premium-card.warning-card { border-top: 5px solid #ea580c !important; }
         
         .istasyon-isim { font-size: 18px; font-weight: 700; color: #0f172a !important; }
         .mesafe-text { font-size: 13px; font-weight: 700; color: #1e40af !important; text-transform: uppercase; }
@@ -71,23 +37,8 @@ st.markdown('''
         
         .adres-text { font-size: 12px; color: #64748b !important; margin-top: 10px; padding-top: 10px; border-top: 1px solid #f1f5f9; }
         
-        .nav-link-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-decoration: none;
-            border-radius: 8px; 
-            height: 44px; 
-            font-weight: 600; 
-            background-color: #0f172a; 
-            color: #ffffff !important;
-            font-size: 13px;
-            width: 100%;
-            margin-top: 10px;
-        }
-        .nav-link-btn.warning-btn {
-            background-color: #ea580c !important;
-        }
+        .nav-link-btn { display: flex; align-items: center; justify-content: center; text-decoration: none; border-radius: 8px; height: 44px; font-weight: 600; background-color: #0f172a; color: #ffffff !important; font-size: 13px; width: 100%; margin-top: 10px; }
+        .nav-link-btn.warning-btn { background-color: #ea580c !important; }
     </style>
 ''', unsafe_allow_html=True)
 
@@ -115,11 +66,32 @@ def arizali_istasyon_setini_getir():
     except: pass
     return arizali_set
 
-# --- 📁 VERİ MODELİ KORUMASI ---
+# Esnek Veri Okuyucu (Büyük/küçük harf bağımsız)
+def esnek_deger_oku(sozluk, olasi_anahtarlar):
+    if not isinstance(sozluk, dict): return None
+    for k, v in sozluk.items():
+        if str(k).lower() in olasi_anahtarlar:
+            return v
+    return None
+
+# --- 📁 AKILLI VERİ MODELİ KORUMASI ---
 if "offline_istasyonlar" not in st.session_state:
     try:
         with open("istasyonlar.json", "r", encoding="utf-8") as f:
-            st.session_state.offline_istasyonlar = json.load(f)
+            raw_data = json.load(f)
+            # JSON formatını otomatik düzelt (dict içindeyse listeyi bul)
+            if isinstance(raw_data, dict):
+                liste_bulundu = False
+                for k, v in raw_data.items():
+                    if isinstance(v, list):
+                        st.session_state.offline_istasyonlar = v
+                        liste_bulundu = True
+                        break
+                if not liste_bulundu: st.session_state.offline_istasyonlar = [raw_data]
+            elif isinstance(raw_data, list):
+                st.session_state.offline_istasyonlar = raw_data
+            else:
+                st.session_state.offline_istasyonlar = []
     except:
         st.error("istasyonlar.json dosyası yüklenemedi.")
         st.stop()
@@ -178,7 +150,7 @@ with st.expander("Araç ve Menzil Ayarları", expanded=False):
 maks_menzil = ((batarya * (sarj_yuzdesi / 100.0)) / tuketim) * 100.0
 
 # ==========================================
-# 🧠 MATRİS HESAPLAMA (Hata Toleranslı Algoritma)
+# 🧠 MATRİS HESAPLAMA (Zırhlı Çekirdek)
 # ==========================================
 en_yakin_istasyon = None
 en_yakin_mesafe = float('inf')
@@ -187,39 +159,49 @@ aktif_arizali_set = arizali_istasyon_setini_getir()
 u_lat, u_lon = st.session_state.user_coords
 
 for ist in st.session_state.offline_istasyonlar:
-    i_lat = ist.get("enlem") or ist.get("lat") or ist.get("latitude")
-    i_lon = ist.get("boylam") or ist.get("lon") or ist.get("lng") or ist.get("longitude")
+    # Verileri kılı kırk yararak okuyoruz
+    raw_lat = esnek_deger_oku(ist, ["enlem", "lat", "latitude", "y"])
+    raw_lon = esnek_deger_oku(ist, ["boylam", "lon", "lng", "longitude", "x"])
     
-    if i_lat is None or i_lon is None:
+    if raw_lat is None or raw_lon is None:
         continue
         
-    km = mesafe_hesapla(u_lat, u_lon, float(i_lat), float(i_lon))
+    try:
+        # Hatalı string (virgüllü) girişleri temizle
+        if isinstance(raw_lat, str): raw_lat = raw_lat.replace(',', '.')
+        if isinstance(raw_lon, str): raw_lon = raw_lon.replace(',', '.')
+        i_lat, i_lon = float(raw_lat), float(raw_lon)
+    except (ValueError, TypeError):
+        continue
+        
+    km = mesafe_hesapla(u_lat, u_lon, i_lat, i_lon)
     
-    i_isim = ist.get("isim") or ist.get("name") or "Şarj İstasyonu"
-    clean_id = "".join(c for c in i_isim if c.isalnum() or c in (' ', '_', '-')).rstrip()
+    i_isim = esnek_deger_oku(ist, ["isim", "name", "title", "ad", "şirket", "sirket"]) or "Şarj İstasyonu"
+    clean_id = "".join(c for c in str(i_isim) if c.isalnum() or c in (' ', '_', '-')).rstrip()
     
     if clean_id not in aktif_arizali_set:
         if km < en_yakin_mesafe:
             en_yakin_mesafe = km
             en_yakin_istasyon = ist.copy()
+            # Güvenli değişkenleri içine yazdır
+            en_yakin_istasyon["Safe_Lat"] = i_lat
+            en_yakin_istasyon["Safe_Lon"] = i_lon
+            en_yakin_istasyon["Safe_Isim"] = str(i_isim)
             en_yakin_istasyon["Mesafe_KM"] = round(km, 1)
 
 # ==========================================
-# 🎯 SONUÇ EKRANI VE KUSURSUZ YÖNLENDİRME
+# 🎯 SONUÇ EKRANI
 # ==========================================
 if en_yakin_istasyon:
     km_uzaklik = en_yakin_istasyon["Mesafe_KM"]
-    ist_isim = en_yakin_istasyon.get("isim") or en_yakin_istasyon.get("name") or "Bilinmeyen İstasyon"
-    ist_hiz = en_yakin_istasyon.get("hiz") or en_yakin_istasyon.get("speed") or "Bilinmiyor"
-    ist_adres = en_yakin_istasyon.get("adres") or en_yakin_istasyon.get("address") or "Adres Bilgisi Yok"
+    ist_isim = en_yakin_istasyon["Safe_Isim"]
+    ist_hiz = esnek_deger_oku(en_yakin_istasyon, ["hiz", "speed", "güç", "guc"]) or "Bilinmiyor"
+    ist_adres = esnek_deger_oku(en_yakin_istasyon, ["adres", "address", "lokasyon"]) or "Adres Bilgisi Yok"
     
-    # En yakın istasyonun doğru navigasyon koordinatları
-    hedef_lat = en_yakin_istasyon.get("enlem") or en_yakin_istasyon.get("lat") or en_yakin_istasyon.get("latitude")
-    hedef_lon = en_yakin_istasyon.get("boylam") or en_yakin_istasyon.get("lon") or en_yakin_istasyon.get("lng") or en_yakin_istasyon.get("longitude")
+    hedef_lat = en_yakin_istasyon["Safe_Lat"]
+    hedef_lon = en_yakin_istasyon["Safe_Lon"]
     
     menzil_yeterli = km_uzaklik <= maks_menzil
-    
-    # Doğru ve geçerli Google Haritalar rotalama URL'si
     g_link = f"https://www.google.com/maps/dir/?api=1&origin={u_lat},{u_lon}&destination={hedef_lat},{hedef_lon}&travelmode=driving"
     
     if menzil_yeterli:
@@ -231,7 +213,6 @@ if en_yakin_istasyon:
             <div class="adres-text">{ist_adres}</div>
         </div>
         """, unsafe_allow_html=True)
-        
         st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn">🗺️ Navigasyonu Başlat</a>', unsafe_allow_html=True)
     else:
         st.markdown(f"""
@@ -243,7 +224,6 @@ if en_yakin_istasyon:
             <div class="adres-text">{ist_adres}</div>
         </div>
         """, unsafe_allow_html=True)
-        
         st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn warning-btn">🗺️ Menzili Göze Al ve Rotala</a>', unsafe_allow_html=True)
 else:
-    st.info("ℹ️ Sistemde listelenebilecek aktif bir şarj istasyonu kaydı bulunamadı.")
+    st.info("ℹ️ Sistemde listelenebilecek aktif bir şarj istasyonu kaydı bulunamadı. JSON dosyasındaki veri anahtarlarını veya yapısını kontrol ediniz.")
