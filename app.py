@@ -6,7 +6,7 @@ import logging
 import unicodedata
 import requests
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime
 import html
 from streamlit_js_eval import get_geolocation
 
@@ -59,7 +59,8 @@ KATEGORI_EMOJILER: dict = {
     "toilets":     ("🚻", "Tuvalet"),
 }
 
-OVERPASS_URL     = "https://overpass-api.de/api/interpreter"
+OVERPASS_URLS = ["https://overpass-api.de/api/interpreter","https://lz4.overpass-api.de/api/interpreter"]
+OVERPASS_URL = OVERPASS_URLS[0]
 OVERPASS_HEADERS = {
     "User-Agent": "SarjBul/1.0 (EV charging finder app)",
     "Accept":     "application/json",
@@ -271,7 +272,7 @@ def yorum_gonder(istasyon_id: str, kullanici: str, yorum_metni: str, durum: str)
         "tarih":     datetime.now().strftime("%d.%m %H:%M"),
     }
     try:
-        r = requests.post(url, json=yeni_yorum, timeout=FIREBASE_TIMEOUT_S)
+        r = get_session().post(url, json=yeni_yorum, timeout=FIREBASE_TIMEOUT_S)
         if r.status_code in (200, 201):
             yorumlari_getir.clear()
             arizali_istasyon_setini_getir.clear()
@@ -286,7 +287,7 @@ def arizali_istasyon_setini_getir() -> set:
     url         = f"{FIREBASE_DB_URL}yorumlar.json"
     arizali_set = set()
     try:
-        res = requests.get(url, timeout=FIREBASE_TIMEOUT_S)
+        res = get_session().get(url, timeout=FIREBASE_TIMEOUT_S)
         if res.status_code != 200:
             logger.warning("Firebase yorumlar yanıt kodu: %s", res.status_code)
             return arizali_set
@@ -373,7 +374,7 @@ def yorumlari_getir(istasyon_id: str) -> list:
     clean_id = clean_id_uret(istasyon_id)
     url      = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
     try:
-        res = requests.get(url, timeout=FIREBASE_TIMEOUT_S)
+        res = get_session().get(url, timeout=FIREBASE_TIMEOUT_S)
         if res.status_code == 200 and res.json():
             return list(res.json().values())
     except Exception as e:
