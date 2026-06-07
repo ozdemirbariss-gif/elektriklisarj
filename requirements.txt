@@ -5,3 +5,4 @@ streamlit-folium
 requests
 firebase-admin
 streamlit-js-eval
+sentry-sdk
