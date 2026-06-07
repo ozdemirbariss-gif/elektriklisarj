@@ -498,14 +498,14 @@ def _paralel_cevre_getir(istasyon_listesi: List[Dict[str, Any]], yaricap: int) -
         return list(executor.map(lambda ist: _cevre_getir_ist(ist, yaricap), istasyon_listesi))
 
 # ==========================================
-# 🎛️ SIDEBAR KONTROLLERİ VE AUTHENTICATION
+# 🔑 ANA SAYFA GİRİŞ PANELİ VE AYARLAR
 # ==========================================
-with st.sidebar:
-    st.header("🔑 Giriş Yap")
+with st.expander("🔑 Giriş / Kullanıcı Paneli", expanded=("auth_token" not in st.session_state)):
     if "auth_token" not in st.session_state:
-        email = st.text_input("E-posta")
-        password = st.text_input("Şifre", type="password")
-        if st.button("Giriş Yap", use_container_width=True):
+        email = st.text_input("E-posta", key="login_email")
+        password = st.text_input("Şifre", type="password", key="login_password")
+
+        if st.button("Giriş Yap", use_container_width=True, key="login_button"):
             user_data = firebase_login(email, password)
             if user_data:
                 st.session_state["auth_token"] = user_data["idToken"]
@@ -515,21 +515,21 @@ with st.sidebar:
                 st.success("Giriş başarılı!")
                 st.rerun()
             else:
-                st.error("Giriş başarısız. Lütfen bilgilerinizi kontrol edin.")
+                st.error("Giriş başarısız. E-posta/şifreyi veya Firebase Authentication ayarlarını kontrol edin.")
     else:
         st.success("Giriş aktif: Doğrulanmış Sürücü")
-        if st.button("Çıkış Yap", use_container_width=True):
+        if st.button("Çıkış Yap", use_container_width=True, key="logout_button"):
             oturumu_temizle()
             st.rerun()
 
-    st.markdown("---")
-    st.header("⚙️ Arama Ayarları")
+with st.expander("⚙️ Arama Ayarları", expanded=False):
     ayar_yaricap = st.slider(
         "Çevresel Mekan Arama Yarıçapı (m)",
         min_value=100,
         max_value=800,
         value=400,
         step=100,
+        key="ayar_yaricap",
     )
     sonuc_sayisi = st.slider(
         "Gösterilecek İstasyon Sayısı",
@@ -537,9 +537,9 @@ with st.sidebar:
         max_value=10,
         value=MAX_ISTASYON_SAYISI,
         step=1,
+        key="sonuc_sayisi",
     )
-    st.markdown("---")
-    st.info("Durum bildirimi için giriş gerekir. Konum veriniz Firebase'e kaydedilmez.")
+    st.caption("Durum bildirimi için giriş gerekir. Konum veriniz Firebase'e kaydedilmez.")
 
 # ==========================================
 # 🏛️ BAŞLIK VE KONUM
@@ -726,7 +726,7 @@ if en_yakin:
         with c2:
             with st.popover("Durum Bildir"):
                 if "auth_token" not in st.session_state:
-                    st.warning("Durum bildirmek ve yorum yapmak için lütfen yan menüden giriş yapın.")
+                    st.warning("Durum bildirmek ve yorum yapmak için lütfen üstteki Giriş / Kullanıcı Paneli bölümünden giriş yapın.")
                 else:
                     col_btn1, col_btn2 = st.columns(2)
                     ist_id = istasyon_id_getir(istasyon)
