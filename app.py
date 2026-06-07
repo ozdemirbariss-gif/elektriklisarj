@@ -59,10 +59,12 @@ KATEGORI_EMOJILER: dict = {
     "toilets":     ("🚻", "Tuvalet"),
 }
 
-OVERPASS_URLS = ["https://overpass-api.de/api/interpreter","https://lz4.overpass-api.de/api/interpreter"]
-OVERPASS_URL = OVERPASS_URLS[0]
+OVERPASS_URLS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://lz4.overpass-api.de/api/interpreter"
+]
 OVERPASS_HEADERS = {
-    "User-Agent": "SarjBul/1.0 (EV charging finder app)",
+    "User-Agent": "SarjBul/2.0 (EV charging finder app production)",
     "Accept":     "application/json",
 }
 
@@ -205,7 +207,7 @@ def get_session():
 def guvenli_metin(metin: str) -> str:
     return html.escape(str(metin or "").strip())
 
-def yorum_gonderilebilir_mi():
+def yorum_gonderilebilir_mi() -> bool:
     son = st.session_state.get("son_yorum_zamani")
     if son is None:
         return True
@@ -235,7 +237,8 @@ def mesafe_hesapla(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 def zaman_oncesi(tarih_str: str) -> str:
     try:
         simdi  = datetime.now()
-        eski   = datetime.strptime(tarih_str, "%d.%m %H:%M").replace(year=simdi.year)
+        # ARTIK YIL HATASI ÇÖZÜMÜ: ISO formatı doğrudan parse ediliyor
+        eski   = datetime.fromisoformat(tarih_str)
         saniye = (simdi - eski).total_seconds()
         if saniye < 0:  return "Az önce"
         dakika = int(saniye / 60)
@@ -247,33 +250,37 @@ def zaman_oncesi(tarih_str: str) -> str:
         return f"{gun} gün önce"
     except Exception as e:
         logger.warning("zaman_oncesi parse hatası: %s", e)
-        return tarih_str
+        return "Bilinmeyen zaman"
 
 
 def yorum_tarihi_parse(tarih_str: str) -> datetime:
     try:
-        simdi = datetime.now()
-        dt    = datetime.strptime(tarih_str, "%d.%m %H:%M").replace(year=simdi.year)
-        if dt > simdi:
-            dt = dt.replace(year=simdi.year - 1)
-        return dt
+        # ARTIK YIL HATASI ÇÖZÜMÜ: ISO standardı deterministik parse sağlıyor
+        return datetime.fromisoformat(tarih_str)
     except Exception as e:
         logger.warning("yorum_tarihi_parse hatası: %s", e)
         return datetime.min
 
 
 def yorum_gonder(istasyon_id: str, kullanici: str, yorum_metni: str, durum: str) -> bool:
+    # SPAM KORUMASI: Rate-limit kontrolü arka planda da doğrulanıyor
+    if not yorum_gonderilebilir_mi():
+        return False
+        
     clean_id   = clean_id_uret(istasyon_id)
     url        = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
+    
+    # XSS GÜVENLİK DUVARI: Veri tabanına yazılmadan önce girdiler dezenfekte ediliyor
     yeni_yorum = {
-        "kullanici": (kullanici.strip() or "Anonim Sürücü"),
-        "yorum":     (yorum_metni.strip() or f"İstasyon durumu bildirildi: {durum}"),
-        "durum":     durum,
-        "tarih":     datetime.now().strftime("%d.%m %H:%M"),
+        "kullanici": (guvenli_metin(kullanici) or "Anonim Sürücü"),
+        "yorum":     (guvenli_metin(yorum_metni) or f"İstasyon durumu bildirildi: {durum}"),
+        "durum":     guvenli_metin(durum),
+        "tarih":     datetime.now().isoformat(), # ISO Standardı kullanılıyor
     }
     try:
         r = get_session().post(url, json=yeni_yorum, timeout=FIREBASE_TIMEOUT_S)
         if r.status_code in (200, 201):
+            st.session_state["son_yorum_zamani"] = datetime.now() # Zaman damgası kilitlendi
             yorumlari_getir.clear()
             arizali_istasyon_setini_getir.clear()
             return True
@@ -321,43 +328,47 @@ def yakin_cevre_getir(enlem: float, boylam: float, yaricap_m: int = OVERPASS_YAR
     );
     out body;
     """
-    try:
-        res = requests.post(
-            OVERPASS_URL, data={"data": sorgu},
-            headers=OVERPASS_HEADERS, timeout=OVERPASS_TIMEOUT_S
-        )
-        if res.status_code != 200:
-            logger.warning("Overpass yanıt kodu: %s", res.status_code)
-            return []
-
-        sonuclar: list = []
-        for el in res.json().get("elements", []):
-            tags    = el.get("tags", {})
-            amenity = tags.get("amenity", tags.get("shop", tags.get("tourism", "")))
-            if amenity not in KATEGORI_EMOJILER:
+    
+    # FAILOVER STRATEJİSİ: Sunucular sırayla denenir, biri çökerse diğeri görevi devralır
+    for url in OVERPASS_URLS:
+        try:
+            res = requests.post(
+                url, data={"data": sorgu},
+                headers=OVERPASS_HEADERS, timeout=OVERPASS_TIMEOUT_S
+            )
+            if res.status_code != 200:
                 continue
-            km    = mesafe_hesapla(enlem, boylam, el.get("lat", enlem), el.get("lon", boylam))
-            emoji, kategori_adi = KATEGORI_EMOJILER[amenity]
-            sonuclar.append({
-                "isim":     (tags.get("name") or kategori_adi),
-                "kategori": kategori_adi,
-                "emoji":    emoji,
-                "metre":    int(km * 1000),
-            })
 
-        gorulmus:     set  = set()
-        filtrelenmis: list = []
-        for s in sorted(sonuclar, key=lambda x: x["metre"]):
-            if s["kategori"] not in gorulmus:
-                gorulmus.add(s["kategori"])
-                filtrelenmis.append(s)
-            if len(filtrelenmis) >= MAX_YAKIN_YER:
-                break
-        return filtrelenmis
+            sonuclar: list = []
+            for el in res.json().get("elements", []):
+                tags    = el.get("tags", {})
+                amenity = tags.get("amenity", tags.get("shop", tags.get("tourism", "")))
+                if amenity not in KATEGORI_EMOJILER:
+                    continue
+                km    = mesafe_hesapla(enlem, boylam, el.get("lat", enlem), el.get("lon", boylam))
+                emoji, kategori_adi = KATEGORI_EMOJILER[amenity]
+                sonuclar.append({
+                    "isim":     guvenli_metin(tags.get("name") or kategori_adi),
+                    "kategori": kategori_adi,
+                    "emoji":    emoji,
+                    "metre":    int(km * 1000),
+                })
 
-    except Exception as e:
-        logger.warning("yakin_cevre_getir hatası [%%.4f, %%.4f]: %s", enlem, boylam, e)
-        return []
+            gorulmus:     set  = set()
+            filtrelenmis: list = []
+            for s in sorted(sonuclar, key=lambda x: x["metre"]):
+                if s["kategori"] not in gorulmus:
+                    gorulmus.add(s["kategori"])
+                    filtrelenmis.append(s)
+                if len(filtrelenmis) >= MAX_YAKIN_YER:
+                    break
+            return filtrelenmis
+
+        except Exception as e:
+            logger.warning("%s sunucusunda Overpass hatası, yedeğe geçiliyor: %s", url, e)
+            continue
+            
+    return []
 
 
 def _cevre_getir_ist(ist: dict) -> list:
@@ -365,7 +376,7 @@ def _cevre_getir_ist(ist: dict) -> list:
 
 
 def _paralel_cevre_getir(istasyon_listesi: list) -> list:
-    with ThreadPoolExecutor(max_workers=len(istasyon_listesi)) as executor:
+    with ThreadPoolExecutor(max_workers=max(1, len(istasyon_listesi))) as executor:
         return list(executor.map(_cevre_getir_ist, istasyon_listesi))
 
 
@@ -480,7 +491,7 @@ with st.expander("Araç ve Menzil Ayarları", expanded=False):
 
     st.markdown("---")
 
-    # DÜZELTME: 'guzenik_marji' yazım hatası 'guvenlik_marji' olarak güncellendi.
+    # YAZIM HATASI DÜZELTİLDİ: guzenik_marji -> guvenlik_marji
     guvenlik_marji = st.slider(
         "Güvenlik Marjı (Yol mesafesi tahmini)",
         min_value=10, max_value=50, value=25,
@@ -539,13 +550,14 @@ if en_yakin:
         else:
             yakin_html = ""
 
+        # GÜVENLİK: İstasyon detayları ekrana basılmadan önce HTML encode işleminden geçiyor
         st.markdown(f"""
         <div class="premium-card">
-            <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">{etiket}</div>
+            <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">{guvenli_metin(etiket)}</div>
             <div class="mesafe-text">{istasyon['Mesafe']} km uzaklıkta</div>
-            <div class="istasyon-isim">{istasyon['isim']}</div>
-            <div class="detay-text">Şarj Hızı: {istasyon['hiz']}</div>
-            <div class="adres-text">{istasyon['adres']}</div>
+            <div class="istasyon-isim">{guvenli_metin(istasyon['isim'])}</div>
+            <div class="detay-text">Şarj Hızı: {guvenli_metin(istasyon['hiz'])}</div>
+            <div class="adres-text">{guvenli_metin(istasyon['adres'])}</div>
             {yakin_html}
         </div>
         """, unsafe_allow_html=True)
@@ -561,7 +573,7 @@ if en_yakin:
 
         c1, c2 = st.columns(2)
         with c1:
-            # DÜZELTME: Evrensel ve resmi Google Maps Directions URL mimarisine geçiş yapıldı.
+            # NAVİGASYON DÜZELTMESİ: Resmi Google Maps Yönlendirme (Directions) URL Şeması entegre edildi
             g_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={istasyon['enlem']},{istasyon['boylam']}&travelmode=driving"
             st.markdown(
                 f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>',
@@ -576,8 +588,11 @@ if en_yakin:
                 with col_btn1:
                     st.markdown('<div class="rapor-calisiyor">', unsafe_allow_html=True)
                     if st.button("Sorunsuz", key=f"btn_ok_{sira}"):
-                        if istasyon_isim:
-                            if yorum_gonder(istasyon_isim, "Anonim Sürücü", "", "Sorunsuz / Boş"):
+                        # SPAM & RATE-LIMIT KORUMASI DOĞRULAMASI
+                        if not yorum_gonderilebilir_mi():
+                            st.error(f"Çok hızlısınız! Lütfen {YORUM_BEKLEME_SURESI} sn bekleyin.")
+                        elif istasyon_isim:
+                            if yorum_gonder(istasyon_isim, "Anonim Sürücü", "Sorunsuz / Boş", "Sorunsuz / Boş"):
                                 st.rerun()
                         else:
                             st.warning("İstasyon adı bulunamadı.")
@@ -586,8 +601,11 @@ if en_yakin:
                 with col_btn2:
                     st.markdown('<div class="rapor-arizali">', unsafe_allow_html=True)
                     if st.button("Arızalı", key=f"btn_fail_{sira}"):
-                        if istasyon_isim:
-                            if yorum_gonder(istasyon_isim, "Anonim Sürücü", "", "Arızalı / Kapalı"):
+                        # SPAM & RATE-LIMIT KORUMASI DOĞRULAMASI
+                        if not yorum_gonderilebilir_mi():
+                            st.error(f"Çok hızlısınız! Lütfen {YORUM_BEKLEME_SURESI} sn bekleyin.")
+                        elif istasyon_isim:
+                            if yorum_gonder(istasyon_isim, "Anonim Sürücü", "Arızalı / Kapalı", "Arızalı / Kapalı"):
                                 st.rerun()
                         else:
                             st.warning("İstasyon adı bulunamadı.")
@@ -597,7 +615,10 @@ if en_yakin:
                 nick      = st.text_input("Kullanıcı Adı", max_chars=12, key=f"inp_nick_{sira}")
                 yorum_txt = st.text_input("Durum Notu", key=f"inp_txt_{sira}")
                 if st.button("Detaylı Gönder", key=f"btn_detail_{sira}"):
-                    if istasyon_isim:
+                    # SPAM & RATE-LIMIT KORUMASI DOĞRULAMASI
+                    if not yorum_gonderilebilir_mi():
+                        st.error(f"Çok hızlısınız! Lütfen {YORUM_BEKLEME_SURESI} sn bekleyin.")
+                    elif istasyon_isim:
                         if yorum_gonder(istasyon_isim, nick, yorum_txt, "Durum Güncellemesi"):
                             st.rerun()
                     else:
@@ -612,11 +633,14 @@ if en_yakin:
                         reverse=True
                     )[:MAX_SON_YORUM]:
                         zaman_etiketi = zaman_oncesi(y.get("tarih", ""))
-                        st.markdown(
-                            f"**{y.get('kullanici', 'Anonim')}** "
-                            f"({y.get('durum', 'Güncelleme')}) • *{zaman_etiketi}*"
-                        )
-                        st.caption(f"> {y.get('yorum', '')}")
+                        
+                        # GÜVENLİK: Markdown render işleminde HTML Injection / XSS engellendi
+                        temiz_user = guvenli_metin(y.get('kullanici', 'Anonim'))
+                        temiz_durum = guvenli_metin(y.get('durum', 'Güncelleme'))
+                        temiz_msg = guvenli_metin(y.get('yorum', ''))
+                        
+                        st.markdown(f"**{temiz_user}** ({temiz_durum}) • *{zaman_etiketi}*")
+                        st.caption(f"> {temiz_msg}")
 
         st.markdown("<br>", unsafe_allow_html=True)
 
