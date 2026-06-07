@@ -16,20 +16,19 @@ logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # ==========================================
-# 📐 UYGULAMA SABİTLERİ  (magic number'lar tek yerden yönetilir)
+# 📐 UYGULAMA SABİTLERİ
 # ==========================================
-MAX_ISTASYON_SAYISI = 2        # Gösterilecek maksimum istasyon sayısı
-OVERPASS_YARICAP_M  = 400      # Overpass arama yarıçapı (metre)
-OVERPASS_TIMEOUT_S  = 12.0     # Overpass istek zaman aşımı (saniye)
-FIREBASE_TIMEOUT_S  = 4.0      # Firebase istek zaman aşımı (saniye)
-YORUM_CACHE_TTL     = 30       # Yorum önbellekleme süresi (saniye)
-CEVRE_CACHE_TTL     = 86_400   # Yakın çevre önbellekleme süresi (saniye = 1 gün)
-MAX_YAKIN_YER       = 5        # Kart üzerinde gösterilecek maksimum yakın yer
-MAX_SON_YORUM       = 2        # Popover'da gösterilecek son yorum sayısı
+MAX_ISTASYON_SAYISI = 2        
+OVERPASS_YARICAP_M  = 400      
+OVERPASS_TIMEOUT_S  = 12.0     
+FIREBASE_TIMEOUT_S  = 4.0      
+YORUM_CACHE_TTL     = 30       
+CEVRE_CACHE_TTL     = 86_400   
+MAX_YAKIN_YER       = 5        
+MAX_SON_YORUM       = 2        
 
 # ==========================================
 # 🚗 ARAÇ KATALOĞU
-# Expander içinde değil modül seviyesinde; her render'da yeniden oluşturulmaz.
 # ==========================================
 ARAC_KATALOGU: dict = {
     "Tesla Model Y Long Range": {"batarya": 75.0, "tuketim": 16.9},
@@ -41,7 +40,6 @@ ARAC_KATALOGU: dict = {
 
 # ==========================================
 # 🗺️ OVERPASS KATEGORİLERİ
-# "fuel" hem sözlükte hem de Overpass sorgusunda artık mevcut (önceden sadece sözlükte vardı).
 # ==========================================
 KATEGORI_EMOJILER: dict = {
     "cafe":        ("☕",  "Kafe"),
@@ -49,7 +47,7 @@ KATEGORI_EMOJILER: dict = {
     "fast_food":   ("🍔", "Fast Food"),
     "supermarket": ("🛒", "Süpermarket"),
     "convenience": ("🏪", "Market"),
-    "fuel":        ("⛽", "Akaryakıt"),   # ← Overpass sorgusuna da eklendi
+    "fuel":        ("⛽", "Akaryakıt"),   
     "parking":     ("🅿️", "Otopark"),
     "hotel":       ("🏨", "Otel"),
     "mall":        ("🏬", "AVM"),
@@ -185,8 +183,7 @@ st.markdown('''
 ''', unsafe_allow_html=True)
 
 # ==========================================
-# 🔐 FİREBASE BAĞLANTISI (st.secrets'tan okunuyor)
-# secrets.toml: [firebase] db_url = "https://..."
+# 🔐 FİREBASE BAĞLANTISI
 # ==========================================
 try:
     FIREBASE_DB_URL = st.secrets["firebase"]["db_url"]
@@ -194,19 +191,11 @@ except (KeyError, FileNotFoundError):
     st.error("Firebase bağlantı bilgisi bulunamadı. Lütfen secrets.toml dosyasını kontrol edin.")
     st.stop()
 
-
 # ==========================================
 # 🛠️ YARDIMCI FONKSİYONLAR
 # ==========================================
 
 def clean_id_uret(isim: str) -> str:
-    """
-    İstasyon adından tutarlı, güvenli bir Firebase anahtarı üretir.
-
-    Türkçe karakterleri (ş→s, ı→i, ğ→g …) ASCII'ye dönüştürür;
-    hiçbir ASCII karakter üretilemezse MD5 hash ile fallback sağlar.
-    Bu sayede farklı istasyon isimleri asla aynı clean_id'ye düşmez.
-    """
     normalized = unicodedata.normalize("NFKD", isim)
     ascii_isim = normalized.encode("ascii", "ignore").decode("ascii").strip()
     safe = "".join(c for c in ascii_isim if c.isalnum() or c in (" ", "_", "-")).rstrip()
@@ -265,7 +254,6 @@ def yorum_gonder(istasyon_id: str, kullanici: str, yorum_metni: str, durum: str)
     try:
         r = requests.post(url, json=yeni_yorum, timeout=FIREBASE_TIMEOUT_S)
         if r.status_code in (200, 201):
-            # Sadece etkilenen iki fonksiyonun önbelleklerini temizle
             yorumlari_getir.clear()
             arizali_istasyon_setini_getir.clear()
             return True
@@ -304,11 +292,6 @@ def arizali_istasyon_setini_getir() -> set:
 
 @st.cache_data(ttl=CEVRE_CACHE_TTL)
 def yakin_cevre_getir(enlem: float, boylam: float, yaricap_m: int = OVERPASS_YARICAP_M) -> list:
-    """
-    Overpass API ile verilen koordinat çevresindeki ilgi noktalarını çeker.
-    - yaricap_m : metre cinsinden arama yarıçapı (varsayılan: OVERPASS_YARICAP_M)
-    - 'fuel'    : Overpass sorgusuna eklendi (daha önce KATEGORI_EMOJILER'de vardı ama sorgu yoktu)
-    """
     sorgu = f"""
     [out:json][timeout:{int(OVERPASS_TIMEOUT_S)}];
     (
@@ -342,7 +325,6 @@ def yakin_cevre_getir(enlem: float, boylam: float, yaricap_m: int = OVERPASS_YAR
                 "metre":    int(km * 1000),
             })
 
-        # Mesafeye göre sırala; kategori başına en yakın 1 yer, toplam MAX_YAKIN_YER
         gorulmus:     set  = set()
         filtrelenmis: list = []
         for s in sorted(sonuclar, key=lambda x: x["metre"]):
@@ -354,21 +336,15 @@ def yakin_cevre_getir(enlem: float, boylam: float, yaricap_m: int = OVERPASS_YAR
         return filtrelenmis
 
     except Exception as e:
-        logger.warning("yakin_cevre_getir hatası [%.4f, %.4f]: %s", enlem, boylam, e)
+        logger.warning("yakin_cevre_getir hatası [%%.4f, %%.4f]: %s", enlem, boylam, e)
         return []
 
 
 def _cevre_getir_ist(ist: dict) -> list:
-    """Tek bir istasyon için yakın çevre verisi çeker (thread-safe yardımcı)."""
     return yakin_cevre_getir(ist["enlem"], ist["boylam"])
 
 
 def _paralel_cevre_getir(istasyon_listesi: list) -> list:
-    """
-    Birden fazla istasyon için Overpass sorgularını paralel çalıştırır.
-    İlk yüklemede (~2 istasyon için) yaklaşık 2x hızlanma sağlar.
-    Sonraki çağrılarda st.cache_data cache'i devreye girer; HTTP çağrısı yapılmaz.
-    """
     with ThreadPoolExecutor(max_workers=len(istasyon_listesi)) as executor:
         return list(executor.map(_cevre_getir_ist, istasyon_listesi))
 
@@ -388,7 +364,6 @@ def yorumlari_getir(istasyon_id: str) -> list:
 
 # ==========================================
 # 📁 İSTASYON VERİSİ
-# session_state yerine @st.cache_data — daha temiz ve Streamlit idiomatik.
 # ==========================================
 @st.cache_data
 def istasyonlari_yukle() -> list:
@@ -418,7 +393,7 @@ st.markdown('''
 
 
 # ==========================================
-# 📡 GPS ENTEGRASYONU
+# 📡 ÖNERİ 1: GPS ENTEGRASYONU & MANUEL KONUM SEÇİMİ (FALLBACK UI)
 # ==========================================
 user_lat, user_lon = None, None
 
@@ -440,13 +415,33 @@ if user_lat is None or user_lon is None:
 if user_lat is None or user_lon is None:
     st.markdown("""
     <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-left: 5px solid #2563eb; padding: 16px; border-radius: 12px; margin-bottom: 15px;">
-        <div style="color: #1e40af; font-weight: 700; font-size: 14px; margin-bottom: 4px; text-transform: uppercase;">Konum İzni Bekleniyor</div>
+        <div style="color: #1e40af; font-weight: 700; font-size: 14px; margin-bottom: 4px; text-transform: uppercase;">Konum Alınamadı / İzin Bekleniyor</div>
         <div style="color: #1e3a8a; font-size: 13px; font-weight: 500; line-height: 1.4;">
-            Lütfen tarayıcınızın konum erişim talebini onaylayın. Uygulama içi tarayıcılardaysanız (X, Instagram), linki kopyalayıp Safari veya Chrome'da açın.
+            Otomatik konum servisleri şu an yanıt vermiyor. Tarayıcı izinlerini onaylayabilir veya uygulamayı kullanmak için aşağıdan <b>manuel bir merkez</b> seçebilirsiniz.
         </div>
     </div>
     """, unsafe_allow_html=True)
-    st.stop()
+    
+    # Uygulama içi tarayıcı blokajlarını aşmak için eklenen Manuel Fallback UI
+    manuel_konum_secimi = st.selectbox(
+        "Lütfen Mevcut Konumunuzu Seçin:",
+        ["Seçiniz...", "İstanbul (Kadıköy)", "Ankara (Çankaya)", "İzmir (Alsancak)"],
+        label_visibility="visible"
+    )
+    
+    SABIT_KOORDINATLAR = {
+        "İstanbul (Kadıköy)": (40.9901, 29.0284),
+        "Ankara (Çankaya)": (39.9208, 32.8541),
+        "İzmir (Alsancak)": (38.4374, 27.1422)
+    }
+    
+    if manuel_konum_secimi in SABIT_KOORDINATLAR:
+        user_lat, user_lon = SABIT_KOORDINATLAR[manuel_konum_secimi]
+        st.session_state["last_valid_lat"] = user_lat
+        st.session_state["last_valid_lon"] = user_lon
+        st.rerun()
+    else:
+        st.stop()
 
 
 # ==========================================
@@ -476,7 +471,6 @@ with st.expander("Araç ve Menzil Ayarları", expanded=False):
         value=True
     )
 
-# Menzil hesabı — ara değişkenlerle okunabilirlik artırıldı
 mevcut_kwh        = batarya * (sarj_yuzdesi / 100.0)
 ham_menzil_km     = (mevcut_kwh / tuketim) * 100.0
 guvenli_menzil_km = ham_menzil_km * (1 - guzenik_marji / 100.0)
@@ -484,7 +478,6 @@ guvenli_menzil_km = ham_menzil_km * (1 - guzenik_marji / 100.0)
 
 # ==========================================
 # 🧠 EN YAKIN AKTİF İSTASYONLARI BULMA
-# En yakın MAX_ISTASYON_SAYISI aktif istasyon listeleniyor.
 # ==========================================
 uygun_istasyonlar = []
 aktif_arizali_set = arizali_istasyon_setini_getir()
@@ -505,10 +498,6 @@ en_yakin = uygun_istasyonlar[:MAX_ISTASYON_SAYISI]
 # 🎯 KART VE SEÇENEKLERİN GÖSTERİMİ
 # ==========================================
 if en_yakin:
-    # Overpass sorgularını döngü dışında, paralel olarak çek.
-    # - İlk yüklemede (cache soğuksa) tek bir spinner gösterilir.
-    # - Sonraki etkileşimlerde session_state key mevcutsa spinner atlanır;
-    #   st.cache_data zaten anında döner.
     if "cevre_cache_isindi" not in st.session_state:
         with st.spinner("Yakın çevre yükleniyor..."):
             cevre_sonuclari = _paralel_cevre_getir(en_yakin)
@@ -552,12 +541,8 @@ if en_yakin:
 
         c1, c2 = st.columns(2)
         with c1:
-            g_link = (
-                f"https://www.google.com/maps/dir/?api=1"
-                f"&origin={user_lat},{user_lon}"
-                f"&destination={istasyon['enlem']},{istasyon['boylam']}"
-                f"&travelmode=driving"
-            )
+            # ÖNERİ 2: Resmi ve Evrensel Google Maps Rotalama/Navigasyon URL Mimarisi
+            g_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={istasyon['enlem']},{istasyon['boylam']}&travelmode=driving"
             st.markdown(
                 f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>',
                 unsafe_allow_html=True
