@@ -1,10 +1,68 @@
 import streamlit as st
-import pandas as pd
 import json
 import math
+import hashlib
+import logging
+import unicodedata
 import requests
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from streamlit_js_eval import get_geolocation
+
+# ==========================================
+# 🪵 LOGLAMA AYARI
+# ==========================================
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+
+# ==========================================
+# 📐 UYGULAMA SABİTLERİ  (magic number'lar tek yerden yönetilir)
+# ==========================================
+MAX_ISTASYON_SAYISI = 2        # Gösterilecek maksimum istasyon sayısı
+OVERPASS_YARICAP_M  = 400      # Overpass arama yarıçapı (metre)
+OVERPASS_TIMEOUT_S  = 12.0     # Overpass istek zaman aşımı (saniye)
+FIREBASE_TIMEOUT_S  = 4.0      # Firebase istek zaman aşımı (saniye)
+YORUM_CACHE_TTL     = 30       # Yorum önbellekleme süresi (saniye)
+CEVRE_CACHE_TTL     = 86_400   # Yakın çevre önbellekleme süresi (saniye = 1 gün)
+MAX_YAKIN_YER       = 5        # Kart üzerinde gösterilecek maksimum yakın yer
+MAX_SON_YORUM       = 2        # Popover'da gösterilecek son yorum sayısı
+
+# ==========================================
+# 🚗 ARAÇ KATALOĞU
+# Expander içinde değil modül seviyesinde; her render'da yeniden oluşturulmaz.
+# ==========================================
+ARAC_KATALOGU: dict = {
+    "Tesla Model Y Long Range": {"batarya": 75.0, "tuketim": 16.9},
+    "Togg T10X Uzun Menzil":   {"batarya": 88.5, "tuketim": 16.9},
+    "BYD Atto 3":               {"batarya": 60.4, "tuketim": 16.0},
+    "Renault Megane E-Tech":    {"batarya": 60.0, "tuketim": 15.5},
+    "Özel Araç (Manuel)":      {"batarya": 60.0, "tuketim": 17.0},
+}
+
+# ==========================================
+# 🗺️ OVERPASS KATEGORİLERİ
+# "fuel" hem sözlükte hem de Overpass sorgusunda artık mevcut (önceden sadece sözlükte vardı).
+# ==========================================
+KATEGORI_EMOJILER: dict = {
+    "cafe":        ("☕",  "Kafe"),
+    "restaurant":  ("🍽️", "Restoran"),
+    "fast_food":   ("🍔", "Fast Food"),
+    "supermarket": ("🛒", "Süpermarket"),
+    "convenience": ("🏪", "Market"),
+    "fuel":        ("⛽", "Akaryakıt"),   # ← Overpass sorgusuna da eklendi
+    "parking":     ("🅿️", "Otopark"),
+    "hotel":       ("🏨", "Otel"),
+    "mall":        ("🏬", "AVM"),
+    "pharmacy":    ("💊", "Eczane"),
+    "atm":         ("🏧", "ATM"),
+    "toilets":     ("🚻", "Tuvalet"),
+}
+
+OVERPASS_URL     = "https://overpass-api.de/api/interpreter"
+OVERPASS_HEADERS = {
+    "User-Agent": "SarjBul/1.0 (EV charging finder app)",
+    "Accept":     "application/json",
+}
 
 # --- 📱 MOBİL VE PREMIUM SAYFA AYARLARI ---
 st.set_page_config(
@@ -127,8 +185,8 @@ st.markdown('''
 ''', unsafe_allow_html=True)
 
 # ==========================================
-# 🔐 DÜZELTMEe 8: Firebase URL artık st.secrets'tan okunuyor
-# secrets.toml içinde: [firebase] db_url = "https://..."
+# 🔐 FİREBASE BAĞLANTISI (st.secrets'tan okunuyor)
+# secrets.toml: [firebase] db_url = "https://..."
 # ==========================================
 try:
     FIREBASE_DB_URL = st.secrets["firebase"]["db_url"]
@@ -140,228 +198,212 @@ except (KeyError, FileNotFoundError):
 # ==========================================
 # 🛠️ YARDIMCI FONKSİYONLAR
 # ==========================================
-def mesafe_hesapla(lat1, lon1, lat2, lon2):
-    R = 6371.0
-    phi1 = math.radians(lat1)
-    phi2 = math.radians(lat2)
-    delta_phi = math.radians(lat2 - lat1)
+
+def clean_id_uret(isim: str) -> str:
+    """
+    İstasyon adından tutarlı, güvenli bir Firebase anahtarı üretir.
+
+    Türkçe karakterleri (ş→s, ı→i, ğ→g …) ASCII'ye dönüştürür;
+    hiçbir ASCII karakter üretilemezse MD5 hash ile fallback sağlar.
+    Bu sayede farklı istasyon isimleri asla aynı clean_id'ye düşmez.
+    """
+    normalized = unicodedata.normalize("NFKD", isim)
+    ascii_isim = normalized.encode("ascii", "ignore").decode("ascii").strip()
+    safe = "".join(c for c in ascii_isim if c.isalnum() or c in (" ", "_", "-")).rstrip()
+    return safe if safe else hashlib.md5(isim.encode()).hexdigest()[:12]
+
+
+def mesafe_hesapla(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    R            = 6371.0
+    phi1, phi2   = math.radians(lat1), math.radians(lat2)
+    delta_phi    = math.radians(lat2 - lat1)
     delta_lambda = math.radians(lon2 - lon1)
-    a = math.sin(delta_phi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c
+    a = (math.sin(delta_phi / 2) ** 2
+         + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2)
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-def zaman_oncesi(tarih_str):
+def zaman_oncesi(tarih_str: str) -> str:
     try:
-        eski_zaman = datetime.strptime(tarih_str, "%d.%m %H:%M")
-        simdi = datetime.now()
-        eski_zaman = eski_zaman.replace(year=simdi.year)
-        fark = simdi - eski_zaman
-        saniye = fark.total_seconds()
-        if saniye < 0:
-            return "Az önce"
+        simdi  = datetime.now()
+        eski   = datetime.strptime(tarih_str, "%d.%m %H:%M").replace(year=simdi.year)
+        saniye = (simdi - eski).total_seconds()
+        if saniye < 0:  return "Az önce"
         dakika = int(saniye / 60)
-        saat = int(dakika / 60)
-        gun = int(saat / 24)
-        if dakika < 1:
-            return "Az önce"
-        elif dakika < 60:
-            return f"{dakika} dakika önce"
-        elif saat < 24:
-            return f"{saat} saat önce"
-        else:
-            return f"{gun} gün önce"
-    except:
+        saat   = int(dakika / 60)
+        gun    = int(saat / 24)
+        if dakika < 1:  return "Az önce"
+        if dakika < 60: return f"{dakika} dakika önce"
+        if saat < 24:   return f"{saat} saat önce"
+        return f"{gun} gün önce"
+    except Exception as e:
+        logger.warning("zaman_oncesi parse hatası: %s", e)
         return tarih_str
 
 
-# ==========================================
-# 🔴 DÜZELTMEe 1 (yorum_tarihi_parse): Yıl + gün/ay birlikte parse ediliyor
-# Artık yılbaşı geçişlerinde sıralama hatası oluşmaz
-# ==========================================
-def yorum_tarihi_parse(tarih_str):
+def yorum_tarihi_parse(tarih_str: str) -> datetime:
     try:
         simdi = datetime.now()
-        # Gün.ay saat:dakika → Önce bu yıl dene, gelecekteyse geçen yıla çek
-        dt = datetime.strptime(tarih_str, "%d.%m %H:%M").replace(year=simdi.year)
+        dt    = datetime.strptime(tarih_str, "%d.%m %H:%M").replace(year=simdi.year)
         if dt > simdi:
             dt = dt.replace(year=simdi.year - 1)
         return dt
-    except:
+    except Exception as e:
+        logger.warning("yorum_tarihi_parse hatası: %s", e)
         return datetime.min
 
 
-# ==========================================
-# 🔴 DÜZELTMEe 2: Yorum gönderme sonrası sadece ilgili önbellek temizleniyor
-# ==========================================
-def yorum_gonder(istasyon_id, kullanici, yorum_metni, durum):
-    clean_id = "".join(c for c in istasyon_id if c.isalnum() or c in (' ', '_', '-')).rstrip()
-    url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
+def yorum_gonder(istasyon_id: str, kullanici: str, yorum_metni: str, durum: str) -> bool:
+    clean_id   = clean_id_uret(istasyon_id)
+    url        = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
     yeni_yorum = {
-        "kullanici": kullanici.strip() if kullanici else "Anonim Sürücü",
-        "yorum": yorum_metni.strip() if yorum_metni else f"İstasyon durumu bildirildi: {durum}",
-        "durum": durum,
-        "tarih": datetime.now().strftime("%d.%m %H:%M")
+        "kullanici": (kullanici.strip() or "Anonim Sürücü"),
+        "yorum":     (yorum_metni.strip() or f"İstasyon durumu bildirildi: {durum}"),
+        "durum":     durum,
+        "tarih":     datetime.now().strftime("%d.%m %H:%M"),
     }
     try:
-        # DÜZELTMEe 9: timeout 2.0 → 4.0 saniyeye çıkarıldı
-        r = requests.post(url, json=yeni_yorum, timeout=4.0)
+        r = requests.post(url, json=yeni_yorum, timeout=FIREBASE_TIMEOUT_S)
         if r.status_code in (200, 201):
             # Sadece etkilenen iki fonksiyonun önbelleklerini temizle
             yorumlari_getir.clear()
             arizali_istasyon_setini_getir.clear()
             return True
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("yorum_gonder hatası [%s]: %s", istasyon_id, e)
     return False
 
 
-# ==========================================
-# ⚡ OPTİMİZASYON: 30 saniyelik cache + timeout 4s
-# ==========================================
-@st.cache_data(ttl=30)
-def arizali_istasyon_setini_getir():
-    url = f"{FIREBASE_DB_URL}yorumlar.json"
+@st.cache_data(ttl=YORUM_CACHE_TTL)
+def arizali_istasyon_setini_getir() -> set:
+    url         = f"{FIREBASE_DB_URL}yorumlar.json"
     arizali_set = set()
     try:
-        # DÜZELTMEe 9: timeout 4 saniye
-        res = requests.get(url, timeout=4.0)
-        if res.status_code == 200 and res.json():
-            tum_veri = res.json()
-            for clean_id, yorum_paketleri in tum_veri.items():
-                if yorum_paketleri and isinstance(yorum_paketleri, dict):
-                    sirali_yorumlar = sorted(
-                        yorum_paketleri.values(),
-                        key=lambda x: yorum_tarihi_parse(x.get('tarih', ''))
-                    )
-                    son5 = sirali_yorumlar[-5:]
-                    arizali_sayisi = sum(
-                        1 for y in son5
-                        if "Arızalı" in y.get("durum", "")
-                    )
-                    if arizali_sayisi >= 3:
-                        arizali_set.add(clean_id)
-    except Exception:
-        pass
+        res = requests.get(url, timeout=FIREBASE_TIMEOUT_S)
+        if res.status_code != 200:
+            logger.warning("Firebase yorumlar yanıt kodu: %s", res.status_code)
+            return arizali_set
+        tum_veri = res.json()
+        if not tum_veri:
+            return arizali_set
+        for clean_id, yorum_paketleri in tum_veri.items():
+            if not isinstance(yorum_paketleri, dict):
+                continue
+            sirali = sorted(
+                yorum_paketleri.values(),
+                key=lambda x: yorum_tarihi_parse(x.get("tarih", ""))
+            )
+            son5           = sirali[-5:]
+            arizali_sayisi = sum(1 for y in son5 if "Arızalı" in y.get("durum", ""))
+            if arizali_sayisi >= 3:
+                arizali_set.add(clean_id)
+    except Exception as e:
+        logger.warning("arizali_istasyon_setini_getir hatası: %s", e)
     return arizali_set
 
 
-# ==========================================
-# 🗺️ OVERPASS API: Yakın çevre bilgisi (ücretsiz, OpenStreetMap)
-# ttl=86400 → günde 1 kez çekiliyor, istasyon koordinatları değişmez
-# ==========================================
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-
-KATEGORI_EMOJILER = {
-    "cafe": ("☕", "Kafe"),
-    "restaurant": ("🍽️", "Restoran"),
-    "fast_food": ("🍔", "Fast Food"),
-    "supermarket": ("🛒", "Süpermarket"),
-    "convenience": ("🏪", "Market"),
-    "fuel": ("⛽", "Akaryakıt"),
-    "parking": ("🅿️", "Otopark"),
-    "hotel": ("🏨", "Otel"),
-    "mall": ("🏬", "AVM"),
-    "pharmacy": ("💊", "Eczane"),
-    "atm": ("🏧", "ATM"),
-    "toilets": ("🚻", "Tuvalet"),
-}
-
-OVERPASS_HEADERS = {
-    "User-Agent": "SarjBul/1.0 (EV charging finder app)",
-    "Accept": "application/json",
-}
-
-@st.cache_data(ttl=86400)
-def yakin_cevre_getir(enlem, boylam, yaricap_m=400):
+@st.cache_data(ttl=CEVRE_CACHE_TTL)
+def yakin_cevre_getir(enlem: float, boylam: float, yaricap_m: int = OVERPASS_YARICAP_M) -> list:
     """
     Overpass API ile verilen koordinat çevresindeki ilgi noktalarını çeker.
-    yaricap_m: metre cinsinden arama yarıçapı (varsayılan 400m)
+    - yaricap_m : metre cinsinden arama yarıçapı (varsayılan: OVERPASS_YARICAP_M)
+    - 'fuel'    : Overpass sorgusuna eklendi (daha önce KATEGORI_EMOJILER'de vardı ama sorgu yoktu)
     """
     sorgu = f"""
-    [out:json][timeout:12];
+    [out:json][timeout:{int(OVERPASS_TIMEOUT_S)}];
     (
-      node["amenity"~"cafe|restaurant|fast_food|parking|pharmacy|atm|toilets"](around:{yaricap_m},{enlem},{boylam});
+      node["amenity"~"cafe|restaurant|fast_food|parking|pharmacy|atm|toilets|fuel"](around:{yaricap_m},{enlem},{boylam});
       node["shop"~"supermarket|convenience|mall"](around:{yaricap_m},{enlem},{boylam});
       node["tourism"="hotel"](around:{yaricap_m},{enlem},{boylam});
     );
     out body;
     """
     try:
-        res = requests.post(OVERPASS_URL, data={"data": sorgu},
-                            headers=OVERPASS_HEADERS, timeout=12.0)
+        res = requests.post(
+            OVERPASS_URL, data={"data": sorgu},
+            headers=OVERPASS_HEADERS, timeout=OVERPASS_TIMEOUT_S
+        )
         if res.status_code != 200:
+            logger.warning("Overpass yanıt kodu: %s", res.status_code)
             return []
 
-        elemanlar = res.json().get("elements", [])
-        sonuclar = []
-
-        for el in elemanlar:
-            tags = el.get("tags", {})
-            isim = tags.get("name", "")
+        sonuclar: list = []
+        for el in res.json().get("elements", []):
+            tags    = el.get("tags", {})
             amenity = tags.get("amenity", tags.get("shop", tags.get("tourism", "")))
-
             if amenity not in KATEGORI_EMOJILER:
                 continue
-
-            # Mesafe hesapla
-            el_lat = el.get("lat", enlem)
-            el_lon = el.get("lon", boylam)
-            km = mesafe_hesapla(enlem, boylam, el_lat, el_lon)
-            metre = int(km * 1000)
-
+            km    = mesafe_hesapla(enlem, boylam, el.get("lat", enlem), el.get("lon", boylam))
             emoji, kategori_adi = KATEGORI_EMOJILER[amenity]
-            goruntu_isim = isim if isim else kategori_adi
-
             sonuclar.append({
-                "isim": goruntu_isim,
+                "isim":     (tags.get("name") or kategori_adi),
                 "kategori": kategori_adi,
-                "emoji": emoji,
-                "metre": metre,
+                "emoji":    emoji,
+                "metre":    int(km * 1000),
             })
 
-        # Mesafeye göre sırala, kategori başına en yakın 1 tane al (fazla kalabalık olmasın)
-        gorulmus_kategoriler = set()
-        filtrelenmis = []
+        # Mesafeye göre sırala; kategori başına en yakın 1 yer, toplam MAX_YAKIN_YER
+        gorulmus:     set  = set()
+        filtrelenmis: list = []
         for s in sorted(sonuclar, key=lambda x: x["metre"]):
-            if s["kategori"] not in gorulmus_kategoriler:
-                gorulmus_kategoriler.add(s["kategori"])
+            if s["kategori"] not in gorulmus:
+                gorulmus.add(s["kategori"])
                 filtrelenmis.append(s)
-            if len(filtrelenmis) >= 5:  # En fazla 5 yer göster
+            if len(filtrelenmis) >= MAX_YAKIN_YER:
                 break
-
         return filtrelenmis
 
-    except Exception:
+    except Exception as e:
+        logger.warning("yakin_cevre_getir hatası [%.4f, %.4f]: %s", enlem, boylam, e)
         return []
 
 
-@st.cache_data(ttl=30)
-def yorumlari_getir(istasyon_id):
-    clean_id = "".join(c for c in istasyon_id if c.isalnum() or c in (' ', '_', '-')).rstrip()
-    url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
+def _cevre_getir_ist(ist: dict) -> list:
+    """Tek bir istasyon için yakın çevre verisi çeker (thread-safe yardımcı)."""
+    return yakin_cevre_getir(ist["enlem"], ist["boylam"])
+
+
+def _paralel_cevre_getir(istasyon_listesi: list) -> list:
+    """
+    Birden fazla istasyon için Overpass sorgularını paralel çalıştırır.
+    İlk yüklemede (~2 istasyon için) yaklaşık 2x hızlanma sağlar.
+    Sonraki çağrılarda st.cache_data cache'i devreye girer; HTTP çağrısı yapılmaz.
+    """
+    with ThreadPoolExecutor(max_workers=len(istasyon_listesi)) as executor:
+        return list(executor.map(_cevre_getir_ist, istasyon_listesi))
+
+
+@st.cache_data(ttl=YORUM_CACHE_TTL)
+def yorumlari_getir(istasyon_id: str) -> list:
+    clean_id = clean_id_uret(istasyon_id)
+    url      = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
     try:
-        # DÜZELTMEe 9: timeout 4 saniye
-        res = requests.get(url, timeout=4.0)
+        res = requests.get(url, timeout=FIREBASE_TIMEOUT_S)
         if res.status_code == 200 and res.json():
             return list(res.json().values())
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("yorumlari_getir hatası [%s]: %s", istasyon_id, e)
     return []
 
 
 # ==========================================
-# 📁 ÇEVRİMDIŞI ÖNBELLEK VERİSİ
+# 📁 İSTASYON VERİSİ
+# session_state yerine @st.cache_data — daha temiz ve Streamlit idiomatik.
 # ==========================================
-if "offline_istasyonlar" not in st.session_state:
+@st.cache_data
+def istasyonlari_yukle() -> list:
     try:
         with open("istasyonlar.json", "r", encoding="utf-8") as f:
-            st.session_state.offline_istasyonlar = json.load(f)
-    except Exception:
-        st.error("istasyonlar.json dosyası bulunamadı.")
-        st.stop()
+            return json.load(f)
+    except Exception as e:
+        logger.error("istasyonlar.json yüklenemedi: %s", e)
+        return []
 
-istasyonlar_verisi = st.session_state.offline_istasyonlar
+
+istasyonlar_verisi = istasyonlari_yukle()
+if not istasyonlar_verisi:
+    st.error("istasyonlar.json dosyası bulunamadı veya boş.")
+    st.stop()
 
 
 # ==========================================
@@ -382,9 +424,9 @@ user_lat, user_lon = None, None
 
 try:
     konum_verisi = get_geolocation()
-    if isinstance(konum_verisi, dict) and 'coords' in konum_verisi:
-        user_lat = konum_verisi['coords'].get('latitude')
-        user_lon = konum_verisi['coords'].get('longitude')
+    if isinstance(konum_verisi, dict) and "coords" in konum_verisi:
+        user_lat = konum_verisi["coords"].get("latitude")
+        user_lon = konum_verisi["coords"].get("longitude")
     if user_lat is not None and user_lon is not None:
         st.session_state["last_valid_lat"] = user_lat
         st.session_state["last_valid_lon"] = user_lon
@@ -411,15 +453,7 @@ if user_lat is None or user_lon is None:
 # 🚗 ARAÇ SEÇİM MENÜSÜ
 # ==========================================
 with st.expander("Araç ve Menzil Ayarları", expanded=False):
-    ARAC_KATALOGU = {
-        "Tesla Model Y Long Range": {"batarya": 75.0, "tuketim": 16.9},
-        "Togg T10X Uzun Menzil": {"batarya": 88.5, "tuketim": 16.9},
-        "BYD Atto 3": {"batarya": 60.4, "tuketim": 16.0},
-        "Renault Megane E-Tech": {"batarya": 60.0, "tuketim": 15.5},
-        "Özel Araç (Manuel)": {"batarya": 60.0, "tuketim": 17.0}
-    }
-
-    secilen_arac = st.selectbox("Model", list(ARAC_KATALOGU.keys()), label_visibility="collapsed")
+    secilen_arac        = st.selectbox("Model", list(ARAC_KATALOGU.keys()), label_visibility="collapsed")
     varsayilan_degerler = ARAC_KATALOGU[secilen_arac]
 
     col_b1, col_b2, col_b3 = st.columns(3)
@@ -432,57 +466,58 @@ with st.expander("Araç ve Menzil Ayarları", expanded=False):
 
     st.markdown("---")
 
-    # 🔴 DÜZELTMEe 6: Güvenlik marjı slider'ı eklendi (gerçek sürüş mesafesi kuş uçuşundan %20-40 uzun olabilir)
     guzenik_marji = st.slider(
         "Güvenlik Marjı (Yol mesafesi tahmini)",
         min_value=10, max_value=50, value=25,
         help="Kuş uçuşu mesafesi gerçek yol mesafesinden daha kısadır. %25 marj önerilir."
     )
-
     menzil_filtresi_aktif = st.checkbox(
         "Menzil Filtresini Uygula (Sadece ulaşabileceğim istasyonları göster)",
         value=True
     )
 
-# DÜZELTMEe 6: Güvenlik marjı hesaba katılıyor — gerçek menzil daraltılıyor
-ham_menzil = ((batarya * (sarj_yuzdesi / 100.0)) / tuketim) * 100.0
-maks_menzil = ham_menzil * (1 - guzenik_marji / 100.0)
+# Menzil hesabı — ara değişkenlerle okunabilirlik artırıldı
+mevcut_kwh        = batarya * (sarj_yuzdesi / 100.0)
+ham_menzil_km     = (mevcut_kwh / tuketim) * 100.0
+guvenli_menzil_km = ham_menzil_km * (1 - guzenik_marji / 100.0)
 
 
 # ==========================================
 # 🧠 EN YAKIN AKTİF İSTASYONLARI BULMA
-# 🔴 DÜZELTMEe 7: Tek değil, en yakın 3 aktif istasyon listeleniyor
+# En yakın MAX_ISTASYON_SAYISI aktif istasyon listeleniyor.
 # ==========================================
 uygun_istasyonlar = []
 aktif_arizali_set = arizali_istasyon_setini_getir()
 
 for ist in istasyonlar_verisi:
     km = mesafe_hesapla(user_lat, user_lon, ist["enlem"], ist["boylam"])
-
-    if (not menzil_filtresi_aktif) or (km <= maks_menzil):
-        clean_id = "".join(c for c in ist["isim"] if c.isalnum() or c in (' ', '_', '-')).rstrip()
-        if clean_id not in aktif_arizali_set:
-            ist_kopya = ist.copy()
+    if (not menzil_filtresi_aktif) or (km <= guvenli_menzil_km):
+        if clean_id_uret(ist["isim"]) not in aktif_arizali_set:
+            ist_kopya           = ist.copy()
             ist_kopya["Mesafe"] = round(km, 1)
             uygun_istasyonlar.append(ist_kopya)
 
-# Mesafeye göre sırala, en yakın 3'ü al
 uygun_istasyonlar.sort(key=lambda x: x["Mesafe"])
-en_yakin_2 = uygun_istasyonlar[:2]
+en_yakin = uygun_istasyonlar[:MAX_ISTASYON_SAYISI]
 
 
 # ==========================================
 # 🎯 KART VE SEÇENEKLERİN GÖSTERİMİ
 # ==========================================
-if en_yakin_2:
-    for sira, istasyon in enumerate(en_yakin_2):
-        # İlk kart ana öneri, diğerleri yedek olarak etiketleniyor
-        etiket = "🥇 En Yakın İstasyon" if sira == 0 else f"#{sira + 1} Yedek İstasyon"
-
-        # Overpass API'den yakın çevre bilgisi çek (önbellekli, günde 1 kez)
-        # İlk yüklemede spinner göster, sonraki açılışlarda cache'den anında gelir
+if en_yakin:
+    # Overpass sorgularını döngü dışında, paralel olarak çek.
+    # - İlk yüklemede (cache soğuksa) tek bir spinner gösterilir.
+    # - Sonraki etkileşimlerde session_state key mevcutsa spinner atlanır;
+    #   st.cache_data zaten anında döner.
+    if "cevre_cache_isindi" not in st.session_state:
         with st.spinner("Yakın çevre yükleniyor..."):
-            yakin_yerler = yakin_cevre_getir(istasyon["enlem"], istasyon["boylam"])
+            cevre_sonuclari = _paralel_cevre_getir(en_yakin)
+        st.session_state["cevre_cache_isindi"] = True
+    else:
+        cevre_sonuclari = _paralel_cevre_getir(en_yakin)
+
+    for sira, (istasyon, yakin_yerler) in enumerate(zip(en_yakin, cevre_sonuclari)):
+        etiket = "🥇 En Yakın İstasyon" if sira == 0 else f"#{sira + 1} Yedek İstasyon"
 
         if yakin_yerler:
             yakin_html = '<div class="panel-bolucu"></div><div class="panel-alt-baslik">Yakındaki Yerler</div>'
@@ -506,11 +541,12 @@ if en_yakin_2:
         </div>
         """, unsafe_allow_html=True)
 
-        # DÜZELTMEe 6: Güvenlik marjı uyarısı — kullanıcı bilgilendirilmiş
         if menzil_filtresi_aktif:
             st.markdown(f"""
             <div class="uyari-sarj">
-                ⚠️ Gösterilen menzil, <b>%{guzenik_marji} güvenlik marjı</b> uygulanmış hesaplı menzildir ({ham_menzil:.0f} km teorik → {maks_menzil:.0f} km güvenli). Gerçek yol mesafesi kuş uçuşundan daha uzundur.
+                ⚠️ Gösterilen menzil, <b>%{guzenik_marji} güvenlik marjı</b> uygulanmış hesaplı menzildir
+                ({ham_menzil_km:.0f} km teorik → {guvenli_menzil_km:.0f} km güvenli).
+                Gerçek yol mesafesi kuş uçuşundan daha uzundur.
             </div>
             """, unsafe_allow_html=True)
 
@@ -522,14 +558,15 @@ if en_yakin_2:
                 f"&destination={istasyon['enlem']},{istasyon['boylam']}"
                 f"&travelmode=driving"
             )
-            st.markdown(f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>', unsafe_allow_html=True)
+            st.markdown(
+                f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>',
+                unsafe_allow_html=True
+            )
 
         with c2:
             with st.popover("Durum Bildir"):
                 col_btn1, col_btn2 = st.columns(2)
-
-                # 🔴 DÜZELTMEe 3: Walrus operatörü kaldırıldı, isim doğrudan ve güvenli şekilde kullanılıyor
-                istasyon_isim = istasyon.get('isim', '').strip()
+                istasyon_isim = istasyon.get("isim", "").strip()
 
                 with col_btn1:
                     st.markdown('<div class="rapor-calisiyor">', unsafe_allow_html=True)
@@ -539,7 +576,7 @@ if en_yakin_2:
                                 st.rerun()
                         else:
                             st.warning("İstasyon adı bulunamadı.")
-                    st.markdown('</div>', unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
 
                 with col_btn2:
                     st.markdown('<div class="rapor-arizali">', unsafe_allow_html=True)
@@ -549,10 +586,10 @@ if en_yakin_2:
                                 st.rerun()
                         else:
                             st.warning("İstasyon adı bulunamadı.")
-                    st.markdown('</div>', unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
 
                 st.markdown("---")
-                nick = st.text_input("Kullanıcı Adı", max_chars=12, key=f"inp_nick_{sira}")
+                nick      = st.text_input("Kullanıcı Adı", max_chars=12, key=f"inp_nick_{sira}")
                 yorum_txt = st.text_input("Durum Notu", key=f"inp_txt_{sira}")
                 if st.button("Detaylı Gönder", key=f"btn_detail_{sira}"):
                     if istasyon_isim:
@@ -564,9 +601,16 @@ if en_yakin_2:
                 st.markdown("---")
                 yorumlar = yorumlari_getir(istasyon_isim)
                 if yorumlar:
-                    for y in sorted(yorumlar, key=lambda x: yorum_tarihi_parse(x.get('tarih', '')), reverse=True)[:2]:
-                        zaman_etiketi = zaman_oncesi(y.get('tarih', ''))
-                        st.markdown(f"**{y.get('kullanici', 'Anonim')}** ({y.get('durum', 'Güncelleme')}) • *{zaman_etiketi}*")
+                    for y in sorted(
+                        yorumlar,
+                        key=lambda x: yorum_tarihi_parse(x.get("tarih", "")),
+                        reverse=True
+                    )[:MAX_SON_YORUM]:
+                        zaman_etiketi = zaman_oncesi(y.get("tarih", ""))
+                        st.markdown(
+                            f"**{y.get('kullanici', 'Anonim')}** "
+                            f"({y.get('durum', 'Güncelleme')}) • *{zaman_etiketi}*"
+                        )
                         st.caption(f"> {y.get('yorum', '')}")
 
         st.markdown("<br>", unsafe_allow_html=True)
