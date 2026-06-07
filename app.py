@@ -413,7 +413,7 @@ st.markdown('''
 
 
 # ==========================================
-# 📡 ÖNERİ 1: GPS ENTEGRASYONU & MANUEL KONUM SEÇİMİ (FALLBACK UI)
+# 📡 GPS ENTEGRASYONU & MANUEL KONUM SEÇİMİ (FALLBACK UI)
 # ==========================================
 user_lat, user_lon = None, None
 
@@ -442,7 +442,6 @@ if user_lat is None or user_lon is None:
     </div>
     """, unsafe_allow_html=True)
     
-    # Uygulama içi tarayıcı blokajlarını aşmak için eklenen Manuel Fallback UI
     manuel_konum_secimi = st.selectbox(
         "Lütfen Mevcut Konumunuzu Seçin:",
         ["Seçiniz...", "İstanbul (Kadıköy)", "Ankara (Çankaya)", "İzmir (Alsancak)"],
@@ -481,7 +480,8 @@ with st.expander("Araç ve Menzil Ayarları", expanded=False):
 
     st.markdown("---")
 
-    guzenik_marji = st.slider(
+    # DÜZELTME: 'guzenik_marji' yazım hatası 'guvenlik_marji' olarak güncellendi.
+    guvenlik_marji = st.slider(
         "Güvenlik Marjı (Yol mesafesi tahmini)",
         min_value=10, max_value=50, value=25,
         help="Kuş uçuşu mesafesi gerçek yol mesafesinden daha kısadır. %25 marj önerilir."
@@ -493,7 +493,7 @@ with st.expander("Araç ve Menzil Ayarları", expanded=False):
 
 mevcut_kwh        = batarya * (sarj_yuzdesi / 100.0)
 ham_menzil_km     = (mevcut_kwh / tuketim) * 100.0
-guvenli_menzil_km = ham_menzil_km * (1 - guzenik_marji / 100.0)
+guvenli_menzil_km = ham_menzil_km * (1 - guvenlik_marji / 100.0)
 
 
 # ==========================================
@@ -553,7 +553,7 @@ if en_yakin:
         if menzil_filtresi_aktif:
             st.markdown(f"""
             <div class="uyari-sarj">
-                ⚠️ Gösterilen menzil, <b>%{guzenik_marji} güvenlik marjı</b> uygulanmış hesaplı menzildir
+                ⚠️ Gösterilen menzil, <b>%{guvenlik_marji} güvenlik marjı</b> uygulanmış hesaplı menzildir
                 ({ham_menzil_km:.0f} km teorik → {guvenli_menzil_km:.0f} km güvenli).
                 Gerçek yol mesafesi kuş uçuşundan daha uzundur.
             </div>
@@ -561,7 +561,7 @@ if en_yakin:
 
         c1, c2 = st.columns(2)
         with c1:
-            # ÖNERİ 2: Resmi ve Evrensel Google Maps Rotalama/Navigasyon URL Mimarisi
+            # DÜZELTME: Evrensel ve resmi Google Maps Directions URL mimarisine geçiş yapıldı.
             g_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={istasyon['enlem']},{istasyon['boylam']}&travelmode=driving"
             st.markdown(
                 f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>',
