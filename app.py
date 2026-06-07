@@ -6,7 +6,8 @@ import logging
 import unicodedata
 import requests
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta
+import html
 from streamlit_js_eval import get_geolocation
 
 # ==========================================
@@ -25,7 +26,9 @@ FIREBASE_TIMEOUT_S  = 4.0
 YORUM_CACHE_TTL     = 30       
 CEVRE_CACHE_TTL     = 86_400   
 MAX_YAKIN_YER       = 5        
-MAX_SON_YORUM       = 2        
+MAX_SON_YORUM       = 2
+YOL_UZAMA_KATSAYISI = 1.25
+YORUM_BEKLEME_SURESI = 30        
 
 # ==========================================
 # 🚗 ARAÇ KATALOĞU
@@ -190,6 +193,22 @@ try:
 except (KeyError, FileNotFoundError):
     st.error("Firebase bağlantı bilgisi bulunamadı. Lütfen secrets.toml dosyasını kontrol edin.")
     st.stop()
+
+
+@st.cache_resource
+def get_session():
+    session = requests.Session()
+    session.headers.update({"User-Agent": "SarjBul/2.0"})
+    return session
+
+def guvenli_metin(metin: str) -> str:
+    return html.escape(str(metin or "").strip())
+
+def yorum_gonderilebilir_mi():
+    son = st.session_state.get("son_yorum_zamani")
+    if son is None:
+        return True
+    return (datetime.now() - son).total_seconds() > YORUM_BEKLEME_SURESI
 
 # ==========================================
 # 🛠️ YARDIMCI FONKSİYONLAR
