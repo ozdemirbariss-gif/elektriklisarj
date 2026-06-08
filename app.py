@@ -63,15 +63,13 @@ except (KeyError, FileNotFoundError):
 MAX_ISTASYON_SAYISI       = 5
 OVERPASS_TIMEOUT_S        = 12.0
 FIREBASE_TIMEOUT_S        = 4.0
-ISTASYON_CACHE_TTL        = 300       # 5 dakika
-# [UX/Kod 4] 10 → 60 sn: write-on-invalidate stratejisiyle sıklaştırmak gereksiz
+ISTASYON_CACHE_TTL        = 300
 YORUM_CACHE_TTL           = 60
-CEVRE_CACHE_TTL           = 21_600    # 6 saat
-# [Gerçek Hata 2] Firebase ID token ömrü ~60 dk; 5 dk payda bırak
+CEVRE_CACHE_TTL           = 21_600
 TOKEN_OMUR_DK             = 55
 MAX_YAKIN_YER             = 5
 MAX_SON_YORUM             = 2
-YOL_UZAMA_KATSAYISI       = 1.25      # kuş uçuşu -> yaklaşık yol mesafesi
+YOL_UZAMA_KATSAYISI       = 1.25
 YORUM_BEKLEME_SURESI      = 30
 ARIZA_GECERLILIK_SAATI    = 6
 ARIZA_RISK_ESIGI          = 2
@@ -109,7 +107,6 @@ OVERPASS_HEADERS = {
     "Accept": "application/json",
 }
 
-# Hız filtresi için eşik haritası
 HIZ_ESIK_MAP: Dict[str, float] = {
     "AC (≥7 kW)": 7.0,
     "DC (≥50 kW)": 50.0,
@@ -503,7 +500,6 @@ def istasyon_id_getir(istasyon: Dict[str, Any]) -> str:
     return fallback or "bilinmeyen_istasyon"
 
 
-# [Gerçek Hata 2] Firebase ID token süresi kontrolü
 def token_suresi_doldu_mu() -> bool:
     """
     auth_login_time'dan itibaren TOKEN_OMUR_DK dakika geçip geçmediğini kontrol eder.
@@ -527,13 +523,11 @@ def yorum_gonderilebilir_mi() -> Tuple[bool, int]:
     return kalan <= 0, max(0, kalan)
 
 
-# [Gerçek Hata 3] Sunucu taraflı cooldown: sayfa yenilemede session_state sıfırlansa da
-# Firebase verisindeki uid_hash'e göre son yorum zamanı kontrol edilir.
 def sunucu_tarafli_cooldown_kontrol(
     tum_yorumlar: Dict[str, List[Dict[str, Any]]], uid_hash: str
 ) -> Tuple[bool, int]:
     """
-    tum_yorumlar (zaten bellekte, cached) üzerinde uid_hash eşleşmesi arar.
+    tum_yorumlar üzerinde uid_hash eşleşmesi arar.
     Bulunan en son yorum zamanına göre cooldown uygular.
     Döner: (gonderilebilir_mi, kalan_saniye)
     """
@@ -667,7 +661,6 @@ def firebase_login(email: str, password: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-# [Eksik Özellik: Kayıt akışı]
 def firebase_register(email: str, password: str) -> Optional[Dict[str, Any]]:
     """Firebase Authentication üzerinden yeni kullanıcı kaydı oluşturur."""
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={FIREBASE_API_KEY}"
@@ -686,7 +679,6 @@ def firebase_register(email: str, password: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-# [Eksik Özellik: Şifre sıfırlama]
 def firebase_sifre_sifirla(email: str) -> Tuple[bool, str]:
     """Firebase Authentication üzerinden şifre sıfırlama e-postası gönderir."""
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key={FIREBASE_API_KEY}"
@@ -788,12 +780,10 @@ def istasyon_yorumlari_getir(istasyon_id: str, limit: int = MAX_SON_YORUM) -> Li
 
 
 def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str) -> Tuple[bool, str]:
-    # [Gerçek Hata 2] Token süresi kontrolü — oturum dolmuşsa anında temizle
     if token_suresi_doldu_mu():
         oturumu_temizle()
         return False, "Oturum süreniz dolmuş. Lütfen yeniden giriş yapın."
 
-    # Client-side cooldown (session_state tabanlı)
     gonderilebilir, kalan = yorum_gonderilebilir_mi()
     if not gonderilebilir:
         return False, f"Çok sık bildirim yapıyorsunuz. {kalan} saniye sonra tekrar deneyin."
@@ -802,7 +792,6 @@ def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str) -> Tuple[bool, 
     if not token:
         return False, "Durum bildirmek için giriş yapmalısınız."
 
-    # [Gerçek Hata 3] Sunucu taraflı cooldown: sayfa yenilemede session sıfırlansa da engeller
     uid_hash = hashlib.sha256(str(st.session_state.get("auth_uid", "")).encode()).hexdigest()[:16]
     tum_yorumlar_snapshot = tum_yorumlari_getir()
     sunucu_ok, sunucu_kalan = sunucu_tarafli_cooldown_kontrol(tum_yorumlar_snapshot, uid_hash)
@@ -812,7 +801,6 @@ def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str) -> Tuple[bool, 
     clean_id = clean_id_uret(istasyon_id)
     url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
 
-    # Privacy: e-posta prefix'i yerine anonim doğrulanmış kullanıcı etiketi.
     kullanici = "Doğrulanmış Sürücü"
 
     yeni_yorum = {
@@ -853,9 +841,8 @@ def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str) -> Tuple[bool, 
 @st.cache_data(ttl=CEVRE_CACHE_TTL, show_spinner=False)
 def yakin_cevre_getir(enlem: float, boylam: float, yaricap_m: int) -> Optional[List[Dict[str, Any]]]:
     """
-    [UX/Kod 2] Dönüş tipi Optional:
-      None  → tüm Overpass URL'leri başarısız (API hatası); çağıran uyarı gösterir.
-      []    → istek başarılı ama yakında eşleşen yer bulunamadı.
+    None  → tüm Overpass URL'leri başarısız.
+    []    → istek başarılı ama yakında eşleşen yer bulunamadı.
     """
     sorgu = f"""
     [out:json][timeout:{int(OVERPASS_TIMEOUT_S)}];
@@ -910,21 +897,20 @@ def yakin_cevre_getir(enlem: float, boylam: float, yaricap_m: int) -> Optional[L
                 filtrelenmis.append(s)
                 if len(filtrelenmis) >= MAX_YAKIN_YER:
                     break
-            return filtrelenmis   # Başarılı; boş liste bile olsa None değil
+            return filtrelenmis
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.warning("Overpass denemesi başarısız (%s): %s", overpass_url, e)
             continue
 
-    return None  # Tüm URL'ler başarısız → API hatası
+    return None
 
 
 def _cevre_getir_ist(ist: Dict[str, Any], yaricap: int) -> Optional[List[Dict[str, Any]]]:
     return yakin_cevre_getir(ist["enlem"], ist["boylam"], yaricap)
 
 
-# [UX/Kod 1] ThreadPoolExecutor → asyncio.to_thread + asyncio.gather
 async def _paralel_cevre_getir_async(
     istasyon_listesi: List[Dict[str, Any]], yaricap: int
 ) -> List[Optional[List[Dict[str, Any]]]]:
@@ -944,7 +930,6 @@ def _paralel_cevre_getir(
     try:
         return asyncio.run(_paralel_cevre_getir_async(istasyon_listesi, yaricap))
     except RuntimeError:
-        # Zaten çalışan bir event loop varsa (bazı ortamlarda olabilir) sıralı çalıştır.
         logger.warning("asyncio.run başarısız, sıralı Overpass sorgusu çalışıyor.")
         return [_cevre_getir_ist(ist, yaricap) for ist in istasyon_listesi]
 
@@ -953,7 +938,6 @@ def _paralel_cevre_getir(
 # ==========================================
 with st.expander("🔑 Giriş / Kullanıcı Paneli", expanded=("auth_token" not in st.session_state)):
     if "auth_token" not in st.session_state:
-        # [Eksik Özellik: Kayıt + Şifre sıfırlama] — tek expander'da 3 sekme
         tab_giris, tab_kayit, tab_sifre = st.tabs(["🔑 Giriş", "📝 Kayıt Ol", "🔓 Şifremi Unuttum"])
 
         with tab_giris:
@@ -1006,7 +990,6 @@ with st.expander("🔑 Giriş / Kullanıcı Paneli", expanded=("auth_token" not 
                     else:
                         st.error(msg)
     else:
-        # [Gerçek Hata 2] Expander açıldığında token süresi kontrolü
         if token_suresi_doldu_mu():
             st.warning("⚠️ Oturum süreniz dolmuş. Lütfen yeniden giriş yapın.")
             oturumu_temizle()
@@ -1033,7 +1016,6 @@ with st.expander("⚙️ Arama Ayarları", expanded=False):
         step=1,
         key="sonuc_sayisi",
     )
-    # [Eksik Özellik: Soket/hız filtresi]
     soket_filtreleri = st.multiselect(
         "Soket Tipi Filtresi",
         ["CCS", "CHAdeMO", "Type 2", "Schuko", "GB/T"],
@@ -1085,7 +1067,6 @@ if user_lat is None or user_lon is None:
         user_lat, user_lon = float(last_lat), float(last_lon)
 
 if user_lat is None or user_lon is None:
-    # [Eksik Özellik: Konum izni reddedilince açıklama]
     st.info(
         "📍 **Konum erişimi gerekli.**\n\n"
         "Tarayıcınız konum izni isteyecektir. İzin verirseniz size en yakın istasyonlar "
@@ -1139,7 +1120,6 @@ st.info(
     f"Yol mesafesi hesabında x{YOL_UZAMA_KATSAYISI:.2f} rota katsayısı kullanılıyor."
 )
 
-# [Eksik Özellik: İsme/adrese göre arama]
 arama_metni = st.text_input(
     "🔍 İstasyon Ara",
     placeholder="İstasyon adı veya adres ile filtrele...",
@@ -1159,13 +1139,11 @@ for ist in istasyonlar_verisi:
     if menzil_filtresi and tahmini_km > guvenli_menzil:
         continue
 
-    # [Eksik Özellik: Soket tipi filtresi]
     if soket_filtreleri:
         soket_val = str(ist.get("soket", "")).upper()
         if not any(sf.upper() in soket_val for sf in soket_filtreleri):
             continue
 
-    # [Eksik Özellik: Hız filtresi]
     if hiz_filtresi != "Tümü":
         hiz_val = str(ist.get("hiz", "")).replace(",", ".")
         rakam = re.search(r"(\d+(?:\.\d+)?)", hiz_val)
@@ -1173,7 +1151,6 @@ for ist in istasyonlar_verisi:
         if hiz_sayi < HIZ_ESIK_MAP.get(hiz_filtresi, 0.0):
             continue
 
-    # [Eksik Özellik: Metin arama filtresi]
     if arama_metni:
         aranan = arama_metni.lower()
         if aranan not in str(ist.get("isim", "")).lower() and \
@@ -1192,7 +1169,6 @@ for ist in istasyonlar_verisi:
     ist_kopya["ArizaSkoru"] = ariza["skor"]
     uygun_istasyonlar.append(ist_kopya)
 
-# Riskli istasyonları tamamen gizlemek yerine aşağıya iter.
 uygun_istasyonlar = sorted(
     uygun_istasyonlar,
     key=lambda x: (1 if x.get("ArizaDurumu") == "riskli" else 0, x["Mesafe"]),
@@ -1202,7 +1178,6 @@ en_yakin = uygun_istasyonlar[:sonuc_sayisi]
 # ==========================================
 # ⭐ FAVORİLER
 # ==========================================
-# [Eksik Özellik: Favori istasyon kaydetme] — session_state tabanlı, oturum boyunca kalır
 if "favoriler" not in st.session_state:
     st.session_state["favoriler"] = set()
 
@@ -1223,7 +1198,6 @@ if favori_eslesmeler:
 if en_yakin:
     cevre_sonuclari = _paralel_cevre_getir(en_yakin, ayar_yaricap)
 
-    # [UX/Kod 2] Overpass tamamen başarısız olduysa toast ile kullanıcıyı bilgilendir
     if any(y is None for y in cevre_sonuclari):
         st.toast(
             "Yakındaki mekan bilgisi alınamadı. Overpass API geçici olarak erişilemez olabilir.",
@@ -1231,7 +1205,6 @@ if en_yakin:
         )
 
     for sira, (istasyon, yakin_yerler_raw) in enumerate(zip(en_yakin, cevre_sonuclari)):
-        # None (API hatası) veya [] (gerçekten boş) her ikisi de güvenle işlenir
         yakin_yerler = yakin_yerler_raw or []
 
         ist_id = istasyon_id_getir(istasyon)
@@ -1255,7 +1228,6 @@ if en_yakin:
                 )
 
         yorum_html = ""
-        # [Gerçek Hata 1] tum_yorumlar zaten bellekte; ayrı Firebase isteği atılmaz
         son_yorumlar = tum_yorumlar.get(ist_key, [])[:MAX_SON_YORUM]
         if son_yorumlar:
             yorum_html = '<div class="panel-bolucu"></div><div class="panel-alt-baslik">Son Bildirimler</div>'
@@ -1268,11 +1240,10 @@ if en_yakin:
                     f'<span class="avantaj-badge">{tarih}</span></div>'
                 )
 
-        # [UX/Kod 3] istasyon["adres"] normalize_et'te zaten temizlendi;
-        # guvenli_metin doğrudan uygula, adres_metni_getir ile çift işleme yapma.
         adres_gosterim = guvenli_metin(istasyon.get("adres", "Adres Bilgisi Yok"))
 
-        st.markdown(f"""
+        # DÜZELTME: Kart HTML'i değişkene alındı ve tek noktadan unsafe_allow_html=True ile basılıyor.
+        kart_html = f"""
         <div class="{card_class}">
             <div class="kart-ust-satir">
                 <div>
@@ -1298,9 +1269,10 @@ if en_yakin:
             {yorum_html}
             <div class="mini-note">Not: Gerçek yol süresi trafik ve rota koşullarına göre değişebilir.</div>
         </div>
-        """, unsafe_allow_html=True)
+        """
 
-        # [Eksik Özellik: Favori] — 3. kolon eklendi
+        st.markdown(kart_html, unsafe_allow_html=True)
+
         c1, c2, c3 = st.columns([5, 3, 2])
         with c1:
             g_link = (
