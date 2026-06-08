@@ -788,83 +788,42 @@ if en_yakin:
 
         st.markdown(f"""
         <div class="{card_class}">
-            <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; margin-bottom:8px;">{guvenli_metin(etiket)}</div>
-            <span class="durum-badge {durum_class}">{guvenli_metin(istasyon.get('ArizaEtiketi'))}</span>
-            <div class="mesafe-text">Tahmini yol: {istasyon['Mesafe']} km · Kuş uçuşu: {istasyon['KusUcusuMesafe']} km</div>
-            <div class="istasyon-isim">{guvenli_metin(istasyon['isim'])}</div>
-            <div class="detay-text">Şarj Hızı: {guvenli_metin(istasyon.get('hiz', 'Bilinmiyor'))}</div>
-            <div class="detay-text">Soket: {guvenli_metin(istasyon.get('soket', 'Bilinmiyor'))} · Operatör: {guvenli_metin(istasyon.get('operator', 'Bilinmiyor'))}</div>
-            <div class="detay-text">Fiyat: {guvenli_metin(istasyon.get('fiyat', 'Bilinmiyor'))}</div>
-            <div class="adres-text">{guvenli_metin(istasyon.get('adres', ''))}</div>
+            <div style="font-size:11px; font-weight:700; color:#64748b; margin-bottom:8px; text-transform:uppercase;">{etiket}</div>
+            <div class="durum-badge {durum_class}">{istasyon.get("ArizaEtiketi", "")}</div>
+            <h3 class="istasyon-isim">{istasyon.get("isim", "Bilinmeyen İstasyon")}</h3>
+            <div class="mesafe-text">🚗 {istasyon.get("Mesafe", 0)} km mesafe (Kuş uçuşu: {istasyon.get("KusUcusuMesafe", 0)} km)</div>
+            <p class="detay-text"><b>Operatör:</b> {istasyon.get("operator", "-")} <br> <b>Hız:</b> {istasyon.get("hiz", "-")} <br> <b>Soket:</b> {istasyon.get("soket", "-")}</p>
             {yakin_html}
             {yorum_html}
-            <div class="mini-note">Not: Gerçek yol süresi trafik ve rota koşullarına göre değişebilir.</div>
+            <div class="adres-text">{istasyon.get("adres", "Adres bilgisi bulunmuyor.")}</div>
         </div>
         """, unsafe_allow_html=True)
 
         c1, c2 = st.columns(2)
+        
         with c1:
-            g_link = (
-                "https://www.google.com/maps/dir/?api=1"
-                f"&origin={user_lat},{user_lon}"
-                f"&destination={istasyon['enlem']},{istasyon['boylam']}"
-                "&travelmode=driving"
-            )
-            st.markdown(
-                f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>',
-                unsafe_allow_html=True,
-            )
-
+            nav_url = f"https://www.google.com/maps/dir/?api=1&destination={istasyon['enlem']},{istasyon['boylam']}"
+            st.markdown(f'<a href="{nav_url}" target="_blank" class="nav-link-btn">🗺️ Yol Tarifi Al</a>', unsafe_allow_html=True)
+            
         with c2:
-            with st.popover("Durum Bildir"):
-                if "auth_token" not in st.session_state:
-                    st.warning("Durum bildirmek ve yorum yapmak için lütfen üstteki Giriş / Kullanıcı Paneli bölümünden giriş yapın.")
-                else:
-                    col_btn1, col_btn2 = st.columns(2)
-                    ist_id = istasyon_id_getir(istasyon)
+            with st.popover("📢 Durum Bildir"):
+                st.write("İstasyonun güncel durumu nedir?")
+                
+                if st.button("✅ Sorunsuz Çalışıyor", key=f"btn_calisiyor_{istasyon['id']}"):
+                    basari, mesaj = yorum_gonder(istasyon["id"], "Sorunsuz şarj yapıldı.", "Sorunsuz")
+                    if basari:
+                        st.success(mesaj)
+                        st.rerun()
+                    else:
+                        st.error(mesaj)
+                        
+                if st.button("⚠️ Arızalı / Çalışmıyor", key=f"btn_arizali_{istasyon['id']}"):
+                    basari, mesaj = yorum_gonder(istasyon["id"], "İstasyon çalışmıyor veya arızalı.", "Arızalı")
+                    if basari:
+                        st.success(mesaj)
+                        st.rerun()
+                    else:
+                        st.error(mesaj)
 
-                    with col_btn1:
-                        st.markdown('<div class="rapor-calisiyor">', unsafe_allow_html=True)
-                        if st.button("Sorunsuz", key=f"btn_ok_{sira}"):
-                            ok, msg = yorum_gonder(ist_id, "Sorunsuz / Boş", "Sorunsuz / Boş")
-                            if ok:
-                                st.success(msg)
-                                st.rerun()
-                            else:
-                                st.error(msg)
-                        st.markdown("</div>", unsafe_allow_html=True)
-
-                    with col_btn2:
-                        st.markdown('<div class="rapor-arizali">', unsafe_allow_html=True)
-                        if st.button("Arızalı", key=f"btn_fail_{sira}"):
-                            ok, msg = yorum_gonder(ist_id, "Arızalı / Kapalı", "Arızalı / Kapalı")
-                            if ok:
-                                st.success(msg)
-                                st.rerun()
-                            else:
-                                st.error(msg)
-                        st.markdown("</div>", unsafe_allow_html=True)
-
-                    st.markdown("---")
-                    yorum_txt = st.text_input(
-                        "Durum Notu",
-                        key=f"inp_txt_{sira}",
-                        max_chars=MAX_YORUM_KARAKTER,
-                        placeholder="Örn: Soket çalışıyor ama sıra var",
-                    )
-                    if st.button("Detaylı Gönder", key=f"btn_detail_{sira}"):
-                        temiz_yorum = yorum_txt.strip()
-                        if not temiz_yorum:
-                            st.warning("Lütfen kısa bir durum notu yazın.")
-                        else:
-                            ok, msg = yorum_gonder(ist_id, temiz_yorum, "Durum Güncellemesi")
-                            if ok:
-                                st.success(msg)
-                                st.rerun()
-                            else:
-                                st.error(msg)
 else:
-    st.warning(
-        "Mevcut şarj yüzdeniz ile ulaşılabilecek istasyon bulunamadı. "
-        "Menzil filtresini kapatabilir veya güvenlik marjını düşürebilirsiniz."
-    )
+    st.warning("🚗 Seçilen menzil ve kriterlere uygun istasyon bulunamadı. Lütfen filtreleri veya arama yarıçapını esnetmeyi deneyin.")
