@@ -122,31 +122,324 @@ HIZ_ESIK_MAP: Dict[str, float] = {
 st.markdown('''
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
+        :root {
+            --sb-bg-main: #07111F;
+            --sb-bg-card: #0F1B2D;
+            --sb-bg-card-soft: #13233A;
+            --sb-text-main: #F8FAFC;
+            --sb-text-soft: #CBD5E1;
+            --sb-text-muted: #94A3B8;
+            --sb-line-soft: rgba(148, 163, 184, 0.14);
+            --sb-primary: #38BDF8;
+            --sb-primary-deep: #0284C7;
+            --sb-success: #22C55E;
+            --sb-warning: #F59E0B;
+            --sb-danger: #EF4444;
+            --sb-glow: rgba(56, 189, 248, 0.28);
+        }
+
         [data-testid="stHeader"] { display: none !important; }
-        .stApp { background-color: #f8f9fa !important; }
-        .block-container { padding: 1.5rem 1rem !important; max-width: 440px !important; }
-        .title-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 2px solid #0f172a; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08); }
-        .title-cell { background-color: #0f172a; color: #ffffff !important; font-family: 'Inter', sans-serif; font-weight: 800; font-size: 24px; text-align: center; padding: 14px; text-transform: uppercase; }
-        .subtitle-cell { background-color: #ffffff; color: #475569 !important; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500; text-align: center; padding: 10px; border-top: 1px solid #e2e8f0; }
-        .premium-card { background: #ffffff !important; border: 1px solid #e2e8f0 !important; border-top: 5px solid #0f172a !important; border-radius: 16px; padding: 24px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04); margin-bottom: 16px; }
-        .premium-card-risk { border-top-color: #dc2626 !important; }
-        .istasyon-isim { font-size: 20px; font-weight: 700; color: #0f172a !important; margin: 0 0 6px 0; letter-spacing: -0.3px; }
-        .mesafe-text { font-size: 14px; font-weight: 700; color: #1e40af !important; margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
-        .detay-text { font-size: 13px; color: #475569 !important; margin: 0; font-weight: 500; }
-        .adres-text { font-size: 12px; color: #64748b !important; margin-top: 14px; line-height: 1.5; border-top: 1px solid #f1f5f9; padding-top: 14px; }
-        .panel-bolucu { border-top: 1px solid #f1f5f9; margin: 18px 0; }
-        .panel-alt-baslik { font-size: 13px; font-weight: 700; color: #0f172a !important; margin-bottom: 12px; text-transform: uppercase; }
-        .avantaj-item { font-size: 12px; color: #475569 !important; margin-bottom: 8px; display: flex; justify-content: space-between; gap: 12px; font-weight: 500; }
-        .avantaj-badge { color: #1e40af !important; font-weight: 700; white-space: nowrap; }
-        .durum-badge { display:inline-block; font-size:11px; font-weight:800; padding:5px 8px; border-radius:999px; margin-bottom:10px; }
-        .durum-aktif { background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
-        .durum-riskli { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
-        .durum-belirsiz { background:#f8fafc; color:#475569; border:1px solid #e2e8f0; }
-        .nav-link-btn { display: flex; align-items: center; justify-content: center; text-decoration: none; border-radius: 10px; height: 46px; font-weight: 600; background-color: #0f172a; color: #ffffff !important; border: 1px solid #0f172a; font-size: 14px; }
-        .stButton>button { border-radius: 10px; height: 46px; font-weight: 600; width: 100%; }
-        .rapor-calisiyor>button { border-color: #2563eb !important; color: #2563eb !important; background: #eff6ff !important; }
-        .rapor-arizali>button { border-color: #dc2626 !important; color: #dc2626 !important; background: #fef2f2 !important; }
-        .mini-note { font-size: 11px; color: #64748b !important; line-height:1.45; margin-top:8px; }
+
+        .stApp {
+            background:
+                radial-gradient(circle at top left, rgba(56, 189, 248, 0.13), transparent 34%),
+                radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.06), transparent 28%),
+                linear-gradient(180deg, #07111F 0%, #0B1220 100%) !important;
+            color: var(--sb-text-main) !important;
+        }
+
+        .block-container {
+            padding: 1.15rem 0.9rem 5.5rem !important;
+            max-width: 460px !important;
+        }
+
+        div[data-testid="stExpander"] {
+            background: rgba(15, 27, 45, 0.78) !important;
+            border: 1px solid rgba(148, 163, 184, 0.14) !important;
+            border-radius: 18px !important;
+            box-shadow: 0 14px 36px rgba(0, 0, 0, 0.20);
+            overflow: hidden;
+        }
+
+        div[data-testid="stExpander"] details summary {
+            color: #E2E8F0 !important;
+            font-weight: 800 !important;
+        }
+
+        label, .stMarkdown, .stCaption, .stTextInput label, .stNumberInput label, .stSelectbox label, .stSlider label, .stMultiSelect label {
+            color: #CBD5E1 !important;
+        }
+
+        .stCaption, .caption {
+            color: #94A3B8 !important;
+        }
+
+        input, textarea {
+            background-color: rgba(15, 27, 45, 0.92) !important;
+            color: #F8FAFC !important;
+            border-radius: 14px !important;
+            border: 1px solid rgba(148, 163, 184, 0.20) !important;
+        }
+
+        .title-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 18px;
+            border: 1px solid rgba(56, 189, 248, 0.24);
+            border-radius: 24px;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at top right, rgba(56, 189, 248, 0.19), transparent 32%),
+                linear-gradient(135deg, #0F1B2D 0%, #13233A 100%);
+            box-shadow:
+                0 22px 54px rgba(0, 0, 0, 0.30),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        .title-cell {
+            background: transparent;
+            color: #F8FAFC !important;
+            font-family: 'Inter', sans-serif;
+            font-weight: 950;
+            font-size: 30px;
+            text-align: left;
+            padding: 22px 22px 4px;
+            letter-spacing: -1px;
+            text-transform: none;
+        }
+
+        .subtitle-cell {
+            background: transparent;
+            color: #94A3B8 !important;
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 650;
+            text-align: left;
+            padding: 4px 22px 20px;
+            border-top: none;
+            line-height: 1.45;
+        }
+
+        .premium-card {
+            background:
+                radial-gradient(circle at top right, rgba(56, 189, 248, 0.10), transparent 34%),
+                linear-gradient(180deg, #0F1B2D 0%, #0B1628 100%) !important;
+            border: 1px solid rgba(148, 163, 184, 0.16) !important;
+            border-top: 1px solid rgba(56, 189, 248, 0.35) !important;
+            border-radius: 24px;
+            padding: 22px;
+            box-shadow:
+                0 18px 44px rgba(0, 0, 0, 0.32),
+                inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            margin-bottom: 18px;
+        }
+
+        .premium-card-risk {
+            border-color: rgba(239, 68, 68, 0.36) !important;
+            border-top-color: rgba(239, 68, 68, 0.48) !important;
+            box-shadow:
+                0 18px 44px rgba(127, 29, 29, 0.24),
+                inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+
+        .kart-ust-satir {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .kart-etiket {
+            font-size: 11px;
+            font-weight: 900;
+            color: #94A3B8 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 8px;
+        }
+
+        .istasyon-isim {
+            font-size: 21px;
+            font-weight: 900;
+            color: #F8FAFC !important;
+            margin: 2px 0 8px 0;
+            letter-spacing: -0.45px;
+            line-height: 1.18;
+        }
+
+        .mesafe-text {
+            font-size: 28px;
+            font-weight: 950;
+            color: #38BDF8 !important;
+            margin: 4px 0 8px 0;
+            letter-spacing: -1px;
+            text-transform: none;
+            line-height: 1.08;
+            text-shadow: 0 0 28px rgba(56, 189, 248, 0.16);
+        }
+
+        .mesafe-alt-text {
+            font-size: 12px;
+            color: #94A3B8 !important;
+            margin: 0 0 12px 0;
+            font-weight: 650;
+        }
+
+        .detay-text {
+            font-size: 13px;
+            color: #CBD5E1 !important;
+            margin: 5px 0;
+            font-weight: 650;
+            line-height: 1.38;
+        }
+
+        .detay-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+            margin-top: 10px;
+        }
+
+        .detay-chip {
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            background: rgba(19, 35, 58, 0.78);
+            color: #CBD5E1 !important;
+            padding: 7px 9px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .adres-text {
+            font-size: 12px;
+            color: #94A3B8 !important;
+            margin-top: 14px;
+            line-height: 1.48;
+            border-top: 1px solid rgba(148, 163, 184, 0.12);
+            padding-top: 14px;
+        }
+
+        .panel-bolucu {
+            border-top: 1px solid rgba(148, 163, 184, 0.12);
+            margin: 18px 0;
+        }
+
+        .panel-alt-baslik {
+            font-size: 12px;
+            font-weight: 900;
+            color: #E2E8F0 !important;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+        }
+
+        .avantaj-item {
+            font-size: 12px;
+            color: #CBD5E1 !important;
+            margin-bottom: 9px;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-weight: 650;
+            line-height: 1.35;
+        }
+
+        .avantaj-badge {
+            color: #38BDF8 !important;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+        .durum-badge {
+            display: inline-flex;
+            align-items: center;
+            font-size: 11px;
+            font-weight: 950;
+            padding: 7px 10px;
+            border-radius: 999px;
+            margin-bottom: 8px;
+            line-height: 1;
+        }
+
+        .durum-aktif {
+            background: rgba(34, 197, 94, 0.12);
+            color: #86EFAC;
+            border: 1px solid rgba(34, 197, 94, 0.35);
+        }
+
+        .durum-riskli {
+            background: rgba(239, 68, 68, 0.12);
+            color: #FCA5A5;
+            border: 1px solid rgba(239, 68, 68, 0.38);
+        }
+
+        .durum-belirsiz {
+            background: rgba(245, 158, 11, 0.12);
+            color: #FCD34D;
+            border: 1px solid rgba(245, 158, 11, 0.32);
+        }
+
+        .nav-link-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            border-radius: 16px;
+            min-height: 54px;
+            font-weight: 950;
+            background: linear-gradient(135deg, #38BDF8 0%, #0284C7 100%);
+            color: #031525 !important;
+            border: 1px solid rgba(125, 211, 252, 0.65);
+            font-size: 15px;
+            box-shadow: 0 12px 28px rgba(56, 189, 248, 0.25);
+        }
+
+        .nav-link-btn:hover {
+            filter: brightness(1.05);
+            text-decoration: none;
+        }
+
+        .stButton>button {
+            border-radius: 16px;
+            min-height: 54px;
+            font-weight: 850;
+            width: 100%;
+            background: rgba(15, 27, 45, 0.86) !important;
+            color: #E2E8F0 !important;
+            border: 1px solid rgba(148, 163, 184, 0.18) !important;
+        }
+
+        .rapor-calisiyor>button {
+            border-color: rgba(34, 197, 94, 0.45) !important;
+            color: #86EFAC !important;
+            background: rgba(34, 197, 94, 0.10) !important;
+        }
+
+        .rapor-arizali>button {
+            border-color: rgba(239, 68, 68, 0.45) !important;
+            color: #FCA5A5 !important;
+            background: rgba(239, 68, 68, 0.10) !important;
+        }
+
+        .mini-note {
+            font-size: 11px;
+            color: #64748B !important;
+            line-height: 1.45;
+            margin-top: 11px;
+        }
+
+        div[data-testid="stAlert"] {
+            border-radius: 18px !important;
+            border: 1px solid rgba(148, 163, 184, 0.18) !important;
+        }
+
+        hr {
+            border-color: rgba(148, 163, 184, 0.14) !important;
+        }
     </style>
 ''', unsafe_allow_html=True)
 
@@ -760,8 +1053,8 @@ with st.expander("⚙️ Arama Ayarları", expanded=False):
 # ==========================================
 st.markdown('''
     <table class="title-table">
-        <tr><td class="title-cell">ŞarjBul</td></tr>
-        <tr><td class="subtitle-cell">En yakın aktif şarj rotanız</td></tr>
+        <tr><td class="title-cell">⚡ ŞarjBul</td></tr>
+        <tr><td class="subtitle-cell">En yakın aktif şarj rotanız · Canlı durum · Rota tahmini · Yakın mekanlar</td></tr>
     </table>
 ''', unsafe_allow_html=True)
 
@@ -981,13 +1274,25 @@ if en_yakin:
 
         st.markdown(f"""
         <div class="{card_class}">
-            <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; margin-bottom:8px;">{guvenli_metin(etiket)}</div>
-            <span class="durum-badge {durum_class}">{guvenli_metin(istasyon.get('ArizaEtiketi'))}</span>
-            <div class="mesafe-text">Tahmini yol: {istasyon['Mesafe']} km · Kuş uçuşu: {istasyon['KusUcusuMesafe']} km</div>
+            <div class="kart-ust-satir">
+                <div>
+                    <div class="kart-etiket">{guvenli_metin(etiket)}</div>
+                    <span class="durum-badge {durum_class}">{guvenli_metin(istasyon.get('ArizaEtiketi'))}</span>
+                </div>
+            </div>
+
+            <div class="mesafe-text">{istasyon['Mesafe']} km tahmini yol</div>
+            <div class="mesafe-alt-text">{istasyon['KusUcusuMesafe']} km kuş uçuşu · x{YOL_UZAMA_KATSAYISI:.2f} rota katsayısı</div>
+
             <div class="istasyon-isim">{guvenli_metin(istasyon['isim'])}</div>
-            <div class="detay-text">Şarj Hızı: {guvenli_metin(istasyon.get('hiz', 'Bilinmiyor'))}</div>
-            <div class="detay-text">Soket: {guvenli_metin(istasyon.get('soket', 'Bilinmiyor'))} · Operatör: {guvenli_metin(istasyon.get('operator', 'Bilinmiyor'))}</div>
-            <div class="detay-text">Fiyat: {guvenli_metin(istasyon.get('fiyat', 'Bilinmiyor'))}</div>
+
+            <div class="detay-chip-row">
+                <span class="detay-chip">⚡ {guvenli_metin(istasyon.get('hiz', 'Bilinmiyor'))}</span>
+                <span class="detay-chip">🔌 {guvenli_metin(istasyon.get('soket', 'Bilinmiyor'))}</span>
+                <span class="detay-chip">🏢 {guvenli_metin(istasyon.get('operator', 'Bilinmiyor'))}</span>
+            </div>
+
+            <div class="detay-text" style="margin-top:13px;">Fiyat: {guvenli_metin(istasyon.get('fiyat', 'Bilinmiyor'))}</div>
             <div class="adres-text">{adres_gosterim}</div>
             {yakin_html}
             {yorum_html}
