@@ -464,7 +464,6 @@ def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str) -> Tuple[bool, 
     clean_id = clean_id_uret(istasyon_id)
     url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
 
-    # Privacy: e-posta prefix'i yerine anonim doğrulanmış kullanıcı etiketi.
     kullanici = "Doğrulanmış Sürücü"
 
     yeni_yorum = {
@@ -704,6 +703,7 @@ st.info(
     f"Tahmini güvenli menziliniz: {guvenli_menzil:.0f} km. "
     f"Yol mesafesi hesabında x{YOL_UZAMA_KATSAYISI:.2f} rota katsayısı kullanılıyor."
 )
+st.markdown('<div class="mini-note">Not: Gerçek yol süresi trafik ve rota koşullarına göre değişebilir.</div>', unsafe_allow_html=True)
 
 # ==========================================
 # 🔎 İSTASYONLARI HAZIRLA
@@ -729,7 +729,6 @@ for ist in istasyonlar_verisi:
     ist_kopya["ArizaSkoru"] = ariza["skor"]
     uygun_istasyonlar.append(ist_kopya)
 
-# Riskli istasyonları tamamen gizlemek yerine aşağıya iter.
 durum_siralama = {
     "aktif": 0,
     "belirsiz": 1,
