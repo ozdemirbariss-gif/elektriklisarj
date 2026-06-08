@@ -4,10 +4,9 @@ import math
 import hashlib
 import logging
 import unicodedata
-import threading
 import requests
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 import html
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -26,7 +25,6 @@ st.set_page_config(
 # ==========================================
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
-_thread_local = threading.local()
 
 # ==========================================
 # 🚨 SENTRY HATA TAKİP (GRACEFUL INIT)
@@ -121,7 +119,6 @@ st.markdown('''
         .subtitle-cell { background-color: #ffffff; color: #475569 !important; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500; text-align: center; padding: 10px; border-top: 1px solid #e2e8f0; }
         .premium-card { background: #ffffff !important; border: 1px solid #e2e8f0 !important; border-top: 5px solid #0f172a !important; border-radius: 16px; padding: 24px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04); margin-bottom: 16px; }
         .premium-card-risk { border-top-color: #dc2626 !important; }
-        .premium-card-warning { border-top-color: #f59e0b !important; }
         .istasyon-isim { font-size: 20px; font-weight: 700; color: #0f172a !important; margin: 0 0 6px 0; letter-spacing: -0.3px; }
         .mesafe-text { font-size: 14px; font-weight: 700; color: #1e40af !important; margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
         .detay-text { font-size: 13px; color: #475569 !important; margin: 0; font-weight: 500; }
@@ -133,7 +130,6 @@ st.markdown('''
         .durum-badge { display:inline-block; font-size:11px; font-weight:800; padding:5px 8px; border-radius:999px; margin-bottom:10px; }
         .durum-aktif { background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
         .durum-riskli { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
-        .durum-supheli { background:#fffbeb; color:#b45309; border:1px solid #fde68a; }
         .durum-belirsiz { background:#f8fafc; color:#475569; border:1px solid #e2e8f0; }
         .nav-link-btn { display: flex; align-items: center; justify-content: center; text-decoration: none; border-radius: 10px; height: 46px; font-weight: 600; background-color: #0f172a; color: #ffffff !important; border: 1px solid #0f172a; font-size: 14px; }
         .stButton>button { border-radius: 10px; height: 46px; font-weight: 600; width: 100%; }
@@ -146,20 +142,13 @@ st.markdown('''
 # ==========================================
 # 🛠️ YARDIMCI FONKSİYONLAR
 # ==========================================
-def yeni_http_session() -> requests.Session:
+@st.cache_resource
+def get_session() -> requests.Session:
     session = requests.Session()
     session.headers.update({
         "User-Agent": "SarjBul/2.1",
         "Accept": "application/json",
     })
-    return session
-
-
-def get_session() -> requests.Session:
-    session = getattr(_thread_local, "session", None)
-    if session is None:
-        session = yeni_http_session()
-        _thread_local.session = session
     return session
 
 
@@ -170,12 +159,21 @@ def guvenli_metin(metin: Any, max_len: Optional[int] = None) -> str:
     return text
 
 
-def simdi_utc() -> datetime:
-    return datetime.now(timezone.utc)
+def html_etiketlerini_temizle(metin: Any) -> str:
+    """Adres alanına yanlışlıkla HTML gelirse ekranda kod gibi görünmesini engeller."""
+    text = html.unescape(str(metin or "").strip())
+    while "<" in text and ">" in text:
+        start = text.find("<")
+        end = text.find(">", start)
+        if end == -1:
+            break
+        text = text[:start] + " " + text[end + 1:]
+    return " ".join(text.split())
 
 
-def simdi_utc_iso() -> str:
-    return simdi_utc().isoformat(timespec="seconds").replace("+00:00", "Z")
+def adres_metni_getir(istasyon: Dict[str, Any]) -> str:
+    adres = html_etiketlerini_temizle(istasyon.get("adres", ""))
+    return adres or "Adres Bilgisi Yok"
 
 
 def clean_id_uret(isim: str) -> str:
@@ -188,65 +186,32 @@ def clean_id_uret(isim: str) -> str:
 
 
 def istasyon_id_getir(istasyon: Dict[str, Any]) -> str:
-    return str(istasyon.get("id") or istasyon.get("isim") or "bilinmeyen_istasyon")
+    """İstasyonda id yoksa KeyError vermeden stabil bir yedek anahtar üretir."""
+    for alan in ("id", "station_id", "place_id", "uid", "firebase_key", "key"):
+        deger = istasyon.get(alan)
+        if deger not in (None, ""):
+            return str(deger).strip()
 
-
-def istasyon_yorum_anahtarlari_getir(istasyon: Dict[str, Any]) -> List[str]:
-    anahtarlar: List[str] = []
-    for deger in (istasyon_id_getir(istasyon), istasyon.get("isim")):
-        clean = clean_id_uret(str(deger or ""))
-        if clean and clean not in anahtarlar:
-            anahtarlar.append(clean)
-    return anahtarlar
-
-
-def istasyon_yorumlarini_lokal_getir(
-    tum_yorumlar: Dict[str, List[Dict[str, Any]]],
-    istasyon: Dict[str, Any],
-    limit: Optional[int] = None,
-) -> List[Dict[str, Any]]:
-    yorumlar: List[Dict[str, Any]] = []
-    gorulen = set()
-
-    for anahtar in istasyon_yorum_anahtarlari_getir(istasyon):
-        for yorum in tum_yorumlar.get(anahtar, []):
-            imza = (
-                yorum.get("tarih"),
-                yorum.get("uid_hash"),
-                yorum.get("durum"),
-                yorum.get("yorum"),
-            )
-            if imza in gorulen:
-                continue
-            gorulen.add(imza)
-            yorumlar.append(yorum)
-
-    sirali = sorted(yorumlar, key=lambda x: yorum_tarihi_parse(x.get("tarih", "")), reverse=True)
-    return sirali[:limit] if limit is not None else sirali
+    isim = str(istasyon.get("isim") or istasyon.get("name") or "bilinmeyen_istasyon").strip()
+    enlem = str(istasyon.get("enlem") or istasyon.get("lat") or "").strip()
+    boylam = str(istasyon.get("boylam") or istasyon.get("lon") or istasyon.get("lng") or "").strip()
+    fallback = f"{isim}_{enlem}_{boylam}".strip("_")
+    return fallback or "bilinmeyen_istasyon"
 
 
 def yorum_gonderilebilir_mi() -> Tuple[bool, int]:
     son = st.session_state.get("son_yorum_zamani")
     if son is None:
         return True, 0
-    if isinstance(son, str):
-        son = yorum_tarihi_parse(son)
-    if not isinstance(son, datetime):
-        return True, 0
-    if isinstance(son, datetime) and son.tzinfo is None:
-        son = son.replace(tzinfo=timezone.utc)
-    kalan = YORUM_BEKLEME_SURESI - int((simdi_utc() - son).total_seconds())
+    kalan = YORUM_BEKLEME_SURESI - int((datetime.now() - son).total_seconds())
     return kalan <= 0, max(0, kalan)
 
 
 def yorum_tarihi_parse(tarih_str: str) -> datetime:
     try:
-        tarih = datetime.fromisoformat(str(tarih_str).replace("Z", "+00:00"))
-        if tarih.tzinfo is None:
-            tarih = tarih.replace(tzinfo=timezone.utc)
-        return tarih.astimezone(timezone.utc)
+        return datetime.fromisoformat(str(tarih_str).replace("Z", "+00:00")).replace(tzinfo=None)
     except Exception:
-        return datetime.min.replace(tzinfo=timezone.utc)
+        return datetime.min
 
 
 def mesafe_hesapla(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -274,15 +239,7 @@ def konum_gecerli_mi(lat: Any, lon: Any) -> bool:
         return False
 
 
-def istasyon_kayitlarini_coz(veri: Any) -> List[Tuple[Optional[str], Any]]:
-    if isinstance(veri, dict):
-        return [(str(kayit_id), item) for kayit_id, item in veri.items()]
-    if isinstance(veri, list):
-        return [(None, item) for item in veri]
-    return []
-
-
-def istasyon_normalize_et(ist: Dict[str, Any], kaynak_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def istasyon_normalize_et(ist: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Firebase veya lokal JSON'dan gelen istasyonu doğrular ve güvenli tipe çevirir."""
     if not isinstance(ist, dict):
         return None
@@ -294,13 +251,11 @@ def istasyon_normalize_et(ist: Dict[str, Any], kaynak_id: Optional[str] = None) 
             return None
 
         yeni = dict(ist)
-        if kaynak_id and not yeni.get("id"):
-            yeni["id"] = str(kaynak_id)
         yeni["isim"] = isim
         yeni["enlem"] = enlem
         yeni["boylam"] = boylam
         yeni.setdefault("hiz", "Bilinmiyor")
-        yeni.setdefault("adres", "")
+        yeni["adres"] = adres_metni_getir(yeni)
         yeni.setdefault("operator", yeni.get("operatör", "Bilinmiyor"))
         yeni.setdefault("soket", "Bilinmiyor")
         yeni.setdefault("fiyat", "Bilinmiyor")
@@ -311,7 +266,7 @@ def istasyon_normalize_et(ist: Dict[str, Any], kaynak_id: Optional[str] = None) 
 
 def ariza_skoru_hesapla(yorumlar: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Son saatler içindeki bildirime göre risk skoru üretir."""
-    simdi = simdi_utc()
+    simdi = datetime.now()
     baslangic = simdi - timedelta(hours=ARIZA_GECERLILIK_SAATI)
     aktif_yorumlar = []
 
@@ -327,15 +282,9 @@ def ariza_skoru_hesapla(yorumlar: List[Dict[str, Any]]) -> Dict[str, Any]:
     if skor >= ARIZA_RISK_ESIGI:
         durum = "riskli"
         etiket = f"⚠️ Kullanıcılar arıza bildirdi ({arizali}/{len(aktif_yorumlar)})"
-    elif arizali > 0:
-        durum = "supheli"
-        etiket = f"⚠️ Arıza bildirimi var ({arizali}/{len(aktif_yorumlar)})"
-    elif sorunsuz > 0:
+    elif aktif_yorumlar:
         durum = "aktif"
         etiket = "✅ Son bildirimlere göre aktif"
-    elif aktif_yorumlar:
-        durum = "belirsiz"
-        etiket = "ℹ️ Son not var, durum net değil"
     else:
         durum = "belirsiz"
         etiket = "ℹ️ Yakın zamanda bildirim yok"
@@ -389,9 +338,10 @@ def istasyonlari_yukle() -> List[Dict[str, Any]]:
         if res.status_code == 200:
             veri = res.json()
             if veri:
+                ham_liste = list(veri.values()) if isinstance(veri, dict) else veri
                 temiz_liste = []
-                for kaynak_id, item in istasyon_kayitlarini_coz(veri):
-                    normalized = istasyon_normalize_et(item, kaynak_id)
+                for item in ham_liste:
+                    normalized = istasyon_normalize_et(item)
                     if normalized:
                         temiz_liste.append(normalized)
                     else:
@@ -405,11 +355,8 @@ def istasyonlari_yukle() -> List[Dict[str, Any]]:
     try:
         with open("istasyonlar.json", "r", encoding="utf-8") as f:
             veri = json.load(f)
-            return [
-                x
-                for kaynak_id, item in istasyon_kayitlarini_coz(veri)
-                if (x := istasyon_normalize_et(item, kaynak_id))
-            ]
+            ham_liste = list(veri.values()) if isinstance(veri, dict) else veri
+            return [x for item in ham_liste if (x := istasyon_normalize_et(item))]
     except Exception as e:
         sentry_sdk.capture_exception(e)
         logger.error("Fallback JSON dosyası da okunamadı: %s", e)
@@ -464,14 +411,14 @@ def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str) -> Tuple[bool, 
     clean_id = clean_id_uret(istasyon_id)
     url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
 
+    # Privacy: e-posta prefix'i yerine anonim doğrulanmış kullanıcı etiketi.
     kullanici = "Doğrulanmış Sürücü"
 
     yeni_yorum = {
         "kullanici": kullanici,
         "yorum": guvenli_metin(yorum_metni or durum, MAX_YORUM_KARAKTER),
         "durum": guvenli_metin(durum, 60),
-        "tarih": simdi_utc_iso(),
-        "istasyon_id": guvenli_metin(istasyon_id, 120),
+        "tarih": datetime.now().isoformat(timespec="seconds"),
         "uid_hash": hashlib.sha256(str(st.session_state.get("auth_uid", "")).encode()).hexdigest()[:16],
     }
 
@@ -483,7 +430,7 @@ def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str) -> Tuple[bool, 
             timeout=FIREBASE_TIMEOUT_S,
         )
         if r.status_code in (200, 201):
-            st.session_state["son_yorum_zamani"] = simdi_utc()
+            st.session_state["son_yorum_zamani"] = datetime.now()
             tum_yorumlari_getir.clear()
             istasyon_yorumlari_getir.clear()
             return True, "Bildirim kaydedildi."
@@ -591,7 +538,7 @@ with st.expander("🔑 Giriş / Kullanıcı Paneli", expanded=("auth_token" not 
                 st.session_state["auth_token"] = user_data["idToken"]
                 st.session_state["auth_email"] = user_data.get("email", "")
                 st.session_state["auth_uid"] = user_data.get("localId", "")
-                st.session_state["auth_login_time"] = simdi_utc_iso()
+                st.session_state["auth_login_time"] = datetime.now().isoformat(timespec="seconds")
                 st.success("Giriş başarılı!")
                 st.rerun()
             else:
@@ -703,7 +650,6 @@ st.info(
     f"Tahmini güvenli menziliniz: {guvenli_menzil:.0f} km. "
     f"Yol mesafesi hesabında x{YOL_UZAMA_KATSAYISI:.2f} rota katsayısı kullanılıyor."
 )
-st.markdown('<div class="mini-note">Not: Gerçek yol süresi trafik ve rota koşullarına göre değişebilir.</div>', unsafe_allow_html=True)
 
 # ==========================================
 # 🔎 İSTASYONLARI HAZIRLA
@@ -718,7 +664,8 @@ for ist in istasyonlar_verisi:
     if menzil_filtresi and tahmini_km > guvenli_menzil:
         continue
 
-    yorumlar = istasyon_yorumlarini_lokal_getir(tum_yorumlar, ist)
+    station_key = clean_id_uret(istasyon_id_getir(ist))
+    yorumlar = tum_yorumlar.get(station_key, [])
     ariza = ariza_skoru_hesapla(yorumlar)
 
     ist_kopya = ist.copy()
@@ -729,15 +676,10 @@ for ist in istasyonlar_verisi:
     ist_kopya["ArizaSkoru"] = ariza["skor"]
     uygun_istasyonlar.append(ist_kopya)
 
-durum_siralama = {
-    "aktif": 0,
-    "belirsiz": 1,
-    "supheli": 2,
-    "riskli": 3,
-}
+# Riskli istasyonları tamamen gizlemek yerine aşağıya iter.
 uygun_istasyonlar = sorted(
     uygun_istasyonlar,
-    key=lambda x: (durum_siralama.get(x.get("ArizaDurumu"), 1), x["Mesafe"]),
+    key=lambda x: (1 if x.get("ArizaDurumu") == "riskli" else 0, x["Mesafe"]),
 )
 en_yakin = uygun_istasyonlar[:sonuc_sayisi]
 
@@ -748,20 +690,15 @@ if en_yakin:
     cevre_sonuclari = _paralel_cevre_getir(en_yakin, ayar_yaricap)
 
     for sira, (istasyon, yakin_yerler) in enumerate(zip(en_yakin, cevre_sonuclari)):
+        ist_id = istasyon_id_getir(istasyon)
         etiket = "🥇 En Yakın İstasyon" if sira == 0 else f"#{sira + 1} Alternatif İstasyon"
         durum = istasyon.get("ArizaDurumu", "belirsiz")
         durum_class = {
             "aktif": "durum-aktif",
             "riskli": "durum-riskli",
-            "supheli": "durum-supheli",
             "belirsiz": "durum-belirsiz",
         }.get(durum, "durum-belirsiz")
-        if durum == "riskli":
-            card_class = "premium-card premium-card-risk"
-        elif durum == "supheli":
-            card_class = "premium-card premium-card-warning"
-        else:
-            card_class = "premium-card"
+        card_class = "premium-card premium-card-risk" if durum == "riskli" else "premium-card"
 
         yakin_html = ""
         if yakin_yerler:
@@ -773,7 +710,7 @@ if en_yakin:
                 )
 
         yorum_html = ""
-        son_yorumlar = istasyon_yorumlarini_lokal_getir(tum_yorumlar, istasyon, MAX_SON_YORUM)
+        son_yorumlar = istasyon_yorumlari_getir(ist_id, MAX_SON_YORUM)
         if son_yorumlar:
             yorum_html = '<div class="panel-bolucu"></div><div class="panel-alt-baslik">Son Bildirimler</div>'
             for y in son_yorumlar:
@@ -787,42 +724,82 @@ if en_yakin:
 
         st.markdown(f"""
         <div class="{card_class}">
-            <div style="font-size:11px; font-weight:700; color:#64748b; margin-bottom:8px; text-transform:uppercase;">{etiket}</div>
-            <div class="durum-badge {durum_class}">{istasyon.get("ArizaEtiketi", "")}</div>
-            <h3 class="istasyon-isim">{istasyon.get("isim", "Bilinmeyen İstasyon")}</h3>
-            <div class="mesafe-text">🚗 {istasyon.get("Mesafe", 0)} km mesafe (Kuş uçuşu: {istasyon.get("KusUcusuMesafe", 0)} km)</div>
-            <p class="detay-text"><b>Operatör:</b> {istasyon.get("operator", "-")} <br> <b>Hız:</b> {istasyon.get("hiz", "-")} <br> <b>Soket:</b> {istasyon.get("soket", "-")}</p>
+            <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; margin-bottom:8px;">{guvenli_metin(etiket)}</div>
+            <span class="durum-badge {durum_class}">{guvenli_metin(istasyon.get('ArizaEtiketi'))}</span>
+            <div class="mesafe-text">Tahmini yol: {istasyon['Mesafe']} km · Kuş uçuşu: {istasyon['KusUcusuMesafe']} km</div>
+            <div class="istasyon-isim">{guvenli_metin(istasyon['isim'])}</div>
+            <div class="detay-text">Şarj Hızı: {guvenli_metin(istasyon.get('hiz', 'Bilinmiyor'))}</div>
+            <div class="detay-text">Soket: {guvenli_metin(istasyon.get('soket', 'Bilinmiyor'))} · Operatör: {guvenli_metin(istasyon.get('operator', 'Bilinmiyor'))}</div>
+            <div class="detay-text">Fiyat: {guvenli_metin(istasyon.get('fiyat', 'Bilinmiyor'))}</div>
+            <div class="adres-text">{guvenli_metin(adres_metni_getir(istasyon))}</div>
             {yakin_html}
             {yorum_html}
-            <div class="adres-text">{istasyon.get("adres", "Adres bilgisi bulunmuyor.")}</div>
+            <div class="mini-note">Not: Gerçek yol süresi trafik ve rota koşullarına göre değişebilir.</div>
         </div>
         """, unsafe_allow_html=True)
 
         c1, c2 = st.columns(2)
-        
         with c1:
-            nav_url = f"https://www.google.com/maps/dir/?api=1&destination={istasyon['enlem']},{istasyon['boylam']}"
-            st.markdown(f'<a href="{nav_url}" target="_blank" class="nav-link-btn">🗺️ Yol Tarifi Al</a>', unsafe_allow_html=True)
-            
-        with c2:
-            with st.popover("📢 Durum Bildir"):
-                st.write("İstasyonun güncel durumu nedir?")
-                
-                if st.button("✅ Sorunsuz Çalışıyor", key=f"btn_calisiyor_{istasyon['id']}"):
-                    basari, mesaj = yorum_gonder(istasyon["id"], "Sorunsuz şarj yapıldı.", "Sorunsuz")
-                    if basari:
-                        st.success(mesaj)
-                        st.rerun()
-                    else:
-                        st.error(mesaj)
-                        
-                if st.button("⚠️ Arızalı / Çalışmıyor", key=f"btn_arizali_{istasyon['id']}"):
-                    basari, mesaj = yorum_gonder(istasyon["id"], "İstasyon çalışmıyor veya arızalı.", "Arızalı")
-                    if basari:
-                        st.success(mesaj)
-                        st.rerun()
-                    else:
-                        st.error(mesaj)
+            g_link = (
+                "https://www.google.com/maps/dir/?api=1"
+                f"&origin={user_lat},{user_lon}"
+                f"&destination={istasyon['enlem']},{istasyon['boylam']}"
+                "&travelmode=driving"
+            )
+            st.markdown(
+                f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>',
+                unsafe_allow_html=True,
+            )
 
+        with c2:
+            with st.popover("Durum Bildir"):
+                if "auth_token" not in st.session_state:
+                    st.warning("Durum bildirmek ve yorum yapmak için lütfen üstteki Giriş / Kullanıcı Paneli bölümünden giriş yapın.")
+                else:
+                    col_btn1, col_btn2 = st.columns(2)
+
+                    with col_btn1:
+                        st.markdown('<div class="rapor-calisiyor">', unsafe_allow_html=True)
+                        if st.button("Sorunsuz", key=f"btn_ok_{sira}_{clean_id_uret(ist_id)}"):
+                            ok, msg = yorum_gonder(ist_id, "Sorunsuz / Boş", "Sorunsuz / Boş")
+                            if ok:
+                                st.success(msg)
+                                st.rerun()
+                            else:
+                                st.error(msg)
+                        st.markdown("</div>", unsafe_allow_html=True)
+
+                    with col_btn2:
+                        st.markdown('<div class="rapor-arizali">', unsafe_allow_html=True)
+                        if st.button("Arızalı", key=f"btn_fail_{sira}_{clean_id_uret(ist_id)}"):
+                            ok, msg = yorum_gonder(ist_id, "Arızalı / Kapalı", "Arızalı / Kapalı")
+                            if ok:
+                                st.success(msg)
+                                st.rerun()
+                            else:
+                                st.error(msg)
+                        st.markdown("</div>", unsafe_allow_html=True)
+
+                    st.markdown("---")
+                    yorum_txt = st.text_input(
+                        "Durum Notu",
+                        key=f"inp_txt_{sira}_{clean_id_uret(ist_id)}",
+                        max_chars=MAX_YORUM_KARAKTER,
+                        placeholder="Örn: Soket çalışıyor ama sıra var",
+                    )
+                    if st.button("Detaylı Gönder", key=f"btn_detail_{sira}_{clean_id_uret(ist_id)}"):
+                        temiz_yorum = yorum_txt.strip()
+                        if not temiz_yorum:
+                            st.warning("Lütfen kısa bir durum notu yazın.")
+                        else:
+                            ok, msg = yorum_gonder(ist_id, temiz_yorum, "Durum Güncellemesi")
+                            if ok:
+                                st.success(msg)
+                                st.rerun()
+                            else:
+                                st.error(msg)
 else:
-    st.warning("🚗 Seçilen menzil ve kriterlere uygun istasyon bulunamadı. Lütfen filtreleri veya arama yarıçapını esnetmeyi deneyin.")
+    st.warning(
+        "Mevcut şarj yüzdeniz ile ulaşılabilecek istasyon bulunamadı. "
+        "Menzil filtresini kapatabilir veya güvenlik marjını düşürebilirsiniz."
+    )
