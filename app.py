@@ -1535,62 +1535,51 @@ if en_yakin:
         }.get(durum, "durum-belirsiz")
         card_class = "premium-card premium-card-risk" if durum == "riskli" else "premium-card"
 
-        yakin_html = ""
-        if yakin_yerler:
-            yakin_html = '<div class="panel-bolucu"></div><div class="panel-alt-baslik">Yakındaki Yerler</div>'
-            for yer in yakin_yerler:
-                yakin_html += (
-                    f'<div class="avantaj-item"><span>{yer["emoji"]} {yer["isim"]}</span>'
-                    f'<span class="avantaj-badge">{yer["metre"]}m</span></div>'
-                )
-
-        yorum_html = ""
         son_yorumlar = (istasyon.get("SonYorumlar") or gorunen_yorumlar.get(ist_key, []))[:MAX_SON_YORUM]
-        if son_yorumlar:
-            yorum_html = '<div class="panel-bolucu"></div><div class="panel-alt-baslik">Son Bildirimler</div>'
-            for y in son_yorumlar:
-                yorum = guvenli_metin(y.get("yorum", ""), 100)
-                durum_y = guvenli_metin(y.get("durum", ""), 50)
-                tarih = guvenli_metin(str(y.get("tarih", ""))[:16])
-                yorum_html += (
-                    f'<div class="avantaj-item"><span>{durum_y}: {yorum}</span>'
-                    f'<span class="avantaj-badge">{tarih}</span></div>'
-                )
+        adres_gosterim = istasyon.get("adres", "Adres Bilgisi Yok")
 
-        adres_gosterim = guvenli_metin(istasyon.get("adres", "Adres Bilgisi Yok"))
+        with st.container(border=True):
+            st.caption(etiket)
+            if durum == "riskli":
+                st.error(istasyon.get("ArizaEtiketi", "Kullanıcı bildirimi: arıza riski"), icon="⚠️")
+            elif durum == "aktif":
+                st.success(istasyon.get("ArizaEtiketi", "Kullanıcı bildirimi: olumlu"), icon="✅")
+            else:
+                st.info(istasyon.get("ArizaEtiketi", "Canlı operatör verisi yok"), icon="ℹ️")
 
-        # DÜZELTME: Kart HTML'i değişkene alındı ve tek noktadan unsafe_allow_html=True ile basılıyor.
-        kart_html = f"""
-        <div class="{card_class}">
-            <div class="kart-ust-satir">
-                <div>
-                    <div class="kart-etiket">{guvenli_metin(etiket)}</div>
-                    <span class="durum-badge {durum_class}">{guvenli_metin(istasyon.get('ArizaEtiketi'))}</span>
-                </div>
-            </div>
+            st.subheader(f"{istasyon['Mesafe']} km tahmini yol")
+            st.caption(
+                f"~{istasyon['TahminiSureDk']} dk · Varışta ~%{istasyon['VarisSarjYuzdesi']:.0f} şarj · "
+                f"{istasyon['KalanGuvenliMenzil']:.0f} km güvenli pay"
+            )
+            st.markdown(f"**{istasyon['isim']}**")
 
-            <div class="mesafe-text">{istasyon['Mesafe']} km tahmini yol</div>
-            <div class="mesafe-alt-text">~{istasyon['TahminiSureDk']} dk · Varışta ~%{istasyon['VarisSarjYuzdesi']:.0f} şarj · {istasyon['KalanGuvenliMenzil']:.0f} km güvenli pay</div>
+            bilgi_col1, bilgi_col2 = st.columns(2)
+            with bilgi_col1:
+                st.write(f"⚡ {istasyon.get('hiz', 'Bilinmiyor')}")
+                st.write(f"🔌 {istasyon.get('soket', 'Bilinmiyor')}")
+            with bilgi_col2:
+                st.write(f"🏢 {istasyon.get('operator', 'Bilinmiyor')}")
+                st.write(f"🕒 {'24 saat' if istasyon.get('_acik_24_saat') else 'Saat belirsiz'}")
 
-            <div class="istasyon-isim">{guvenli_metin(istasyon['isim'])}</div>
+            st.write(f"Fiyat: {istasyon.get('fiyat', 'Bilinmiyor')}")
+            st.caption(
+                f"{istasyon['KusUcusuMesafe']} km kuş uçuşu · x{YOL_UZAMA_KATSAYISI:.2f} rota katsayısı · "
+                "Operatör canlı uygunluk verisi yok"
+            )
+            st.caption(adres_gosterim)
 
-            <div class="detay-chip-row">
-                <span class="detay-chip">⚡ {guvenli_metin(istasyon.get('hiz', 'Bilinmiyor'))}</span>
-                <span class="detay-chip">🔌 {guvenli_metin(istasyon.get('soket', 'Bilinmiyor'))}</span>
-                <span class="detay-chip">🏢 {guvenli_metin(istasyon.get('operator', 'Bilinmiyor'))}</span>
-                <span class="detay-chip">🕒 {'24 saat' if istasyon.get('_acik_24_saat') else 'Saat belirsiz'}</span>
-            </div>
+            if son_yorumlar:
+                st.divider()
+                st.markdown("**Son Bildirimler**")
+                for y in son_yorumlar:
+                    yorum = str(y.get("yorum", ""))[:100]
+                    durum_y = str(y.get("durum", ""))[:50]
+                    tarih = str(y.get("tarih", ""))[:16]
+                    st.write(f"{durum_y}: {yorum}")
+                    st.caption(tarih)
 
-            <div class="detay-text" style="margin-top:13px;">Fiyat: {guvenli_metin(istasyon.get('fiyat', 'Bilinmiyor'))}</div>
-            <div class="mesafe-alt-text">{istasyon['KusUcusuMesafe']} km kuş uçuşu · x{YOL_UZAMA_KATSAYISI:.2f} rota katsayısı · Operatör canlı uygunluk verisi yok</div>
-            <div class="adres-text">{adres_gosterim}</div>
-            {yakin_html}
-            {yorum_html}
-            <div class="mini-note">Not: Gerçek yol süresi trafik ve rota koşullarına göre değişebilir.</div>
-        </div>
-        """
-
-        st.markdown(kart_html, unsafe_allow_html=True)
+            st.caption("Not: Gerçek yol süresi trafik ve rota koşullarına göre değişebilir.")
 
         g_link = (
             "https://www.google.com/maps/dir/?api=1"
@@ -1598,10 +1587,7 @@ if en_yakin:
             f"&destination={istasyon['enlem']},{istasyon['boylam']}"
             "&travelmode=driving"
         )
-        st.markdown(
-            f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>',
-            unsafe_allow_html=True,
-        )
+        st.link_button("Navigasyonu Başlat", g_link, use_container_width=True)
 
         konum_dogrulandi = mesafe_hesapla(
             user_lat, user_lon, istasyon["enlem"], istasyon["boylam"]
@@ -1634,7 +1620,6 @@ if en_yakin:
                     col_btn1, col_btn2, col_btn3 = st.columns(3)
 
                     with col_btn1:
-                        st.markdown('<div class="rapor-calisiyor">', unsafe_allow_html=True)
                         if st.button("Sorunsuz", key=f"btn_ok_{sira}_{ist_key}"):
                             ok, msg = yorum_gonder(
                                 ist_id,
@@ -1647,10 +1632,8 @@ if en_yakin:
                                 st.rerun()
                             else:
                                 st.error(msg)
-                        st.markdown("</div>", unsafe_allow_html=True)
 
                     with col_btn2:
-                        st.markdown('<div class="rapor-arizali">', unsafe_allow_html=True)
                         if st.button("Arızalı", key=f"btn_fail_{sira}_{ist_key}"):
                             ok, msg = yorum_gonder(
                                 ist_id,
@@ -1663,7 +1646,6 @@ if en_yakin:
                                 st.rerun()
                             else:
                                 st.error(msg)
-                        st.markdown("</div>", unsafe_allow_html=True)
 
                     with col_btn3:
                         if st.button("Sıra Var", key=f"btn_queue_{sira}_{ist_key}"):
