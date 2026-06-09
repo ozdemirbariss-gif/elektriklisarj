@@ -4,7 +4,6 @@ import math
 import hashlib
 import logging
 import unicodedata
-import asyncio
 import re
 import requests
 from datetime import datetime, timedelta
@@ -580,33 +579,6 @@ def yorum_gonderilebilir_mi() -> Tuple[bool, int]:
     return kalan <= 0, max(0, kalan)
 
 
-def sunucu_tarafli_cooldown_kontrol(
-    tum_yorumlar: Dict[str, List[Dict[str, Any]]], uid_hash: str
-) -> Tuple[bool, int]:
-    """
-    tum_yorumlar üzerinde uid_hash eşleşmesi arar.
-    Bulunan en son yorum zamanına göre cooldown uygular.
-    Döner: (gonderilebilir_mi, kalan_saniye)
-    """
-    if not uid_hash:
-        return True, 0
-    simdi = datetime.now()
-    son_yorum_zamani: Optional[datetime] = None
-
-    for yorumlar in tum_yorumlar.values():
-        for y in yorumlar:
-            if str(y.get("uid_hash", ""))[:16] == uid_hash[:16]:
-                tarih = yorum_tarihi_parse(y.get("tarih", ""))
-                if tarih != datetime.min:
-                    if son_yorum_zamani is None or tarih > son_yorum_zamani:
-                        son_yorum_zamani = tarih
-
-    if son_yorum_zamani is None:
-        return True, 0
-    kalan = YORUM_BEKLEME_SURESI - int((simdi - son_yorum_zamani).total_seconds())
-    return kalan <= 0, max(0, kalan)
-
-
 def yorum_tarihi_parse(tarih_str: str) -> datetime:
     try:
         return datetime.fromisoformat(str(tarih_str).replace("Z", "+00:00")).replace(tzinfo=None)
@@ -710,6 +682,26 @@ def ariza_skoru_hesapla(yorumlar: List[Dict[str, Any]]) -> Dict[str, Any]:
         ).isoformat(timespec="seconds") if aktif_yorumlar else "",
     }
 
+
+def rapor_ek_bilgi_olustur(
+    rapor_tipi: str,
+    konum_dogrulandi: bool,
+    kus_ucusu_km: float,
+    foto_dosyasi: Any = None,
+) -> Dict[str, Any]:
+    """Yorum gönderiminde ek meta veri paketi oluşturur."""
+    ek: Dict[str, Any] = {
+        "rapor_tipi": rapor_tipi,
+        "konum_dogrulandi": konum_dogrulandi,
+        "kullanici_istasyona_km": round(kus_ucusu_km, 3),
+    }
+    if foto_dosyasi is not None:
+        foto_bytes = foto_dosyasi.getvalue()
+        ek["foto_adi"] = guvenli_metin(foto_dosyasi.name, 80)
+        ek["foto_hash"] = hashlib.sha256(foto_bytes[:2_000_000]).hexdigest()[:16]
+    return ek
+
+
 # ==========================================
 # 🔐 AUTH FONKSİYONLARI
 # ==========================================
@@ -810,25 +802,6 @@ def istasyonlari_yukle() -> List[Dict[str, Any]]:
         sentry_sdk.capture_exception(e)
         logger.error("Fallback JSON dosyası da okunamadı: %s", e)
         return []
-
-
-@st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
-def tum_yorumlari_getir() -> Dict[str, List[Dict[str, Any]]]:
-    url = f"{FIREBASE_DB_URL}yorumlar.json"
-    sonuc: Dict[str, List[Dict[str, Any]]] = {}
-    try:
-        res = get_session().get(url, timeout=FIREBASE_TIMEOUT_S)
-        if res.status_code == 200 and res.json():
-            for clean_id, pkts in res.json().items():
-                if isinstance(pkts, dict):
-                    yorumlar = [y for y in pkts.values() if isinstance(y, dict)]
-                    sonuc[clean_id] = sorted(yorumlar, key=lambda x: yorum_tarihi_parse(x.get("tarih", "")), reverse=True)
-        elif res.status_code not in (200, 404):
-            logger.warning("Yorumlar alınamadı: %s - %s", res.status_code, res.text[:200])
-    except Exception as e:
-        sentry_sdk.capture_exception(e)
-        logger.exception("Yorum verisi çekilemedi")
-    return sonuc
 
 
 @st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
@@ -1141,33 +1114,6 @@ def yakin_cevre_getir(enlem: float, boylam: float, yaricap_m: int) -> Optional[L
             continue
 
     return None
-
-
-def _cevre_getir_ist(ist: Dict[str, Any], yaricap: int) -> Optional[List[Dict[str, Any]]]:
-    return yakin_cevre_getir(ist["enlem"], ist["boylam"], yaricap)
-
-
-async def _paralel_cevre_getir_async(
-    istasyon_listesi: List[Dict[str, Any]], yaricap: int
-) -> List[Optional[List[Dict[str, Any]]]]:
-    gorevler = [
-        asyncio.to_thread(_cevre_getir_ist, ist, yaricap)
-        for ist in istasyon_listesi
-    ]
-    return await asyncio.gather(*gorevler)
-
-
-def _paralel_cevre_getir(
-    istasyon_listesi: List[Dict[str, Any]], yaricap: int
-) -> List[Optional[List[Dict[str, Any]]]]:
-    """Overpass sorgularını asyncio.to_thread ile paralel çalıştırır."""
-    if not istasyon_listesi:
-        return []
-    try:
-        return asyncio.run(_paralel_cevre_getir_async(istasyon_listesi, yaricap))
-    except RuntimeError:
-        logger.warning("asyncio.run başarısız, sıralı Overpass sorgusu çalışıyor.")
-        return [_cevre_getir_ist(ist, yaricap) for ist in istasyon_listesi]
 
 # ==========================================
 # 🔑 ANA SAYFA GİRİŞ PANELİ VE AYARLAR
@@ -1522,21 +1468,17 @@ if en_yakin:
         )
 
     for sira, istasyon in enumerate(en_yakin):
-        yakin_yerler: List[Dict[str, Any]] = []
-
         ist_id = istasyon_id_getir(istasyon)
         ist_key = str(istasyon.get("_station_key") or clean_id_uret(ist_id))
         etiket = "🥇 En Yakın İstasyon" if sira == 0 else f"#{sira + 1} Alternatif İstasyon"
         durum = istasyon.get("ArizaDurumu", "belirsiz")
-        durum_class = {
-            "aktif": "durum-aktif",
-            "riskli": "durum-riskli",
-            "belirsiz": "durum-belirsiz",
-        }.get(durum, "durum-belirsiz")
-        card_class = "premium-card premium-card-risk" if durum == "riskli" else "premium-card"
 
         son_yorumlar = (istasyon.get("SonYorumlar") or gorunen_yorumlar.get(ist_key, []))[:MAX_SON_YORUM]
         adres_gosterim = istasyon.get("adres", "Adres Bilgisi Yok")
+
+        konum_dogrulandi = mesafe_hesapla(
+            user_lat, user_lon, istasyon["enlem"], istasyon["boylam"]
+        ) <= KONUM_DOGRULAMA_ESIGI_KM
 
         with st.container(border=True):
             st.caption(etiket)
@@ -1589,22 +1531,6 @@ if en_yakin:
         )
         st.link_button("Navigasyonu Başlat", g_link, use_container_width=True)
 
-        konum_dogrulandi = mesafe_hesapla(
-            user_lat, user_lon, istasyon["enlem"], istasyon["boylam"]
-        ) <= KONUM_DOGRULAMA_ESIGI_KM
-
-        def rapor_ek_bilgi_olustur(rapor_tipi: str, foto_dosyasi: Any = None) -> Dict[str, Any]:
-            ek = {
-                "rapor_tipi": rapor_tipi,
-                "konum_dogrulandi": konum_dogrulandi,
-                "kullanici_istasyona_km": round(istasyon["KusUcusuMesafe"], 3),
-            }
-            if foto_dosyasi is not None:
-                foto_bytes = foto_dosyasi.getvalue()
-                ek["foto_adi"] = guvenli_metin(foto_dosyasi.name, 80)
-                ek["foto_hash"] = hashlib.sha256(foto_bytes[:2_000_000]).hexdigest()[:16]
-            return ek
-
         aksiyon_col1, aksiyon_col2 = st.columns([3, 1])
         with aksiyon_col1:
             with st.popover("Durum Bildir"):
@@ -1625,7 +1551,7 @@ if en_yakin:
                                 ist_id,
                                 "Sorunsuz / Boş",
                                 "Sorunsuz / Boş",
-                                rapor_ek_bilgi_olustur("sorunsuz", foto),
+                                rapor_ek_bilgi_olustur("sorunsuz", konum_dogrulandi, istasyon["KusUcusuMesafe"], foto),
                             )
                             if ok:
                                 st.success(msg)
@@ -1639,7 +1565,7 @@ if en_yakin:
                                 ist_id,
                                 "Arızalı / Kapalı",
                                 "Arızalı / Kapalı",
-                                rapor_ek_bilgi_olustur("arizali", foto),
+                                rapor_ek_bilgi_olustur("arizali", konum_dogrulandi, istasyon["KusUcusuMesafe"], foto),
                             )
                             if ok:
                                 st.success(msg)
@@ -1653,7 +1579,7 @@ if en_yakin:
                                 ist_id,
                                 "Sıra var",
                                 "Sıra Var",
-                                rapor_ek_bilgi_olustur("sira_var", foto),
+                                rapor_ek_bilgi_olustur("sira_var", konum_dogrulandi, istasyon["KusUcusuMesafe"], foto),
                             )
                             if ok:
                                 st.success(msg)
@@ -1677,7 +1603,7 @@ if en_yakin:
                                 ist_id,
                                 temiz_yorum,
                                 "Durum Güncellemesi",
-                                rapor_ek_bilgi_olustur("detayli", foto),
+                                rapor_ek_bilgi_olustur("detayli", konum_dogrulandi, istasyon["KusUcusuMesafe"], foto),
                             )
                             if ok:
                                 st.success(msg)
