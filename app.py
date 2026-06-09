@@ -4,6 +4,7 @@ import math
 import hashlib
 import logging
 import unicodedata
+import asyncio
 import re
 import requests
 from datetime import datetime, timedelta
@@ -86,18 +87,18 @@ ARAC_KATALOGU: Dict[str, Dict[str, float]] = {
 }
 
 KATEGORI_EMOJILER: Dict[str, Tuple[str, str]] = {
-    "cafe":        ("☕",  "Kafe"),
-    "restaurant":  ("🍽️", "Restoran"),
-    "fast_food":   ("🍔", "Fast Food"),
-    "supermarket": ("🛒", "Süpermarket"),
-    "convenience": ("🏪", "Market"),
-    "fuel":        ("⛽", "Akaryakıt"),
-    "parking":     ("🅿️", "Otopark"),
-    "hotel":       ("🏨", "Otel"),
-    "mall":        ("🏬", "AVM"),
-    "pharmacy":    ("💊", "Eczane"),
-    "atm":         ("🏧", "ATM"),
-    "toilets":     ("🚻", "Tuvalet"),
+    "cafe":        ("", "Kafe"),
+    "restaurant":  ("", "Restoran"),
+    "fast_food":   ("", "Fast Food"),
+    "supermarket": ("", "Süpermarket"),
+    "convenience": ("", "Market"),
+    "fuel":        ("", "Akaryakıt"),
+    "parking":     ("", "Otopark"),
+    "hotel":       ("", "Otel"),
+    "mall":        ("", "AVM"),
+    "pharmacy":    ("", "Eczane"),
+    "atm":         ("", "ATM"),
+    "toilets":     ("", "Tuvalet"),
 }
 
 OVERPASS_URLS = [
@@ -116,328 +117,124 @@ HIZ_ESIK_MAP: Dict[str, float] = {
 }
 
 # ==========================================
-# 🎨 PREMIUM CSS
+# TASARIM SİSTEMİ
 # ==========================================
 st.markdown('''
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         :root {
-            --sb-bg-main: #07111F;
-            --sb-bg-card: #0F1B2D;
-            --sb-bg-card-soft: #13233A;
-            --sb-text-main: #F8FAFC;
-            --sb-text-soft: #CBD5E1;
-            --sb-text-muted: #94A3B8;
-            --sb-line-soft: rgba(148, 163, 184, 0.14);
-            --sb-primary: #38BDF8;
-            --sb-primary-deep: #0284C7;
-            --sb-success: #22C55E;
-            --sb-warning: #F59E0B;
-            --sb-danger: #EF4444;
-            --sb-glow: rgba(56, 189, 248, 0.28);
+            --sb-bg: #101211;
+            --sb-surface: #171A18;
+            --sb-surface-soft: #1E221F;
+            --sb-line: rgba(226, 232, 220, 0.12);
+            --sb-line-strong: rgba(226, 232, 220, 0.22);
+            --sb-text: #F3F5F0;
+            --sb-text-soft: #C8CEC4;
+            --sb-text-muted: #8F978C;
+            --sb-primary: #B7F0D0;
+            --sb-primary-deep: #6EC89A;
+            --sb-danger: #E68484;
+            --sb-warning: #D8B46A;
         }
 
         [data-testid="stHeader"] { display: none !important; }
 
         .stApp {
-            background:
-                radial-gradient(circle at top left, rgba(56, 189, 248, 0.13), transparent 34%),
-                radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.06), transparent 28%),
-                linear-gradient(180deg, #07111F 0%, #0B1220 100%) !important;
-            color: var(--sb-text-main) !important;
+            background: linear-gradient(180deg, #101211 0%, #141714 100%) !important;
+            color: var(--sb-text) !important;
         }
 
         .block-container {
-            padding: 1.15rem 0.9rem 5.5rem !important;
-            max-width: 460px !important;
+            padding: 1rem 0.9rem 4.5rem !important;
+            max-width: 480px !important;
+        }
+
+        h1, h2, h3 {
+            color: var(--sb-text) !important;
+            letter-spacing: 0 !important;
+            font-weight: 720 !important;
+        }
+
+        h1 {
+            font-size: 30px !important;
+            margin: 0.25rem 0 0.15rem !important;
+        }
+
+        h2, h3 {
+            font-size: 22px !important;
+        }
+
+        p, span, label, .stMarkdown, .stCaption,
+        .stTextInput label, .stNumberInput label, .stSelectbox label,
+        .stSlider label, .stMultiSelect label {
+            color: var(--sb-text-soft) !important;
+            letter-spacing: 0 !important;
+        }
+
+        .stCaption, .caption, small {
+            color: var(--sb-text-muted) !important;
         }
 
         div[data-testid="stExpander"] {
-            background: rgba(15, 27, 45, 0.78) !important;
-            border: 1px solid rgba(148, 163, 184, 0.14) !important;
-            border-radius: 18px !important;
-            box-shadow: 0 14px 36px rgba(0, 0, 0, 0.20);
+            background: rgba(23, 26, 24, 0.82) !important;
+            border: 1px solid var(--sb-line) !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
             overflow: hidden;
         }
 
         div[data-testid="stExpander"] details summary {
-            color: #E2E8F0 !important;
-            font-weight: 800 !important;
+            color: var(--sb-text-soft) !important;
+            font-weight: 620 !important;
         }
 
-        label, .stMarkdown, .stCaption, .stTextInput label, .stNumberInput label, .stSelectbox label, .stSlider label, .stMultiSelect label {
-            color: #CBD5E1 !important;
-        }
-
-        .stCaption, .caption {
-            color: #94A3B8 !important;
-        }
-
-        input, textarea {
-            background-color: rgba(15, 27, 45, 0.92) !important;
-            color: #F8FAFC !important;
-            border-radius: 14px !important;
-            border: 1px solid rgba(148, 163, 184, 0.20) !important;
-        }
-
-        .title-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 18px;
-            border: 1px solid rgba(56, 189, 248, 0.24);
-            border-radius: 24px;
-            overflow: hidden;
-            background:
-                radial-gradient(circle at top right, rgba(56, 189, 248, 0.19), transparent 32%),
-                linear-gradient(135deg, #0F1B2D 0%, #13233A 100%);
-            box-shadow:
-                0 22px 54px rgba(0, 0, 0, 0.30),
-                inset 0 1px 0 rgba(255, 255, 255, 0.05);
-        }
-
-        .title-cell {
-            background: transparent;
-            color: #F8FAFC !important;
-            font-family: 'Inter', sans-serif;
-            font-weight: 950;
-            font-size: 30px;
-            text-align: left;
-            padding: 22px 22px 4px;
-            letter-spacing: -1px;
-            text-transform: none;
-        }
-
-        .subtitle-cell {
-            background: transparent;
-            color: #94A3B8 !important;
-            font-family: 'Inter', sans-serif;
-            font-size: 13px;
-            font-weight: 650;
-            text-align: left;
-            padding: 4px 22px 20px;
-            border-top: none;
-            line-height: 1.45;
-        }
-
-        .premium-card {
-            background:
-                radial-gradient(circle at top right, rgba(56, 189, 248, 0.10), transparent 34%),
-                linear-gradient(180deg, #0F1B2D 0%, #0B1628 100%) !important;
-            border: 1px solid rgba(148, 163, 184, 0.16) !important;
-            border-top: 1px solid rgba(56, 189, 248, 0.35) !important;
-            border-radius: 24px;
-            padding: 22px;
-            box-shadow:
-                0 18px 44px rgba(0, 0, 0, 0.32),
-                inset 0 1px 0 rgba(255, 255, 255, 0.04);
-            margin-bottom: 18px;
-        }
-
-        .premium-card-risk {
-            border-color: rgba(239, 68, 68, 0.36) !important;
-            border-top-color: rgba(239, 68, 68, 0.48) !important;
-            box-shadow:
-                0 18px 44px rgba(127, 29, 29, 0.24),
-                inset 0 1px 0 rgba(255, 255, 255, 0.04);
-        }
-
-        .kart-ust-satir {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 12px;
-            margin-bottom: 10px;
-        }
-
-        .kart-etiket {
-            font-size: 11px;
-            font-weight: 900;
-            color: #94A3B8 !important;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            margin-bottom: 8px;
-        }
-
-        .istasyon-isim {
-            font-size: 21px;
-            font-weight: 900;
-            color: #F8FAFC !important;
-            margin: 2px 0 8px 0;
-            letter-spacing: -0.45px;
-            line-height: 1.18;
-        }
-
-        .mesafe-text {
-            font-size: 28px;
-            font-weight: 950;
-            color: #38BDF8 !important;
-            margin: 4px 0 8px 0;
-            letter-spacing: -1px;
-            text-transform: none;
-            line-height: 1.08;
-            text-shadow: 0 0 28px rgba(56, 189, 248, 0.16);
-        }
-
-        .mesafe-alt-text {
-            font-size: 12px;
-            color: #94A3B8 !important;
-            margin: 0 0 12px 0;
-            font-weight: 650;
-        }
-
-        .detay-text {
-            font-size: 13px;
-            color: #CBD5E1 !important;
-            margin: 5px 0;
-            font-weight: 650;
-            line-height: 1.38;
-        }
-
-        .detay-chip-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 7px;
-            margin-top: 10px;
-        }
-
-        .detay-chip {
-            display: inline-flex;
-            align-items: center;
-            border: 1px solid rgba(148, 163, 184, 0.16);
-            background: rgba(19, 35, 58, 0.78);
-            color: #CBD5E1 !important;
-            padding: 7px 9px;
-            border-radius: 999px;
-            font-size: 11px;
-            font-weight: 800;
-            line-height: 1;
-        }
-
-        .adres-text {
-            font-size: 12px;
-            color: #94A3B8 !important;
-            margin-top: 14px;
-            line-height: 1.48;
-            border-top: 1px solid rgba(148, 163, 184, 0.12);
-            padding-top: 14px;
-        }
-
-        .panel-bolucu {
-            border-top: 1px solid rgba(148, 163, 184, 0.12);
-            margin: 18px 0;
-        }
-
-        .panel-alt-baslik {
-            font-size: 12px;
-            font-weight: 900;
-            color: #E2E8F0 !important;
-            margin-bottom: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.7px;
-        }
-
-        .avantaj-item {
-            font-size: 12px;
-            color: #CBD5E1 !important;
-            margin-bottom: 9px;
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            font-weight: 650;
-            line-height: 1.35;
-        }
-
-        .avantaj-badge {
-            color: #38BDF8 !important;
-            font-weight: 900;
-            white-space: nowrap;
-        }
-
-        .durum-badge {
-            display: inline-flex;
-            align-items: center;
-            font-size: 11px;
-            font-weight: 950;
-            padding: 7px 10px;
-            border-radius: 999px;
-            margin-bottom: 8px;
-            line-height: 1;
-        }
-
-        .durum-aktif {
-            background: rgba(34, 197, 94, 0.12);
-            color: #86EFAC;
-            border: 1px solid rgba(34, 197, 94, 0.35);
-        }
-
-        .durum-riskli {
-            background: rgba(239, 68, 68, 0.12);
-            color: #FCA5A5;
-            border: 1px solid rgba(239, 68, 68, 0.38);
-        }
-
-        .durum-belirsiz {
-            background: rgba(245, 158, 11, 0.12);
-            color: #FCD34D;
-            border: 1px solid rgba(245, 158, 11, 0.32);
-        }
-
-        .nav-link-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-decoration: none;
-            border-radius: 16px;
-            min-height: 54px;
-            font-weight: 950;
-            background: linear-gradient(135deg, #38BDF8 0%, #0284C7 100%);
-            color: #031525 !important;
-            border: 1px solid rgba(125, 211, 252, 0.65);
-            font-size: 15px;
-            box-shadow: 0 12px 28px rgba(56, 189, 248, 0.25);
-        }
-
-        .nav-link-btn:hover {
-            filter: brightness(1.05);
-            text-decoration: none;
-        }
-
-        .stButton>button {
-            border-radius: 16px;
-            min-height: 54px;
-            font-weight: 850;
-            width: 100%;
-            background: rgba(15, 27, 45, 0.86) !important;
-            color: #E2E8F0 !important;
-            border: 1px solid rgba(148, 163, 184, 0.18) !important;
-        }
-
-        .rapor-calisiyor>button {
-            border-color: rgba(34, 197, 94, 0.45) !important;
-            color: #86EFAC !important;
-            background: rgba(34, 197, 94, 0.10) !important;
-        }
-
-        .rapor-arizali>button {
-            border-color: rgba(239, 68, 68, 0.45) !important;
-            color: #FCA5A5 !important;
-            background: rgba(239, 68, 68, 0.10) !important;
-        }
-
-        .mini-note {
-            font-size: 11px;
-            color: #64748B !important;
-            line-height: 1.45;
-            margin-top: 11px;
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            background: rgba(23, 26, 24, 0.92) !important;
+            border: 1px solid var(--sb-line) !important;
+            border-radius: 8px !important;
+            box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18);
         }
 
         div[data-testid="stAlert"] {
-            border-radius: 18px !important;
-            border: 1px solid rgba(148, 163, 184, 0.18) !important;
+            background: rgba(30, 34, 31, 0.92) !important;
+            border: 1px solid var(--sb-line) !important;
+            border-radius: 8px !important;
+            color: var(--sb-text-soft) !important;
+        }
+
+        input, textarea, [data-baseweb="select"] > div {
+            background-color: var(--sb-surface) !important;
+            color: var(--sb-text) !important;
+            border-radius: 8px !important;
+            border-color: var(--sb-line-strong) !important;
+        }
+
+        .stButton>button, .stDownloadButton>button,
+        div[data-testid="stLinkButton"] a {
+            min-height: 48px;
+            width: 100%;
+            border-radius: 8px !important;
+            border: 1px solid var(--sb-line-strong) !important;
+            background: var(--sb-surface-soft) !important;
+            color: var(--sb-text) !important;
+            font-weight: 650 !important;
+            box-shadow: none !important;
+        }
+
+        div[data-testid="stLinkButton"] a {
+            background: var(--sb-primary) !important;
+            color: #0E1511 !important;
+            border-color: var(--sb-primary) !important;
+        }
+
+        .stButton>button:hover,
+        div[data-testid="stLinkButton"] a:hover {
+            border-color: var(--sb-primary-deep) !important;
+            filter: brightness(1.03);
         }
 
         hr {
-            border-color: rgba(148, 163, 184, 0.14) !important;
+            border-color: var(--sb-line) !important;
         }
     </style>
 ''', unsafe_allow_html=True)
@@ -534,6 +331,19 @@ def acik_24_saat_mi(istasyon: Dict[str, Any]) -> bool:
     return "24" in metin or "7/24" in metin or "24/7" in metin
 
 
+def durum_metni_sadelestir(durum: Any) -> str:
+    text = str(durum or "").strip()
+    if "Sorunsuz" in text or "Uygun" in text:
+        return "Uygun"
+    if "Arızalı" in text or "Sorun" in text:
+        return "Sorun bildirildi"
+    if "Sıra" in text:
+        return "Sıra var"
+    if "Güncelleme" in text:
+        return "Not"
+    return text or "Bildirim"
+
+
 def tahmini_sure_dk(tahmini_km: float) -> int:
     if tahmini_km <= 0:
         return 1
@@ -576,6 +386,33 @@ def yorum_gonderilebilir_mi() -> Tuple[bool, int]:
     if son is None:
         return True, 0
     kalan = YORUM_BEKLEME_SURESI - int((datetime.now() - son).total_seconds())
+    return kalan <= 0, max(0, kalan)
+
+
+def sunucu_tarafli_cooldown_kontrol(
+    tum_yorumlar: Dict[str, List[Dict[str, Any]]], uid_hash: str
+) -> Tuple[bool, int]:
+    """
+    tum_yorumlar üzerinde uid_hash eşleşmesi arar.
+    Bulunan en son yorum zamanına göre cooldown uygular.
+    Döner: (gonderilebilir_mi, kalan_saniye)
+    """
+    if not uid_hash:
+        return True, 0
+    simdi = datetime.now()
+    son_yorum_zamani: Optional[datetime] = None
+
+    for yorumlar in tum_yorumlar.values():
+        for y in yorumlar:
+            if str(y.get("uid_hash", ""))[:16] == uid_hash[:16]:
+                tarih = yorum_tarihi_parse(y.get("tarih", ""))
+                if tarih != datetime.min:
+                    if son_yorum_zamani is None or tarih > son_yorum_zamani:
+                        son_yorum_zamani = tarih
+
+    if son_yorum_zamani is None:
+        return True, 0
+    kalan = YORUM_BEKLEME_SURESI - int((simdi - son_yorum_zamani).total_seconds())
     return kalan <= 0, max(0, kalan)
 
 
@@ -655,19 +492,19 @@ def ariza_skoru_hesapla(yorumlar: List[Dict[str, Any]]) -> Dict[str, Any]:
         if tarih >= baslangic:
             aktif_yorumlar.append(y)
 
-    arizali = sum(1 for y in aktif_yorumlar if "Arızalı" in str(y.get("durum", "")))
-    sorunsuz = sum(1 for y in aktif_yorumlar if "Sorunsuz" in str(y.get("durum", "")))
+    arizali = sum(1 for y in aktif_yorumlar if any(k in str(y.get("durum", "")) for k in ("Arızalı", "Sorun")))
+    sorunsuz = sum(1 for y in aktif_yorumlar if any(k in str(y.get("durum", "")) for k in ("Sorunsuz", "Uygun")))
     skor = arizali - sorunsuz
 
     if skor >= ARIZA_RISK_ESIGI:
         durum = "riskli"
-        etiket = f"⚠️ Kullanıcı bildirimi: arıza riski ({arizali}/{len(aktif_yorumlar)})"
+        etiket = f"Arıza riski bildirildi ({arizali}/{len(aktif_yorumlar)})"
     elif aktif_yorumlar:
         durum = "aktif"
-        etiket = "✅ Kullanıcı bildirimi: olumlu"
+        etiket = "Son bildirimler olumlu"
     else:
         durum = "belirsiz"
-        etiket = "ℹ️ Canlı operatör verisi yok"
+        etiket = "Canlı uygunluk verisi yok"
 
     return {
         "skor": skor,
@@ -681,26 +518,6 @@ def ariza_skoru_hesapla(yorumlar: List[Dict[str, Any]]) -> Dict[str, Any]:
             default=datetime.min,
         ).isoformat(timespec="seconds") if aktif_yorumlar else "",
     }
-
-
-def rapor_ek_bilgi_olustur(
-    rapor_tipi: str,
-    konum_dogrulandi: bool,
-    kus_ucusu_km: float,
-    foto_dosyasi: Any = None,
-) -> Dict[str, Any]:
-    """Yorum gönderiminde ek meta veri paketi oluşturur."""
-    ek: Dict[str, Any] = {
-        "rapor_tipi": rapor_tipi,
-        "konum_dogrulandi": konum_dogrulandi,
-        "kullanici_istasyona_km": round(kus_ucusu_km, 3),
-    }
-    if foto_dosyasi is not None:
-        foto_bytes = foto_dosyasi.getvalue()
-        ek["foto_adi"] = guvenli_metin(foto_dosyasi.name, 80)
-        ek["foto_hash"] = hashlib.sha256(foto_bytes[:2_000_000]).hexdigest()[:16]
-    return ek
-
 
 # ==========================================
 # 🔐 AUTH FONKSİYONLARI
@@ -805,6 +622,25 @@ def istasyonlari_yukle() -> List[Dict[str, Any]]:
 
 
 @st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
+def tum_yorumlari_getir() -> Dict[str, List[Dict[str, Any]]]:
+    url = f"{FIREBASE_DB_URL}yorumlar.json"
+    sonuc: Dict[str, List[Dict[str, Any]]] = {}
+    try:
+        res = get_session().get(url, timeout=FIREBASE_TIMEOUT_S)
+        if res.status_code == 200 and res.json():
+            for clean_id, pkts in res.json().items():
+                if isinstance(pkts, dict):
+                    yorumlar = [y for y in pkts.values() if isinstance(y, dict)]
+                    sonuc[clean_id] = sorted(yorumlar, key=lambda x: yorum_tarihi_parse(x.get("tarih", "")), reverse=True)
+        elif res.status_code not in (200, 404):
+            logger.warning("Yorumlar alınamadı: %s - %s", res.status_code, res.text[:200])
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
+        logger.exception("Yorum verisi çekilemedi")
+    return sonuc
+
+
+@st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
 def istasyon_yorumlari_getir(istasyon_id: str, limit: int = MAX_SON_YORUM) -> List[Dict[str, Any]]:
     clean_id = clean_id_uret(istasyon_id)
     url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
@@ -852,7 +688,7 @@ def durum_ozeti_fallback() -> Dict[str, Any]:
     return {
         "skor": 0,
         "durum": "belirsiz",
-        "etiket": "ℹ️ Canlı operatör verisi yok",
+        "etiket": "Canlı uygunluk verisi yok",
         "arizali": 0,
         "sorunsuz": 0,
         "aktif_yorum_sayisi": 0,
@@ -1115,12 +951,42 @@ def yakin_cevre_getir(enlem: float, boylam: float, yaricap_m: int) -> Optional[L
 
     return None
 
+
+def _cevre_getir_ist(ist: Dict[str, Any], yaricap: int) -> Optional[List[Dict[str, Any]]]:
+    return yakin_cevre_getir(ist["enlem"], ist["boylam"], yaricap)
+
+
+async def _paralel_cevre_getir_async(
+    istasyon_listesi: List[Dict[str, Any]], yaricap: int
+) -> List[Optional[List[Dict[str, Any]]]]:
+    gorevler = [
+        asyncio.to_thread(_cevre_getir_ist, ist, yaricap)
+        for ist in istasyon_listesi
+    ]
+    return await asyncio.gather(*gorevler)
+
+
+def _paralel_cevre_getir(
+    istasyon_listesi: List[Dict[str, Any]], yaricap: int
+) -> List[Optional[List[Dict[str, Any]]]]:
+    """Overpass sorgularını asyncio.to_thread ile paralel çalıştırır."""
+    if not istasyon_listesi:
+        return []
+    try:
+        return asyncio.run(_paralel_cevre_getir_async(istasyon_listesi, yaricap))
+    except RuntimeError:
+        logger.warning("asyncio.run başarısız, sıralı Overpass sorgusu çalışıyor.")
+        return [_cevre_getir_ist(ist, yaricap) for ist in istasyon_listesi]
+
 # ==========================================
-# 🔑 ANA SAYFA GİRİŞ PANELİ VE AYARLAR
+# ANA SAYFA GİRİŞ PANELİ VE AYARLAR
 # ==========================================
-with st.expander("🔑 Giriş / Kullanıcı Paneli", expanded=False):
+st.title("ŞarjBul")
+st.caption("Yakındaki en uygun şarj noktasını sakin, hızlı ve anlaşılır biçimde bulun.")
+
+with st.expander("Hesap", expanded=False):
     if "auth_token" not in st.session_state:
-        tab_giris, tab_kayit, tab_sifre = st.tabs(["🔑 Giriş", "📝 Kayıt Ol", "🔓 Şifremi Unuttum"])
+        tab_giris, tab_kayit, tab_sifre = st.tabs(["Giriş", "Kayıt", "Şifre"])
 
         with tab_giris:
             email = st.text_input("E-posta", key="login_email")
@@ -1132,7 +998,7 @@ with st.expander("🔑 Giriş / Kullanıcı Paneli", expanded=False):
                     st.session_state["auth_email"] = user_data.get("email", "")
                     st.session_state["auth_uid"] = user_data.get("localId", "")
                     st.session_state["auth_login_time"] = datetime.now().isoformat(timespec="seconds")
-                    st.success("Giriş başarılı!")
+                    st.success("Giriş tamamlandı.")
                     st.rerun()
                 else:
                     st.error("Giriş başarısız. E-posta/şifreyi veya Firebase Authentication ayarlarını kontrol edin.")
@@ -1155,7 +1021,7 @@ with st.expander("🔑 Giriş / Kullanıcı Paneli", expanded=False):
                         st.session_state["auth_email"] = user_data.get("email", "")
                         st.session_state["auth_uid"] = user_data.get("localId", "")
                         st.session_state["auth_login_time"] = datetime.now().isoformat(timespec="seconds")
-                        st.success("Kayıt başarılı! Hoş geldiniz.")
+                        st.success("Hesabınız hazır.")
                         st.rerun()
                     else:
                         st.error("Kayıt başarısız. Bu e-posta zaten kayıtlı olabilir veya şifre çok zayıf.")
@@ -1173,17 +1039,17 @@ with st.expander("🔑 Giriş / Kullanıcı Paneli", expanded=False):
                         st.error(msg)
     else:
         if token_suresi_doldu_mu():
-            st.warning("⚠️ Oturum süreniz dolmuş. Lütfen yeniden giriş yapın.")
+            st.warning("Oturum süresi doldu. Lütfen yeniden giriş yapın.")
             oturumu_temizle()
             st.rerun()
-        st.success("Giriş aktif: Doğrulanmış Sürücü")
+        st.success("Hesap aktif.")
         if st.button("Çıkış Yap", use_container_width=True, key="logout_button"):
             oturumu_temizle()
             st.rerun()
 
-with st.expander("⚙️ Arama Ayarları", expanded=False):
+with st.expander("Arama", expanded=False):
     ayar_yaricap = st.slider(
-        "Çevresel Mekan Arama Yarıçapı (m)",
+        "Yakın yer mesafesi (m)",
         min_value=100,
         max_value=800,
         value=400,
@@ -1193,7 +1059,7 @@ with st.expander("⚙️ Arama Ayarları", expanded=False):
     if st.session_state.get("sonuc_sayisi", MAX_ISTASYON_SAYISI) > MAX_EKRAN_KART_SAYISI:
         st.session_state["sonuc_sayisi"] = MAX_EKRAN_KART_SAYISI
     sonuc_sayisi = st.slider(
-        "Gösterilecek İstasyon Sayısı",
+        "Gösterilecek istasyon sayısı",
         min_value=1,
         max_value=MAX_EKRAN_KART_SAYISI,
         value=MAX_ISTASYON_SAYISI,
@@ -1201,28 +1067,18 @@ with st.expander("⚙️ Arama Ayarları", expanded=False):
         key="sonuc_sayisi",
     )
     soket_filtreleri = st.multiselect(
-        "Soket Tipi Filtresi",
+        "Soket",
         ["CCS", "CHAdeMO", "Type 2", "Schuko", "GB/T"],
         default=[],
         key="soket_filtre",
         help="Seçim yapılmazsa tüm soket tipleri gösterilir.",
     )
     hiz_filtresi = st.selectbox(
-        "Minimum Şarj Hızı",
+        "Minimum güç",
         ["Tümü", "AC (≥7 kW)", "DC (≥50 kW)", "Hızlı DC (≥150 kW)"],
         key="hiz_filtre",
     )
-    st.caption("Durum bildirimi için giriş gerekir. Konum veriniz Firebase'e kaydedilmez.")
-
-# ==========================================
-# 🏛️ BAŞLIK VE KONUM
-# ==========================================
-st.markdown('''
-    <table class="title-table">
-        <tr><td class="title-cell">⚡ ŞarjBul</td></tr>
-        <tr><td class="subtitle-cell">En yakın şarj rotanız · Kullanıcı bildirimleri · Varış bataryası · Yakın mekanlar</td></tr>
-    </table>
-''', unsafe_allow_html=True)
+    st.caption("Durum bildirmek için hesap gerekir. Konum veriniz kaydedilmez.")
 
 istasyonlar_verisi = istasyonlari_yukle()
 if not istasyonlar_verisi:
@@ -1234,7 +1090,7 @@ operator_secenekleri = sorted({
     for ist in istasyonlar_verisi
     if str(ist.get("operator", "")).strip()
 })
-with st.expander("🎛️ Ek Filtreler ve Görünüm", expanded=False):
+with st.expander("Filtreler ve görünüm", expanded=False):
     operator_filtreleri = st.multiselect(
         "Operatör",
         operator_secenekleri,
@@ -1278,11 +1134,10 @@ if user_lat is None or user_lon is None:
 
 if user_lat is None or user_lon is None:
     st.info(
-        "📍 **Konum erişimi gerekli.**\n\n"
-        "Tarayıcınız konum izni isteyecektir. İzin verirseniz size en yakın istasyonlar "
-        "otomatik bulunur. İzin vermek istemiyorsanız veya tarayıcı izin penceresi "
-        "görünmüyorsa aşağıdan manuel konum seçebilirsiniz. "
-        "**Konum veriniz sunucularımıza kaydedilmez.**"
+        "**Konum gerekli.**\n\n"
+        "Yakındaki istasyonları hesaplamak için mevcut konumunuzu kullanırız. "
+        "İzin vermek istemezseniz aşağıdan manuel konum seçebilirsiniz. "
+        "**Konum veriniz kaydedilmez.**"
     )
     manuel = st.selectbox(
         "Lütfen Mevcut Konumunuzu Seçin:",
@@ -1320,9 +1175,9 @@ if user_lat is None or user_lon is None:
     st.stop()
 
 # ==========================================
-# 🚗 ARAÇ SEÇİMİ VE FİLTRELEME
+# ARAÇ SEÇİMİ VE FİLTRELEME
 # ==========================================
-with st.expander("Araç ve Menzil Ayarları", expanded=False):
+with st.expander("Araç ve menzil", expanded=False):
     secilen_arac = st.selectbox("Model", list(ARAC_KATALOGU.keys()), label_visibility="collapsed")
     varsayilan = ARAC_KATALOGU[secilen_arac]
     c_b1, c_b2, c_b3 = st.columns(3)
@@ -1341,19 +1196,19 @@ with st.expander("Araç ve Menzil Ayarları", expanded=False):
         value=float(varsayilan["tuketim"]),
         step=0.1,
     )
-    guvenlik_marji = st.slider("Güvenlik Marjı (%)", min_value=10, max_value=50, value=25)
-    menzil_filtresi = st.checkbox("Menzil Filtresini Uygula", value=True)
+    guvenlik_marji = st.slider("Güvenlik payı (%)", min_value=10, max_value=50, value=25)
+    menzil_filtresi = st.checkbox("Menzile göre filtrele", value=True)
 
 ham_menzil = (batarya * (sarj_yuzdesi / 100.0) / tuketim) * 100.0
 guvenli_menzil = ham_menzil * (1 - guvenlik_marji / 100.0)
 st.info(
-    f"Tahmini güvenli menziliniz: {guvenli_menzil:.0f} km. "
-    f"Yol mesafesi hesabında x{YOL_UZAMA_KATSAYISI:.2f} rota katsayısı kullanılıyor."
+    f"Güvenli menzil: {guvenli_menzil:.0f} km. "
+    f"Yol hesabı x{YOL_UZAMA_KATSAYISI:.2f} katsayısıyla yapılır."
 )
 
 with st.form("arama_form", clear_on_submit=False):
     arama_metni_input = st.text_input(
-        "🔍 İstasyon Ara",
+        "İstasyon ara",
         placeholder="İstasyon adı, adres veya operatör ile filtrele...",
         value=st.session_state.get("arama_metni", ""),
         key="arama_metni_input",
@@ -1365,7 +1220,7 @@ with st.form("arama_form", clear_on_submit=False):
 arama_metni = st.session_state.get("arama_metni", "")
 
 # ==========================================
-# 🔎 İSTASYONLARI HAZIRLA
+# İSTASYONLARI HAZIRLA
 # ==========================================
 durum_ozetleri = durum_ozetleri_getir()
 uygun_istasyonlar: List[Dict[str, Any]] = []
@@ -1408,7 +1263,7 @@ for ist in istasyonlar_verisi:
     ist_kopya["VarisSarjYuzdesi"] = varis_sarj_yuzdesi_hesapla(sarj_yuzdesi, batarya, tuketim, tahmini_km)
     ist_kopya["KalanGuvenliMenzil"] = max(0.0, guvenli_menzil - tahmini_km)
     ist_kopya["ArizaDurumu"] = ariza.get("durum", "belirsiz")
-    ist_kopya["ArizaEtiketi"] = ariza.get("etiket", "ℹ️ Canlı operatör verisi yok")
+    ist_kopya["ArizaEtiketi"] = ariza.get("etiket", "Canlı uygunluk verisi yok")
     ist_kopya["ArizaSkoru"] = ariza.get("skor", 0)
     ist_kopya["SonYorumlar"] = ariza.get("son_yorumlar", [])
     uygun_istasyonlar.append(ist_kopya)
@@ -1426,7 +1281,7 @@ uygun_istasyonlar = sorted(uygun_istasyonlar, key=istasyon_siralama_anahtari)
 en_yakin = uygun_istasyonlar[:min(sonuc_sayisi, MAX_EKRAN_KART_SAYISI)]
 
 # ==========================================
-# ⭐ FAVORİLER
+# FAVORİLER
 # ==========================================
 if "favoriler" not in st.session_state:
     st.session_state["favoriler"] = set()
@@ -1441,14 +1296,14 @@ favori_eslesmeler = [
     if str(ist.get("_station_key") or clean_id_uret(istasyon_id_getir(ist))) in st.session_state["favoriler"]
 ]
 if favori_eslesmeler:
-    with st.expander(f"⭐ Favorilerim ({len(favori_eslesmeler)})", expanded=False):
+    with st.expander(f"Kayıtlı istasyonlar ({len(favori_eslesmeler)})", expanded=False):
         for fav in favori_eslesmeler:
             fav_isim = guvenli_metin(fav.get("isim", "Bilinmiyor"))
             fav_adres = guvenli_metin(fav.get("adres", ""))
-            st.markdown(f"**⚡ {fav_isim}**  \n{fav_adres}", unsafe_allow_html=False)
+            st.markdown(f"**{fav_isim}**  \n{fav_adres}", unsafe_allow_html=False)
 
 # ==========================================
-# 🎯 SONUÇ EKRANI VE KARTLAR
+# SONUÇ EKRANI VE KARTLAR
 # ==========================================
 if en_yakin:
     gorunen_keys = tuple(
@@ -1468,55 +1323,59 @@ if en_yakin:
         )
 
     for sira, istasyon in enumerate(en_yakin):
+        yakin_yerler: List[Dict[str, Any]] = []
+
         ist_id = istasyon_id_getir(istasyon)
         ist_key = str(istasyon.get("_station_key") or clean_id_uret(ist_id))
-        etiket = "🥇 En Yakın İstasyon" if sira == 0 else f"#{sira + 1} Alternatif İstasyon"
+        etiket = "En yakın seçenek" if sira == 0 else f"Alternatif {sira + 1}"
         durum = istasyon.get("ArizaDurumu", "belirsiz")
+        durum_class = {
+            "aktif": "durum-aktif",
+            "riskli": "durum-riskli",
+            "belirsiz": "durum-belirsiz",
+        }.get(durum, "durum-belirsiz")
+        card_class = "premium-card premium-card-risk" if durum == "riskli" else "premium-card"
 
         son_yorumlar = (istasyon.get("SonYorumlar") or gorunen_yorumlar.get(ist_key, []))[:MAX_SON_YORUM]
         adres_gosterim = istasyon.get("adres", "Adres Bilgisi Yok")
 
-        konum_dogrulandi = mesafe_hesapla(
-            user_lat, user_lon, istasyon["enlem"], istasyon["boylam"]
-        ) <= KONUM_DOGRULAMA_ESIGI_KM
-
         with st.container(border=True):
             st.caption(etiket)
             if durum == "riskli":
-                st.error(istasyon.get("ArizaEtiketi", "Kullanıcı bildirimi: arıza riski"), icon="⚠️")
+                st.error(istasyon.get("ArizaEtiketi", "Arıza riski bildirildi"))
             elif durum == "aktif":
-                st.success(istasyon.get("ArizaEtiketi", "Kullanıcı bildirimi: olumlu"), icon="✅")
+                st.success(istasyon.get("ArizaEtiketi", "Son bildirimler olumlu"))
             else:
-                st.info(istasyon.get("ArizaEtiketi", "Canlı operatör verisi yok"), icon="ℹ️")
+                st.info(istasyon.get("ArizaEtiketi", "Canlı uygunluk verisi yok"))
 
-            st.subheader(f"{istasyon['Mesafe']} km tahmini yol")
+            st.subheader(f"{istasyon['Mesafe']} km")
             st.caption(
-                f"~{istasyon['TahminiSureDk']} dk · Varışta ~%{istasyon['VarisSarjYuzdesi']:.0f} şarj · "
-                f"{istasyon['KalanGuvenliMenzil']:.0f} km güvenli pay"
+                f"{istasyon['TahminiSureDk']} dk · Varışta %{istasyon['VarisSarjYuzdesi']:.0f} · "
+                f"{istasyon['KalanGuvenliMenzil']:.0f} km pay"
             )
             st.markdown(f"**{istasyon['isim']}**")
 
             bilgi_col1, bilgi_col2 = st.columns(2)
             with bilgi_col1:
-                st.write(f"⚡ {istasyon.get('hiz', 'Bilinmiyor')}")
-                st.write(f"🔌 {istasyon.get('soket', 'Bilinmiyor')}")
+                st.write(f"Güç: {istasyon.get('hiz', 'Bilinmiyor')}")
+                st.write(f"Soket: {istasyon.get('soket', 'Bilinmiyor')}")
             with bilgi_col2:
-                st.write(f"🏢 {istasyon.get('operator', 'Bilinmiyor')}")
-                st.write(f"🕒 {'24 saat' if istasyon.get('_acik_24_saat') else 'Saat belirsiz'}")
+                st.write(f"Operatör: {istasyon.get('operator', 'Bilinmiyor')}")
+                st.write(f"Saat: {'24 saat' if istasyon.get('_acik_24_saat') else 'Belirsiz'}")
 
             st.write(f"Fiyat: {istasyon.get('fiyat', 'Bilinmiyor')}")
             st.caption(
                 f"{istasyon['KusUcusuMesafe']} km kuş uçuşu · x{YOL_UZAMA_KATSAYISI:.2f} rota katsayısı · "
-                "Operatör canlı uygunluk verisi yok"
+                "Canlı uygunluk verisi yok"
             )
             st.caption(adres_gosterim)
 
             if son_yorumlar:
                 st.divider()
-                st.markdown("**Son Bildirimler**")
+                st.markdown("**Son bildirimler**")
                 for y in son_yorumlar:
                     yorum = str(y.get("yorum", ""))[:100]
-                    durum_y = str(y.get("durum", ""))[:50]
+                    durum_y = durum_metni_sadelestir(y.get("durum", ""))[:50]
                     tarih = str(y.get("tarih", ""))[:16]
                     st.write(f"{durum_y}: {yorum}")
                     st.caption(tarih)
@@ -1529,15 +1388,31 @@ if en_yakin:
             f"&destination={istasyon['enlem']},{istasyon['boylam']}"
             "&travelmode=driving"
         )
-        st.link_button("Navigasyonu Başlat", g_link, use_container_width=True)
+        st.link_button("Rotayı aç", g_link, use_container_width=True)
+
+        konum_dogrulandi = mesafe_hesapla(
+            user_lat, user_lon, istasyon["enlem"], istasyon["boylam"]
+        ) <= KONUM_DOGRULAMA_ESIGI_KM
+
+        def rapor_ek_bilgi_olustur(rapor_tipi: str, foto_dosyasi: Any = None) -> Dict[str, Any]:
+            ek = {
+                "rapor_tipi": rapor_tipi,
+                "konum_dogrulandi": konum_dogrulandi,
+                "kullanici_istasyona_km": round(istasyon["KusUcusuMesafe"], 3),
+            }
+            if foto_dosyasi is not None:
+                foto_bytes = foto_dosyasi.getvalue()
+                ek["foto_adi"] = guvenli_metin(foto_dosyasi.name, 80)
+                ek["foto_hash"] = hashlib.sha256(foto_bytes[:2_000_000]).hexdigest()[:16]
+            return ek
 
         aksiyon_col1, aksiyon_col2 = st.columns([3, 1])
         with aksiyon_col1:
-            with st.popover("Durum Bildir"):
+            with st.popover("Durum bildir"):
                 if "auth_token" not in st.session_state:
-                    st.warning("Durum bildirmek ve yorum yapmak için lütfen üstteki Giriş / Kullanıcı Paneli bölümünden giriş yapın.")
+                    st.warning("Durum bildirmek için hesaba giriş yapın.")
                 else:
-                    st.caption("Konum doğrulandı." if konum_dogrulandi else "Konum istasyona yakın görünmüyor; bildirim yine de alınır.")
+                    st.caption("Konum doğrulandı." if konum_dogrulandi else "Konum uzak görünüyor; bildiriminiz yine de alınır.")
                     foto = st.file_uploader(
                         "Fotoğraf doğrulama (opsiyonel)",
                         type=["jpg", "jpeg", "png"],
@@ -1546,12 +1421,12 @@ if en_yakin:
                     col_btn1, col_btn2, col_btn3 = st.columns(3)
 
                     with col_btn1:
-                        if st.button("Sorunsuz", key=f"btn_ok_{sira}_{ist_key}"):
+                        if st.button("Uygun", key=f"btn_ok_{sira}_{ist_key}"):
                             ok, msg = yorum_gonder(
                                 ist_id,
-                                "Sorunsuz / Boş",
-                                "Sorunsuz / Boş",
-                                rapor_ek_bilgi_olustur("sorunsuz", konum_dogrulandi, istasyon["KusUcusuMesafe"], foto),
+                                "Uygun",
+                                "Uygun",
+                                rapor_ek_bilgi_olustur("sorunsuz", foto),
                             )
                             if ok:
                                 st.success(msg)
@@ -1560,12 +1435,12 @@ if en_yakin:
                                 st.error(msg)
 
                     with col_btn2:
-                        if st.button("Arızalı", key=f"btn_fail_{sira}_{ist_key}"):
+                        if st.button("Sorun var", key=f"btn_fail_{sira}_{ist_key}"):
                             ok, msg = yorum_gonder(
                                 ist_id,
-                                "Arızalı / Kapalı",
-                                "Arızalı / Kapalı",
-                                rapor_ek_bilgi_olustur("arizali", konum_dogrulandi, istasyon["KusUcusuMesafe"], foto),
+                                "Sorun var",
+                                "Sorun var",
+                                rapor_ek_bilgi_olustur("arizali", foto),
                             )
                             if ok:
                                 st.success(msg)
@@ -1574,12 +1449,12 @@ if en_yakin:
                                 st.error(msg)
 
                     with col_btn3:
-                        if st.button("Sıra Var", key=f"btn_queue_{sira}_{ist_key}"):
+                        if st.button("Sıra var", key=f"btn_queue_{sira}_{ist_key}"):
                             ok, msg = yorum_gonder(
                                 ist_id,
                                 "Sıra var",
-                                "Sıra Var",
-                                rapor_ek_bilgi_olustur("sira_var", konum_dogrulandi, istasyon["KusUcusuMesafe"], foto),
+                                "Sıra var",
+                                rapor_ek_bilgi_olustur("sira_var", foto),
                             )
                             if ok:
                                 st.success(msg)
@@ -1587,14 +1462,14 @@ if en_yakin:
                             else:
                                 st.error(msg)
 
-                    st.markdown("---")
+                    st.divider()
                     yorum_txt = st.text_input(
-                        "Durum Notu",
+                        "Kısa not",
                         key=f"inp_txt_{sira}_{ist_key}",
                         max_chars=MAX_YORUM_KARAKTER,
                         placeholder="Örn: Soket çalışıyor ama sıra var",
                     )
-                    if st.button("Detaylı Gönder", key=f"btn_detail_{sira}_{ist_key}"):
+                    if st.button("Gönder", key=f"btn_detail_{sira}_{ist_key}"):
                         temiz_yorum = yorum_txt.strip()
                         if not temiz_yorum:
                             st.warning("Lütfen kısa bir durum notu yazın.")
@@ -1603,7 +1478,7 @@ if en_yakin:
                                 ist_id,
                                 temiz_yorum,
                                 "Durum Güncellemesi",
-                                rapor_ek_bilgi_olustur("detayli", konum_dogrulandi, istasyon["KusUcusuMesafe"], foto),
+                                rapor_ek_bilgi_olustur("detayli", foto),
                             )
                             if ok:
                                 st.success(msg)
@@ -1613,11 +1488,11 @@ if en_yakin:
 
         with aksiyon_col2:
             is_favori = ist_key in st.session_state["favoriler"]
-            fav_label = "★" if is_favori else "☆"
+            fav_label = "Kayıtlı" if is_favori else "Kaydet"
             if st.button(
                 fav_label,
                 key=f"fav_{sira}_{ist_key}",
-                help="Favorilere ekle / çıkar",
+                help="Kaydet veya kaldır",
                 use_container_width=True,
             ):
                 ok, msg = favori_guncelle(ist_key, not is_favori)
@@ -1632,22 +1507,23 @@ if en_yakin:
                     st.error(msg)
 
         cevre_state_key = f"cevre_yukle_{ist_key}_{ayar_yaricap}"
-        if st.button("Yakındaki Yerleri Yükle", key=f"btn_cevre_{sira}_{ist_key}", use_container_width=True):
+        if st.button("Yakın yerler", key=f"btn_cevre_{sira}_{ist_key}", use_container_width=True):
             st.session_state[cevre_state_key] = True
 
         if st.session_state.get(cevre_state_key):
             yakin_yerler_raw = yakin_cevre_getir(istasyon["enlem"], istasyon["boylam"], ayar_yaricap)
             if yakin_yerler_raw is None:
-                st.warning("Yakındaki mekan bilgisi alınamadı. Overpass API geçici olarak erişilemez olabilir.")
+                st.warning("Yakın yerler şu an alınamadı.")
             elif yakin_yerler_raw:
-                st.markdown("**Yakındaki Yerler**")
+                st.markdown("**Yakın yerler**")
                 for yer in yakin_yerler_raw:
+                    yer_adi = f'{yer["isim"]} · **{yer["metre"]}m**'
                     st.markdown(
-                        f'{yer["emoji"]} {yer["isim"]} · **{yer["metre"]}m**',
+                        yer_adi,
                         unsafe_allow_html=False,
                     )
             else:
-                st.caption("Bu yarıçapta listelenecek yakın mekan bulunamadı.")
+                st.caption("Bu yarıçapta yakın yer bulunamadı.")
 
 else:
     st.warning(
