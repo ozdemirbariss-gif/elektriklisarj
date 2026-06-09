@@ -60,7 +60,8 @@ except (KeyError, FileNotFoundError):
 # ==========================================
 # 📐 UYGULAMA SABİTLERİ
 # ==========================================
-MAX_ISTASYON_SAYISI       = 5
+MAX_ISTASYON_SAYISI       = 2
+MAX_EKRAN_KART_SAYISI     = 2
 OVERPASS_TIMEOUT_S        = 12.0
 FIREBASE_TIMEOUT_S        = 4.0
 ISTASYON_CACHE_TTL        = 300
@@ -70,10 +71,12 @@ TOKEN_OMUR_DK             = 55
 MAX_YAKIN_YER             = 5
 MAX_SON_YORUM             = 2
 YOL_UZAMA_KATSAYISI       = 1.25
+ORTALAMA_SEYIR_HIZI_KMH   = 45.0
 YORUM_BEKLEME_SURESI      = 30
 ARIZA_GECERLILIK_SAATI    = 6
 ARIZA_RISK_ESIGI          = 2
 MAX_YORUM_KARAKTER        = 280
+KONUM_DOGRULAMA_ESIGI_KM  = 0.30
 
 ARAC_KATALOGU: Dict[str, Dict[str, float]] = {
     "Tesla Model Y Long Range": {"batarya": 75.0, "tuketim": 16.9},
@@ -477,6 +480,13 @@ def adres_metni_getir(istasyon: Dict[str, Any]) -> str:
     return adres or "Adres Bilgisi Yok"
 
 
+def arama_metni_normalize_et(metin: Any) -> str:
+    text = str(metin or "").strip().lower()
+    normalized = unicodedata.normalize("NFKD", text)
+    ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
+    return " ".join(ascii_text.split())
+
+
 def clean_id_uret(isim: str) -> str:
     raw = str(isim or "").strip()
     normalized = unicodedata.normalize("NFKD", raw)
@@ -498,6 +508,53 @@ def istasyon_id_getir(istasyon: Dict[str, Any]) -> str:
     boylam = str(istasyon.get("boylam") or istasyon.get("lon") or istasyon.get("lng") or "").strip()
     fallback = f"{isim}_{enlem}_{boylam}".strip("_")
     return fallback or "bilinmeyen_istasyon"
+
+
+def auth_uid_hash_getir() -> str:
+    uid = str(st.session_state.get("auth_uid", "")).strip()
+    return hashlib.sha256(uid.encode()).hexdigest()[:16] if uid else ""
+
+
+def hiz_sayisi_ayikla(hiz: Any) -> float:
+    hiz_val = str(hiz or "").replace(",", ".")
+    rakam = re.search(r"(\d+(?:\.\d+)?)", hiz_val)
+    return float(rakam.group(1)) if rakam else 0.0
+
+
+def fiyat_sayisi_ayikla(fiyat: Any) -> float:
+    fiyat_val = str(fiyat or "").replace(",", ".")
+    rakam = re.search(r"(\d+(?:\.\d+)?)", fiyat_val)
+    return float(rakam.group(1)) if rakam else 9999.0
+
+
+def acik_24_saat_mi(istasyon: Dict[str, Any]) -> bool:
+    metin = " ".join(
+        str(istasyon.get(k, ""))
+        for k in ("saat", "saatler", "calisma_saatleri", "çalışma_saatleri", "opening_hours")
+    ).lower()
+    return "24" in metin or "7/24" in metin or "24/7" in metin
+
+
+def tahmini_sure_dk(tahmini_km: float) -> int:
+    if tahmini_km <= 0:
+        return 1
+    return max(1, int(round((tahmini_km / ORTALAMA_SEYIR_HIZI_KMH) * 60)))
+
+
+def varis_sarj_yuzdesi_hesapla(
+    baslangic_sarj: int, batarya_kwh: float, tuketim_kwh_100km: float, tahmini_km: float
+) -> float:
+    if batarya_kwh <= 0:
+        return 0.0
+    harcanan_yuzde = (tahmini_km * tuketim_kwh_100km / 100.0) / batarya_kwh * 100.0
+    return max(0.0, min(100.0, baslangic_sarj - harcanan_yuzde))
+
+
+def cache_temizle_guvenli(cache_fn: Any, *args: Any) -> None:
+    try:
+        cache_fn.clear(*args)
+    except TypeError:
+        cache_fn.clear()
 
 
 def token_suresi_doldu_mu() -> bool:
@@ -602,6 +659,14 @@ def istasyon_normalize_et(ist: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         yeni.setdefault("operator", yeni.get("operatör", "Bilinmiyor"))
         yeni.setdefault("soket", "Bilinmiyor")
         yeni.setdefault("fiyat", "Bilinmiyor")
+        yeni["_station_key"] = clean_id_uret(istasyon_id_getir(yeni))
+        yeni["_search_text"] = arama_metni_normalize_et(
+            f"{yeni.get('isim', '')} {yeni.get('adres', '')} {yeni.get('operator', '')}"
+        )
+        yeni["_soket_upper"] = str(yeni.get("soket", "")).upper()
+        yeni["_hiz_sayi"] = hiz_sayisi_ayikla(yeni.get("hiz", ""))
+        yeni["_fiyat_sayi"] = fiyat_sayisi_ayikla(yeni.get("fiyat", ""))
+        yeni["_acik_24_saat"] = acik_24_saat_mi(yeni)
         return yeni
     except Exception:
         return None
@@ -624,13 +689,13 @@ def ariza_skoru_hesapla(yorumlar: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     if skor >= ARIZA_RISK_ESIGI:
         durum = "riskli"
-        etiket = f"⚠️ Kullanıcılar arıza bildirdi ({arizali}/{len(aktif_yorumlar)})"
+        etiket = f"⚠️ Kullanıcı bildirimi: arıza riski ({arizali}/{len(aktif_yorumlar)})"
     elif aktif_yorumlar:
         durum = "aktif"
-        etiket = "✅ Son bildirimlere göre aktif"
+        etiket = "✅ Kullanıcı bildirimi: olumlu"
     else:
         durum = "belirsiz"
-        etiket = "ℹ️ Yakın zamanda bildirim yok"
+        etiket = "ℹ️ Canlı operatör verisi yok"
 
     return {
         "skor": skor,
@@ -639,6 +704,10 @@ def ariza_skoru_hesapla(yorumlar: List[Dict[str, Any]]) -> Dict[str, Any]:
         "arizali": arizali,
         "sorunsuz": sorunsuz,
         "aktif_yorum_sayisi": len(aktif_yorumlar),
+        "son_bildirim_tarihi": max(
+            (yorum_tarihi_parse(y.get("tarih", "")) for y in aktif_yorumlar),
+            default=datetime.min,
+        ).isoformat(timespec="seconds") if aktif_yorumlar else "",
     }
 
 # ==========================================
@@ -779,7 +848,172 @@ def istasyon_yorumlari_getir(istasyon_id: str, limit: int = MAX_SON_YORUM) -> Li
     return []
 
 
-def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str) -> Tuple[bool, str]:
+def yorumlardan_durum_ozeti_uret(yorumlar: List[Dict[str, Any]]) -> Dict[str, Any]:
+    sirali = sorted(yorumlar, key=lambda x: yorum_tarihi_parse(x.get("tarih", "")), reverse=True)
+    ariza = ariza_skoru_hesapla(sirali)
+    ariza["son_yorumlar"] = sirali[:MAX_SON_YORUM]
+    return ariza
+
+
+@st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
+def durum_ozetleri_getir() -> Dict[str, Dict[str, Any]]:
+    """Ana liste için tüm yorum ağacını değil, istasyon başına küçük durum özetini okur."""
+    url = f"{FIREBASE_DB_URL}station_status.json"
+    try:
+        res = get_session().get(url, timeout=FIREBASE_TIMEOUT_S)
+        if res.status_code == 200 and res.json():
+            return {
+                clean_id: data
+                for clean_id, data in res.json().items()
+                if isinstance(data, dict)
+            }
+        if res.status_code not in (200, 404):
+            logger.warning("Durum özetleri alınamadı: %s - %s", res.status_code, res.text[:200])
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
+        logger.exception("Durum özeti çekilemedi")
+    return {}
+
+
+def durum_ozeti_fallback() -> Dict[str, Any]:
+    return {
+        "skor": 0,
+        "durum": "belirsiz",
+        "etiket": "ℹ️ Canlı operatör verisi yok",
+        "arizali": 0,
+        "sorunsuz": 0,
+        "aktif_yorum_sayisi": 0,
+        "son_bildirim_tarihi": "",
+        "son_yorumlar": [],
+    }
+
+
+@st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
+def gorunen_yorumlari_getir(station_keys: Tuple[str, ...]) -> Dict[str, List[Dict[str, Any]]]:
+    """Sadece ekranda görünen en fazla iki istasyonun son yorumlarını çeker."""
+    return {
+        key: istasyon_yorumlari_getir(key, MAX_SON_YORUM)
+        for key in station_keys
+    }
+
+
+@st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
+def kullanici_son_yorum_zamani_getir(uid_hash: str, token: str) -> Optional[str]:
+    if not uid_hash or not token:
+        return None
+    url = f"{FIREBASE_DB_URL}kullanici_yorum_meta/{uid_hash}.json"
+    try:
+        res = get_session().get(url, params={"auth": token}, timeout=FIREBASE_TIMEOUT_S)
+        if res.status_code == 200 and isinstance(res.json(), dict):
+            return str(res.json().get("son_yorum_zamani", "") or "") or None
+        if res.status_code not in (200, 404):
+            logger.warning("Kullanıcı yorum meta alınamadı: %s - %s", res.status_code, res.text[:200])
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
+        logger.exception("Kullanıcı yorum meta çekilemedi")
+    return None
+
+
+def sunucu_tarafli_hizli_cooldown_kontrol(uid_hash: str, token: str) -> Tuple[bool, int]:
+    son_str = kullanici_son_yorum_zamani_getir(uid_hash, token)
+    if not son_str:
+        return True, 0
+    son = yorum_tarihi_parse(son_str)
+    if son == datetime.min:
+        return True, 0
+    kalan = YORUM_BEKLEME_SURESI - int((datetime.now() - son).total_seconds())
+    return kalan <= 0, max(0, kalan)
+
+
+def kullanici_yorum_meta_guncelle(uid_hash: str, token: str, tarih: str) -> None:
+    if not uid_hash or not token:
+        return
+    url = f"{FIREBASE_DB_URL}kullanici_yorum_meta/{uid_hash}.json"
+    try:
+        get_session().patch(
+            url,
+            params={"auth": token},
+            json={"son_yorum_zamani": tarih},
+            timeout=FIREBASE_TIMEOUT_S,
+        )
+        cache_temizle_guvenli(kullanici_son_yorum_zamani_getir, uid_hash, token)
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
+        logger.warning("Kullanıcı yorum meta güncellenemedi: %s", e)
+
+
+def istasyon_durum_ozetini_guncelle(clean_id: str, token: str) -> None:
+    try:
+        url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
+        res = get_session().get(url, params={"auth": token}, timeout=FIREBASE_TIMEOUT_S)
+        if res.status_code != 200 or not res.json():
+            return
+        yorumlar = [y for y in res.json().values() if isinstance(y, dict)]
+        ozet = yorumlardan_durum_ozeti_uret(yorumlar)
+        ozet_url = f"{FIREBASE_DB_URL}station_status/{clean_id}.json"
+        get_session().patch(
+            ozet_url,
+            params={"auth": token},
+            json=ozet,
+            timeout=FIREBASE_TIMEOUT_S,
+        )
+        cache_temizle_guvenli(durum_ozetleri_getir)
+        cache_temizle_guvenli(gorunen_yorumlari_getir)
+        cache_temizle_guvenli(istasyon_yorumlari_getir, clean_id, MAX_SON_YORUM)
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
+        logger.warning("İstasyon durum özeti güncellenemedi: %s", e)
+
+
+@st.cache_data(ttl=ISTASYON_CACHE_TTL, show_spinner=False)
+def favorileri_getir(uid_hash: str, token: str) -> List[str]:
+    if not uid_hash or not token:
+        return []
+    url = f"{FIREBASE_DB_URL}favoriler/{uid_hash}.json"
+    try:
+        res = get_session().get(url, params={"auth": token}, timeout=FIREBASE_TIMEOUT_S)
+        if res.status_code == 200 and isinstance(res.json(), dict):
+            return [str(k) for k, v in res.json().items() if v]
+        if res.status_code not in (200, 404):
+            logger.warning("Favoriler alınamadı: %s - %s", res.status_code, res.text[:200])
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
+        logger.exception("Favoriler çekilemedi")
+    return []
+
+
+def favori_guncelle(ist_key: str, favori_mi: bool) -> Tuple[bool, str]:
+    token = st.session_state.get("auth_token")
+    uid_hash = auth_uid_hash_getir()
+    if not token or not uid_hash:
+        if favori_mi:
+            st.session_state["favoriler"].add(ist_key)
+        else:
+            st.session_state["favoriler"].discard(ist_key)
+        return True, "Favoriler bu oturum için güncellendi."
+
+    url = f"{FIREBASE_DB_URL}favoriler/{uid_hash}/{ist_key}.json"
+    try:
+        if favori_mi:
+            res = get_session().put(url, params={"auth": token}, json=True, timeout=FIREBASE_TIMEOUT_S)
+        else:
+            res = get_session().delete(url, params={"auth": token}, timeout=FIREBASE_TIMEOUT_S)
+        if res.status_code in (200, 204):
+            cache_temizle_guvenli(favorileri_getir, uid_hash, token)
+            return True, "Favoriler güncellendi."
+        logger.warning("Favori güncellenemedi: %s - %s", res.status_code, res.text[:200])
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
+        logger.exception("Favori güncelleme hatası")
+    return False, "Favori güncellenemedi. Lütfen tekrar deneyin."
+
+
+def yorum_gonder(
+    istasyon_id: str,
+    yorum_metni: str,
+    durum: str,
+    ek_bilgi: Optional[Dict[str, Any]] = None,
+) -> Tuple[bool, str]:
     if token_suresi_doldu_mu():
         oturumu_temizle()
         return False, "Oturum süreniz dolmuş. Lütfen yeniden giriş yapın."
@@ -792,9 +1026,8 @@ def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str) -> Tuple[bool, 
     if not token:
         return False, "Durum bildirmek için giriş yapmalısınız."
 
-    uid_hash = hashlib.sha256(str(st.session_state.get("auth_uid", "")).encode()).hexdigest()[:16]
-    tum_yorumlar_snapshot = tum_yorumlari_getir()
-    sunucu_ok, sunucu_kalan = sunucu_tarafli_cooldown_kontrol(tum_yorumlar_snapshot, uid_hash)
+    uid_hash = auth_uid_hash_getir()
+    sunucu_ok, sunucu_kalan = sunucu_tarafli_hizli_cooldown_kontrol(uid_hash, token)
     if not sunucu_ok:
         return False, f"Çok sık bildirim yapıyorsunuz. {sunucu_kalan} saniye sonra tekrar deneyin."
 
@@ -802,14 +1035,17 @@ def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str) -> Tuple[bool, 
     url = f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json"
 
     kullanici = "Doğrulanmış Sürücü"
+    tarih = datetime.now().isoformat(timespec="seconds")
 
     yeni_yorum = {
         "kullanici": kullanici,
         "yorum": guvenli_metin(yorum_metni or durum, MAX_YORUM_KARAKTER),
         "durum": guvenli_metin(durum, 60),
-        "tarih": datetime.now().isoformat(timespec="seconds"),
+        "tarih": tarih,
         "uid_hash": uid_hash,
     }
+    if ek_bilgi:
+        yeni_yorum["ek_bilgi"] = ek_bilgi
 
     try:
         r = get_session().post(
@@ -820,8 +1056,8 @@ def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str) -> Tuple[bool, 
         )
         if r.status_code in (200, 201):
             st.session_state["son_yorum_zamani"] = datetime.now()
-            tum_yorumlari_getir.clear()
-            istasyon_yorumlari_getir.clear()
+            kullanici_yorum_meta_guncelle(uid_hash, token, tarih)
+            istasyon_durum_ozetini_guncelle(clean_id, token)
             return True, "Bildirim kaydedildi."
 
         if r.status_code in (401, 403):
@@ -936,7 +1172,7 @@ def _paralel_cevre_getir(
 # ==========================================
 # 🔑 ANA SAYFA GİRİŞ PANELİ VE AYARLAR
 # ==========================================
-with st.expander("🔑 Giriş / Kullanıcı Paneli", expanded=("auth_token" not in st.session_state)):
+with st.expander("🔑 Giriş / Kullanıcı Paneli", expanded=False):
     if "auth_token" not in st.session_state:
         tab_giris, tab_kayit, tab_sifre = st.tabs(["🔑 Giriş", "📝 Kayıt Ol", "🔓 Şifremi Unuttum"])
 
@@ -1008,10 +1244,12 @@ with st.expander("⚙️ Arama Ayarları", expanded=False):
         step=100,
         key="ayar_yaricap",
     )
+    if st.session_state.get("sonuc_sayisi", MAX_ISTASYON_SAYISI) > MAX_EKRAN_KART_SAYISI:
+        st.session_state["sonuc_sayisi"] = MAX_EKRAN_KART_SAYISI
     sonuc_sayisi = st.slider(
         "Gösterilecek İstasyon Sayısı",
-        min_value=2,
-        max_value=10,
+        min_value=1,
+        max_value=MAX_EKRAN_KART_SAYISI,
         value=MAX_ISTASYON_SAYISI,
         step=1,
         key="sonuc_sayisi",
@@ -1036,7 +1274,7 @@ with st.expander("⚙️ Arama Ayarları", expanded=False):
 st.markdown('''
     <table class="title-table">
         <tr><td class="title-cell">⚡ ŞarjBul</td></tr>
-        <tr><td class="subtitle-cell">En yakın aktif şarj rotanız · Canlı durum · Rota tahmini · Yakın mekanlar</td></tr>
+        <tr><td class="subtitle-cell">En yakın şarj rotanız · Kullanıcı bildirimleri · Varış bataryası · Yakın mekanlar</td></tr>
     </table>
 ''', unsafe_allow_html=True)
 
@@ -1044,6 +1282,32 @@ istasyonlar_verisi = istasyonlari_yukle()
 if not istasyonlar_verisi:
     st.error("İstasyon verileri yüklenemedi. Ağ bağlantınızı ve Firebase/lokal JSON ayarlarını kontrol edin.")
     st.stop()
+
+operator_secenekleri = sorted({
+    str(ist.get("operator", "Bilinmiyor"))
+    for ist in istasyonlar_verisi
+    if str(ist.get("operator", "")).strip()
+})
+with st.expander("🎛️ Ek Filtreler ve Görünüm", expanded=False):
+    operator_filtreleri = st.multiselect(
+        "Operatör",
+        operator_secenekleri,
+        default=[],
+        key="operator_filtre",
+        help="Seçim yapılmazsa tüm operatörler gösterilir.",
+    )
+    sadece_24_saat = st.checkbox("Sadece 24 saat açık görünen istasyonlar", value=False, key="sadece_24_saat")
+    siralama_modu = st.selectbox(
+        "Sıralama",
+        ["Mesafe", "Fiyat", "Hız"],
+        key="siralama_modu",
+    )
+    gorunum_modu = st.radio(
+        "Görünüm",
+        ["Liste", "Harita + Liste"],
+        horizontal=True,
+        key="gorunum_modu",
+    )
 
 user_lat: Optional[float] = None
 user_lon: Optional[float] = None
@@ -1076,16 +1340,37 @@ if user_lat is None or user_lon is None:
     )
     manuel = st.selectbox(
         "Lütfen Mevcut Konumunuzu Seçin:",
-        ["Seçiniz...", "İstanbul (Kadıköy)", "Ankara (Çankaya)", "İzmir (Alsancak)"],
+        [
+            "Seçiniz...",
+            "İstanbul (Kadıköy)",
+            "İstanbul (Maslak)",
+            "Ankara (Çankaya)",
+            "İzmir (Alsancak)",
+            "Bursa (Nilüfer)",
+            "Antalya (Muratpaşa)",
+            "Konya (Selçuklu)",
+        ],
     )
     SABIT_K = {
         "İstanbul (Kadıköy)": (40.9901, 29.0284),
+        "İstanbul (Maslak)": (41.1092, 29.0214),
         "Ankara (Çankaya)": (39.9208, 32.8541),
         "İzmir (Alsancak)": (38.4374, 27.1422),
+        "Bursa (Nilüfer)": (40.2130, 28.9844),
+        "Antalya (Muratpaşa)": (36.8841, 30.7056),
+        "Konya (Selçuklu)": (37.9507, 32.4922),
     }
     if manuel in SABIT_K:
         st.session_state["last_valid_lat"], st.session_state["last_valid_lon"] = SABIT_K[manuel]
         st.rerun()
+
+    with st.form("manuel_koordinat_form"):
+        st.caption("Listede yoksa mevcut konum koordinatınızı manuel girebilirsiniz.")
+        manuel_lat = st.number_input("Enlem", min_value=-90.0, max_value=90.0, value=41.0082, step=0.0001, format="%.6f")
+        manuel_lon = st.number_input("Boylam", min_value=-180.0, max_value=180.0, value=28.9784, step=0.0001, format="%.6f")
+        if st.form_submit_button("Bu Konumu Kullan", use_container_width=True):
+            st.session_state["last_valid_lat"], st.session_state["last_valid_lon"] = float(manuel_lat), float(manuel_lon)
+            st.rerun()
     st.stop()
 
 # ==========================================
@@ -1120,16 +1405,23 @@ st.info(
     f"Yol mesafesi hesabında x{YOL_UZAMA_KATSAYISI:.2f} rota katsayısı kullanılıyor."
 )
 
-arama_metni = st.text_input(
-    "🔍 İstasyon Ara",
-    placeholder="İstasyon adı veya adres ile filtrele...",
-    key="arama_metni",
-)
+with st.form("arama_form", clear_on_submit=False):
+    arama_metni_input = st.text_input(
+        "🔍 İstasyon Ara",
+        placeholder="İstasyon adı, adres veya operatör ile filtrele...",
+        value=st.session_state.get("arama_metni", ""),
+        key="arama_metni_input",
+    )
+    arama_submit = st.form_submit_button("Filtrele", use_container_width=True)
+    if arama_submit:
+        st.session_state["arama_metni"] = arama_metni_input
+
+arama_metni = st.session_state.get("arama_metni", "")
 
 # ==========================================
 # 🔎 İSTASYONLARI HAZIRLA
 # ==========================================
-tum_yorumlar = tum_yorumlari_getir()
+durum_ozetleri = durum_ozetleri_getir()
 uygun_istasyonlar: List[Dict[str, Any]] = []
 
 for ist in istasyonlar_verisi:
@@ -1140,40 +1432,52 @@ for ist in istasyonlar_verisi:
         continue
 
     if soket_filtreleri:
-        soket_val = str(ist.get("soket", "")).upper()
+        soket_val = str(ist.get("_soket_upper", ist.get("soket", ""))).upper()
         if not any(sf.upper() in soket_val for sf in soket_filtreleri):
             continue
 
     if hiz_filtresi != "Tümü":
-        hiz_val = str(ist.get("hiz", "")).replace(",", ".")
-        rakam = re.search(r"(\d+(?:\.\d+)?)", hiz_val)
-        hiz_sayi = float(rakam.group(1)) if rakam else 0.0
+        hiz_sayi = float(ist.get("_hiz_sayi", 0.0))
         if hiz_sayi < HIZ_ESIK_MAP.get(hiz_filtresi, 0.0):
             continue
 
+    if operator_filtreleri and str(ist.get("operator", "Bilinmiyor")) not in operator_filtreleri:
+        continue
+
+    if sadece_24_saat and not ist.get("_acik_24_saat", False):
+        continue
+
     if arama_metni:
-        aranan = arama_metni.lower()
-        if aranan not in str(ist.get("isim", "")).lower() and \
-           aranan not in str(ist.get("adres", "")).lower():
+        aranan = arama_metni_normalize_et(arama_metni)
+        if aranan not in str(ist.get("_search_text", "")):
             continue
 
-    station_key = clean_id_uret(istasyon_id_getir(ist))
-    yorumlar = tum_yorumlar.get(station_key, [])
-    ariza = ariza_skoru_hesapla(yorumlar)
+    station_key = str(ist.get("_station_key") or clean_id_uret(istasyon_id_getir(ist)))
+    ariza = {**durum_ozeti_fallback(), **durum_ozetleri.get(station_key, {})}
 
     ist_kopya = ist.copy()
     ist_kopya["Mesafe"] = round(tahmini_km, 1)
     ist_kopya["KusUcusuMesafe"] = round(kus_ucusu_km, 1)
-    ist_kopya["ArizaDurumu"] = ariza["durum"]
-    ist_kopya["ArizaEtiketi"] = ariza["etiket"]
-    ist_kopya["ArizaSkoru"] = ariza["skor"]
+    ist_kopya["TahminiSureDk"] = tahmini_sure_dk(tahmini_km)
+    ist_kopya["VarisSarjYuzdesi"] = varis_sarj_yuzdesi_hesapla(sarj_yuzdesi, batarya, tuketim, tahmini_km)
+    ist_kopya["KalanGuvenliMenzil"] = max(0.0, guvenli_menzil - tahmini_km)
+    ist_kopya["ArizaDurumu"] = ariza.get("durum", "belirsiz")
+    ist_kopya["ArizaEtiketi"] = ariza.get("etiket", "ℹ️ Canlı operatör verisi yok")
+    ist_kopya["ArizaSkoru"] = ariza.get("skor", 0)
+    ist_kopya["SonYorumlar"] = ariza.get("son_yorumlar", [])
     uygun_istasyonlar.append(ist_kopya)
 
-uygun_istasyonlar = sorted(
-    uygun_istasyonlar,
-    key=lambda x: (1 if x.get("ArizaDurumu") == "riskli" else 0, x["Mesafe"]),
-)
-en_yakin = uygun_istasyonlar[:sonuc_sayisi]
+def istasyon_siralama_anahtari(ist: Dict[str, Any]) -> Tuple[float, float]:
+    risk = 1 if ist.get("ArizaDurumu") == "riskli" else 0
+    if siralama_modu == "Fiyat":
+        return risk, float(ist.get("_fiyat_sayi", 9999.0))
+    if siralama_modu == "Hız":
+        return risk, -float(ist.get("_hiz_sayi", 0.0))
+    return risk, float(ist["Mesafe"])
+
+
+uygun_istasyonlar = sorted(uygun_istasyonlar, key=istasyon_siralama_anahtari)
+en_yakin = uygun_istasyonlar[:min(sonuc_sayisi, MAX_EKRAN_KART_SAYISI)]
 
 # ==========================================
 # ⭐ FAVORİLER
@@ -1181,9 +1485,14 @@ en_yakin = uygun_istasyonlar[:sonuc_sayisi]
 if "favoriler" not in st.session_state:
     st.session_state["favoriler"] = set()
 
+if "auth_token" in st.session_state:
+    uid_hash = auth_uid_hash_getir()
+    token = st.session_state.get("auth_token", "")
+    st.session_state["favoriler"] = set(favorileri_getir(uid_hash, token))
+
 favori_eslesmeler = [
     ist for ist in istasyonlar_verisi
-    if clean_id_uret(istasyon_id_getir(ist)) in st.session_state["favoriler"]
+    if str(ist.get("_station_key") or clean_id_uret(istasyon_id_getir(ist))) in st.session_state["favoriler"]
 ]
 if favori_eslesmeler:
     with st.expander(f"⭐ Favorilerim ({len(favori_eslesmeler)})", expanded=False):
@@ -1196,19 +1505,27 @@ if favori_eslesmeler:
 # 🎯 SONUÇ EKRANI VE KARTLAR
 # ==========================================
 if en_yakin:
-    cevre_sonuclari = _paralel_cevre_getir(en_yakin, ayar_yaricap)
+    gorunen_keys = tuple(
+        str(ist.get("_station_key") or clean_id_uret(istasyon_id_getir(ist)))
+        for ist in en_yakin
+    )
+    gorunen_yorumlar = gorunen_yorumlari_getir(gorunen_keys)
 
-    if any(y is None for y in cevre_sonuclari):
-        st.toast(
-            "Yakındaki mekan bilgisi alınamadı. Overpass API geçici olarak erişilemez olabilir.",
-            icon="⚠️",
+    if gorunum_modu == "Harita + Liste":
+        st.map(
+            {
+                "lat": [ist["enlem"] for ist in en_yakin],
+                "lon": [ist["boylam"] for ist in en_yakin],
+            },
+            latitude="lat",
+            longitude="lon",
         )
 
-    for sira, (istasyon, yakin_yerler_raw) in enumerate(zip(en_yakin, cevre_sonuclari)):
-        yakin_yerler = yakin_yerler_raw or []
+    for sira, istasyon in enumerate(en_yakin):
+        yakin_yerler: List[Dict[str, Any]] = []
 
         ist_id = istasyon_id_getir(istasyon)
-        ist_key = clean_id_uret(ist_id)
+        ist_key = str(istasyon.get("_station_key") or clean_id_uret(ist_id))
         etiket = "🥇 En Yakın İstasyon" if sira == 0 else f"#{sira + 1} Alternatif İstasyon"
         durum = istasyon.get("ArizaDurumu", "belirsiz")
         durum_class = {
@@ -1228,7 +1545,7 @@ if en_yakin:
                 )
 
         yorum_html = ""
-        son_yorumlar = tum_yorumlar.get(ist_key, [])[:MAX_SON_YORUM]
+        son_yorumlar = (istasyon.get("SonYorumlar") or gorunen_yorumlar.get(ist_key, []))[:MAX_SON_YORUM]
         if son_yorumlar:
             yorum_html = '<div class="panel-bolucu"></div><div class="panel-alt-baslik">Son Bildirimler</div>'
             for y in son_yorumlar:
@@ -1253,7 +1570,7 @@ if en_yakin:
             </div>
 
             <div class="mesafe-text">{istasyon['Mesafe']} km tahmini yol</div>
-            <div class="mesafe-alt-text">{istasyon['KusUcusuMesafe']} km kuş uçuşu · x{YOL_UZAMA_KATSAYISI:.2f} rota katsayısı</div>
+            <div class="mesafe-alt-text">~{istasyon['TahminiSureDk']} dk · Varışta ~%{istasyon['VarisSarjYuzdesi']:.0f} şarj · {istasyon['KalanGuvenliMenzil']:.0f} km güvenli pay</div>
 
             <div class="istasyon-isim">{guvenli_metin(istasyon['isim'])}</div>
 
@@ -1261,9 +1578,11 @@ if en_yakin:
                 <span class="detay-chip">⚡ {guvenli_metin(istasyon.get('hiz', 'Bilinmiyor'))}</span>
                 <span class="detay-chip">🔌 {guvenli_metin(istasyon.get('soket', 'Bilinmiyor'))}</span>
                 <span class="detay-chip">🏢 {guvenli_metin(istasyon.get('operator', 'Bilinmiyor'))}</span>
+                <span class="detay-chip">🕒 {'24 saat' if istasyon.get('_acik_24_saat') else 'Saat belirsiz'}</span>
             </div>
 
             <div class="detay-text" style="margin-top:13px;">Fiyat: {guvenli_metin(istasyon.get('fiyat', 'Bilinmiyor'))}</div>
+            <div class="mesafe-alt-text">{istasyon['KusUcusuMesafe']} km kuş uçuşu · x{YOL_UZAMA_KATSAYISI:.2f} rota katsayısı · Operatör canlı uygunluk verisi yok</div>
             <div class="adres-text">{adres_gosterim}</div>
             {yakin_html}
             {yorum_html}
@@ -1273,30 +1592,56 @@ if en_yakin:
 
         st.markdown(kart_html, unsafe_allow_html=True)
 
-        c1, c2, c3 = st.columns([5, 3, 2])
-        with c1:
-            g_link = (
-                "https://www.google.com/maps/dir/?api=1"
-                f"&origin={user_lat},{user_lon}"
-                f"&destination={istasyon['enlem']},{istasyon['boylam']}"
-                "&travelmode=driving"
-            )
-            st.markdown(
-                f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>',
-                unsafe_allow_html=True,
-            )
+        g_link = (
+            "https://www.google.com/maps/dir/?api=1"
+            f"&origin={user_lat},{user_lon}"
+            f"&destination={istasyon['enlem']},{istasyon['boylam']}"
+            "&travelmode=driving"
+        )
+        st.markdown(
+            f'<a href="{g_link}" target="_blank" class="nav-link-btn">Navigasyonu Başlat</a>',
+            unsafe_allow_html=True,
+        )
 
-        with c2:
+        konum_dogrulandi = mesafe_hesapla(
+            user_lat, user_lon, istasyon["enlem"], istasyon["boylam"]
+        ) <= KONUM_DOGRULAMA_ESIGI_KM
+
+        def rapor_ek_bilgi_olustur(rapor_tipi: str, foto_dosyasi: Any = None) -> Dict[str, Any]:
+            ek = {
+                "rapor_tipi": rapor_tipi,
+                "konum_dogrulandi": konum_dogrulandi,
+                "kullanici_istasyona_km": round(istasyon["KusUcusuMesafe"], 3),
+            }
+            if foto_dosyasi is not None:
+                foto_bytes = foto_dosyasi.getvalue()
+                ek["foto_adi"] = guvenli_metin(foto_dosyasi.name, 80)
+                ek["foto_hash"] = hashlib.sha256(foto_bytes[:2_000_000]).hexdigest()[:16]
+            return ek
+
+        aksiyon_col1, aksiyon_col2 = st.columns([3, 1])
+        with aksiyon_col1:
             with st.popover("Durum Bildir"):
                 if "auth_token" not in st.session_state:
                     st.warning("Durum bildirmek ve yorum yapmak için lütfen üstteki Giriş / Kullanıcı Paneli bölümünden giriş yapın.")
                 else:
-                    col_btn1, col_btn2 = st.columns(2)
+                    st.caption("Konum doğrulandı." if konum_dogrulandi else "Konum istasyona yakın görünmüyor; bildirim yine de alınır.")
+                    foto = st.file_uploader(
+                        "Fotoğraf doğrulama (opsiyonel)",
+                        type=["jpg", "jpeg", "png"],
+                        key=f"foto_{sira}_{ist_key}",
+                    )
+                    col_btn1, col_btn2, col_btn3 = st.columns(3)
 
                     with col_btn1:
                         st.markdown('<div class="rapor-calisiyor">', unsafe_allow_html=True)
                         if st.button("Sorunsuz", key=f"btn_ok_{sira}_{ist_key}"):
-                            ok, msg = yorum_gonder(ist_id, "Sorunsuz / Boş", "Sorunsuz / Boş")
+                            ok, msg = yorum_gonder(
+                                ist_id,
+                                "Sorunsuz / Boş",
+                                "Sorunsuz / Boş",
+                                rapor_ek_bilgi_olustur("sorunsuz", foto),
+                            )
                             if ok:
                                 st.success(msg)
                                 st.rerun()
@@ -1307,13 +1652,32 @@ if en_yakin:
                     with col_btn2:
                         st.markdown('<div class="rapor-arizali">', unsafe_allow_html=True)
                         if st.button("Arızalı", key=f"btn_fail_{sira}_{ist_key}"):
-                            ok, msg = yorum_gonder(ist_id, "Arızalı / Kapalı", "Arızalı / Kapalı")
+                            ok, msg = yorum_gonder(
+                                ist_id,
+                                "Arızalı / Kapalı",
+                                "Arızalı / Kapalı",
+                                rapor_ek_bilgi_olustur("arizali", foto),
+                            )
                             if ok:
                                 st.success(msg)
                                 st.rerun()
                             else:
                                 st.error(msg)
                         st.markdown("</div>", unsafe_allow_html=True)
+
+                    with col_btn3:
+                        if st.button("Sıra Var", key=f"btn_queue_{sira}_{ist_key}"):
+                            ok, msg = yorum_gonder(
+                                ist_id,
+                                "Sıra var",
+                                "Sıra Var",
+                                rapor_ek_bilgi_olustur("sira_var", foto),
+                            )
+                            if ok:
+                                st.success(msg)
+                                st.rerun()
+                            else:
+                                st.error(msg)
 
                     st.markdown("---")
                     yorum_txt = st.text_input(
@@ -1327,14 +1691,19 @@ if en_yakin:
                         if not temiz_yorum:
                             st.warning("Lütfen kısa bir durum notu yazın.")
                         else:
-                            ok, msg = yorum_gonder(ist_id, temiz_yorum, "Durum Güncellemesi")
+                            ok, msg = yorum_gonder(
+                                ist_id,
+                                temiz_yorum,
+                                "Durum Güncellemesi",
+                                rapor_ek_bilgi_olustur("detayli", foto),
+                            )
                             if ok:
                                 st.success(msg)
                                 st.rerun()
                             else:
                                 st.error(msg)
 
-        with c3:
+        with aksiyon_col2:
             is_favori = ist_key in st.session_state["favoriler"]
             fav_label = "★" if is_favori else "☆"
             if st.button(
@@ -1343,11 +1712,34 @@ if en_yakin:
                 help="Favorilere ekle / çıkar",
                 use_container_width=True,
             ):
-                if is_favori:
-                    st.session_state["favoriler"].discard(ist_key)
+                ok, msg = favori_guncelle(ist_key, not is_favori)
+                if ok:
+                    if is_favori:
+                        st.session_state["favoriler"].discard(ist_key)
+                    else:
+                        st.session_state["favoriler"].add(ist_key)
+                    st.toast(msg)
+                    st.rerun()
                 else:
-                    st.session_state["favoriler"].add(ist_key)
-                st.rerun()
+                    st.error(msg)
+
+        cevre_state_key = f"cevre_yukle_{ist_key}_{ayar_yaricap}"
+        if st.button("Yakındaki Yerleri Yükle", key=f"btn_cevre_{sira}_{ist_key}", use_container_width=True):
+            st.session_state[cevre_state_key] = True
+
+        if st.session_state.get(cevre_state_key):
+            yakin_yerler_raw = yakin_cevre_getir(istasyon["enlem"], istasyon["boylam"], ayar_yaricap)
+            if yakin_yerler_raw is None:
+                st.warning("Yakındaki mekan bilgisi alınamadı. Overpass API geçici olarak erişilemez olabilir.")
+            elif yakin_yerler_raw:
+                st.markdown("**Yakındaki Yerler**")
+                for yer in yakin_yerler_raw:
+                    st.markdown(
+                        f'{yer["emoji"]} {yer["isim"]} · **{yer["metre"]}m**',
+                        unsafe_allow_html=False,
+                    )
+            else:
+                st.caption("Bu yarıçapta listelenecek yakın mekan bulunamadı.")
 
 else:
     st.warning(
