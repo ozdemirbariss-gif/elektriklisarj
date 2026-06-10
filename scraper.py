@@ -1,7 +1,7 @@
 import argparse
 import os
 from pathlib import Path
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Tuple
 
 from scrapers.chargeiq import chargeiq_istasyonlarini_getir
 from scrapers.common import Istasyon, atomik_json_yaz, duplicate_temizle
@@ -21,6 +21,36 @@ def env_bool(name: str, default: bool = True) -> bool:
     if value is None:
         return default
     return value.strip().lower() not in {"0", "false", "hayir", "hayır", "no", "off"}
+
+
+def env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+
+
+def veri_kalitesini_dogrula(
+    istasyonlar: List[Istasyon],
+    kaynak_sayilari: Dict[str, int],
+    kaynak_hatalari: List[Tuple[str, str]],
+) -> None:
+    basarili_kaynaklar = [ad for ad, adet in kaynak_sayilari.items() if adet > 0]
+    min_kaynak = env_int("MIN_SCRAPER_SOURCE_COUNT", 1)
+    min_kayit = env_int("MIN_SCRAPER_RECORD_COUNT", 1)
+
+    if env_bool("FAIL_ON_SOURCE_ERROR", False) and kaynak_hatalari:
+        ozet = "; ".join(f"{ad}: {hata}" for ad, hata in kaynak_hatalari)
+        raise RuntimeError(f"Kaynak hatası nedeniyle çıktı yazılmadı: {ozet}")
+
+    if len(basarili_kaynaklar) < min_kaynak:
+        raise RuntimeError(
+            f"Yetersiz kaynak: {len(basarili_kaynaklar)}/{min_kaynak}. "
+            f"Başarılı kaynaklar: {', '.join(basarili_kaynaklar) or 'yok'}"
+        )
+
+    if len(istasyonlar) < min_kayit:
+        raise RuntimeError(f"Yetersiz kayıt: {len(istasyonlar)}/{min_kayit}.")
 
 
 def kaynaklari_getir() -> Dict[str, SourceFn]:
@@ -52,31 +82,36 @@ def kaynak_sec(kaynaklar: Dict[str, SourceFn], secimler: str) -> Dict[str, Sourc
 def istasyonlari_kaziyici(kaynak_secimi: str = "", output: str = DEFAULT_OUTPUT) -> None:
     secili_kaynaklar = kaynak_sec(kaynaklari_getir(), kaynak_secimi)
     if not secili_kaynaklar:
-        print("Aktif kaynak bulunamadı. ENABLE_* ayarlarını veya --sources değerini kontrol edin.")
-        return
+        raise RuntimeError("Aktif kaynak bulunamadı. ENABLE_* ayarlarını veya --sources değerini kontrol edin.")
 
     tum_istasyonlar: List[Istasyon] = []
+    kaynak_sayilari: Dict[str, int] = {}
+    kaynak_hatalari: List[Tuple[str, str]] = []
 
     print("Çok kaynaklı istasyon toplama başladı.")
     for kaynak_adi, kaynak_fn in secili_kaynaklar.items():
         try:
             print(f"{kaynak_adi}: veri alınıyor...")
             istasyonlar = kaynak_fn()
+            kaynak_sayilari[kaynak_adi] = len(istasyonlar)
             tum_istasyonlar.extend(istasyonlar)
             print(f"{kaynak_adi}: {len(istasyonlar)} istasyon alındı.")
         except Exception as exc:
+            kaynak_sayilari[kaynak_adi] = 0
+            kaynak_hatalari.append((kaynak_adi, str(exc)))
             print(f"{kaynak_adi}: kaynak atlandı. Hata: {exc}")
 
     if not tum_istasyonlar:
-        print("Hiç istasyon alınamadı; mevcut çıktı dosyası değiştirilmedi.")
-        return
+        raise RuntimeError("Hiç istasyon alınamadı; mevcut çıktı dosyası değiştirilmedi.")
 
     mesafe_m = int(os.getenv("DEDUP_DISTANCE_M", "120"))
     temiz_istasyonlar = duplicate_temizle(tum_istasyonlar, mesafe_m=mesafe_m)
+    veri_kalitesini_dogrula(temiz_istasyonlar, kaynak_sayilari, kaynak_hatalari)
 
     atomik_json_yaz(temiz_istasyonlar, Path(output))
     print(f"Toplam ham kayıt: {len(tum_istasyonlar)}")
     print(f"Duplicate sonrası: {len(temiz_istasyonlar)}")
+    print(f"Başarılı kaynaklar: {', '.join(ad for ad, adet in kaynak_sayilari.items() if adet > 0)}")
     print(f"Çıktı güncellendi: {output}")
 
 

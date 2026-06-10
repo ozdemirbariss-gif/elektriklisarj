@@ -7,13 +7,13 @@ from typing import Any, Dict, List, Optional, Tuple
 import streamlit as st
 
 from config import (
-    logger, FIREBASE_DB_URL, FIREBASE_API_KEY, MAX_SON_YORUM, ISTASYON_CACHE_TTL, 
-    YORUM_CACHE_TTL, CEVRE_CACHE_TTL, FIREBASE_TIMEOUT_S, OVERPASS_TIMEOUT_S, 
+    logger, FIREBASE_DB_URL, FIREBASE_API_KEY, FIREBASE_ENABLED, MAX_SON_YORUM, ISTASYON_CACHE_TTL,
+    YORUM_CACHE_TTL, CEVRE_CACHE_TTL, FIREBASE_TIMEOUT_S, OVERPASS_TIMEOUT_S,
     OVERPASS_URLS, OVERPASS_HEADERS, KATEGORI_EMOJILER, MAX_YAKIN_YER, MAX_YORUM_KARAKTER, YORUM_BEKLEME_SURESI
 )
 from utils import (
     istasyon_normalize_et, yorum_tarihi_parse, clean_id_uret,
-    auth_uid_hash_getir, cache_temizle_guvenli, guvenli_metin, mesafe_hesapla, 
+    auth_uid_hash_getir, cache_temizle_guvenli, guvenli_metin, mesafe_hesapla,
     token_suresi_doldu_mu, yorum_gonderilebilir_mi, yorumlardan_durum_ozeti_uret
 )
 
@@ -24,6 +24,8 @@ def get_session() -> requests.Session:
     return session
 
 def firebase_login(email: str, password: str) -> Optional[Dict[str, Any]]:
+    if not FIREBASE_ENABLED:
+        return None
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}"
     try:
         r = get_session().post(url, json={"email": email, "password": password, "returnSecureToken": True}, timeout=5)
@@ -34,6 +36,8 @@ def firebase_login(email: str, password: str) -> Optional[Dict[str, Any]]:
     return None
 
 def firebase_register(email: str, password: str) -> Optional[Dict[str, Any]]:
+    if not FIREBASE_ENABLED:
+        return None
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={FIREBASE_API_KEY}"
     try:
         r = get_session().post(url, json={"email": email, "password": password, "returnSecureToken": True}, timeout=5)
@@ -44,6 +48,8 @@ def firebase_register(email: str, password: str) -> Optional[Dict[str, Any]]:
     return None
 
 def firebase_sifre_sifirla(email: str) -> Tuple[bool, str]:
+    if not FIREBASE_ENABLED:
+        return False, "Firebase bağlantısı yapılandırılmamış."
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key={FIREBASE_API_KEY}"
     try:
         r = get_session().post(url, json={"requestType": "PASSWORD_RESET", "email": email}, timeout=5)
@@ -59,14 +65,15 @@ def oturumu_temizle() -> None:
 
 @st.cache_data(ttl=ISTASYON_CACHE_TTL, show_spinner=False)
 def istasyonlari_yukle() -> List[Dict[str, Any]]:
-    try:
-        res = get_session().get(f"{FIREBASE_DB_URL}istasyonlar.json", timeout=3.0)
-        if res.status_code == 200 and res.json():
-            ham_veri = res.json()
-            ham_liste = list(ham_veri.values()) if isinstance(ham_veri, dict) else ham_veri
-            return [x for item in ham_liste if (x := istasyon_normalize_et(item))]
-    except Exception as e:
-        sentry_sdk.capture_exception(e)
+    if FIREBASE_ENABLED:
+        try:
+            res = get_session().get(f"{FIREBASE_DB_URL}istasyonlar.json", timeout=3.0)
+            if res.status_code == 200 and res.json():
+                ham_veri = res.json()
+                ham_liste = list(ham_veri.values()) if isinstance(ham_veri, dict) else ham_veri
+                return [x for item in ham_liste if (x := istasyon_normalize_et(item))]
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
 
     try:
         with open("istasyonlar.json", "r", encoding="utf-8") as f:
@@ -83,6 +90,8 @@ def istasyonlari_yukle() -> List[Dict[str, Any]]:
 
 @st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
 def istasyon_yorumlari_getir(istasyon_id: str, limit: int = MAX_SON_YORUM) -> List[Dict[str, Any]]:
+    if not FIREBASE_ENABLED:
+        return []
     clean_id = clean_id_uret(istasyon_id)
     try:
         res = get_session().get(
@@ -100,9 +109,11 @@ def istasyon_yorumlari_getir(istasyon_id: str, limit: int = MAX_SON_YORUM) -> Li
         sentry_sdk.capture_exception(e)
 
     return []
-    
+
 @st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
 def durum_ozetleri_getir() -> Dict[str, Dict[str, Any]]:
+    if not FIREBASE_ENABLED:
+        return {}
     try:
         res = get_session().get(f"{FIREBASE_DB_URL}station_status.json", timeout=FIREBASE_TIMEOUT_S)
         if res.status_code == 200 and res.json():
@@ -117,7 +128,7 @@ def gorunen_yorumlari_getir(station_keys: Tuple[str, ...]) -> Dict[str, List[Dic
 
 @st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
 def kullanici_son_yorum_zamani_getir(uid_hash: str, token: str) -> Optional[str]:
-    if not uid_hash or not token: return None
+    if not FIREBASE_ENABLED or not uid_hash or not token: return None
     try:
         res = get_session().get(f"{FIREBASE_DB_URL}kullanici_yorum_meta/{uid_hash}.json", params={"auth": token}, timeout=FIREBASE_TIMEOUT_S)
         if res.status_code == 200 and isinstance(res.json(), dict):
@@ -134,12 +145,16 @@ def sunucu_tarafli_hizli_cooldown_kontrol(uid_hash: str, token: str) -> Tuple[bo
     return kalan <= 0, max(0, kalan)
 
 def kullanici_yorum_meta_guncelle(uid_hash: str, token: str, tarih: str) -> None:
+    if not FIREBASE_ENABLED:
+        return
     try:
         get_session().patch(f"{FIREBASE_DB_URL}kullanici_yorum_meta/{uid_hash}.json", params={"auth": token}, json={"son_yorum_zamani": tarih}, timeout=FIREBASE_TIMEOUT_S)
         cache_temizle_guvenli(kullanici_son_yorum_zamani_getir, uid_hash, token)
     except Exception: pass
 
 def istasyon_durum_ozetini_guncelle(clean_id: str, token: str) -> None:
+    if not FIREBASE_ENABLED:
+        return
     try:
         res = get_session().get(f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json", params={"auth": token}, timeout=FIREBASE_TIMEOUT_S)
         if res.status_code == 200 and res.json():
@@ -152,7 +167,7 @@ def istasyon_durum_ozetini_guncelle(clean_id: str, token: str) -> None:
 
 @st.cache_data(ttl=ISTASYON_CACHE_TTL, show_spinner=False)
 def favorileri_getir(uid_hash: str, token: str) -> List[str]:
-    if not uid_hash or not token: return []
+    if not FIREBASE_ENABLED or not uid_hash or not token: return []
     try:
         res = get_session().get(f"{FIREBASE_DB_URL}favoriler/{uid_hash}.json", params={"auth": token}, timeout=FIREBASE_TIMEOUT_S)
         if res.status_code == 200 and isinstance(res.json(), dict):
@@ -162,7 +177,7 @@ def favorileri_getir(uid_hash: str, token: str) -> List[str]:
 
 def favori_guncelle(ist_key: str, favori_mi: bool) -> Tuple[bool, str]:
     token, uid_hash = st.session_state.get("auth_token"), auth_uid_hash_getir()
-    if not token or not uid_hash:
+    if not FIREBASE_ENABLED or not token or not uid_hash:
         st.session_state["favoriler"].add(ist_key) if favori_mi else st.session_state["favoriler"].discard(ist_key)
         return True, "Oturum için güncellendi."
     try:
@@ -175,6 +190,8 @@ def favori_guncelle(ist_key: str, favori_mi: bool) -> Tuple[bool, str]:
     return False, "Favori güncellenemedi."
 
 def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str, ek_bilgi: Optional[Dict[str, Any]] = None) -> Tuple[bool, str]:
+    if not FIREBASE_ENABLED:
+        return False, "Bildirim için Firebase bağlantısı gerekli."
     if token_suresi_doldu_mu():
         oturumu_temizle()
         return False, "Oturum süresi dolmuş."
@@ -182,7 +199,7 @@ def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str, ek_bilgi: Optio
     if not gonderilebilir: return False, f"{kalan} saniye bekleyin."
     token, uid_hash = st.session_state.get("auth_token"), auth_uid_hash_getir()
     if not token: return False, "Giriş yapmalısınız."
-    
+
     sunucu_ok, sunucu_kalan = sunucu_tarafli_hizli_cooldown_kontrol(uid_hash, token)
     if not sunucu_ok: return False, f"{sunucu_kalan} saniye bekleyin."
 
@@ -220,7 +237,7 @@ def yakin_cevre_getir(enlem: float, boylam: float, yaricap_m: int) -> Optional[L
                     km = mesafe_hesapla(enlem, boylam, float(lat), float(lon))
                     emoji, kat_adi = KATEGORI_EMOJILER[kategori_kodu]
                     sonuclar.append({"isim": guvenli_metin(tags.get("name") or kat_adi, 80), "kategori": kat_adi, "metre": int(km * 1000)})
-                
+
                 gorulmus, filtrelenmis = set(), []
                 for s in sorted(sonuclar, key=lambda x: x["metre"]):
                     isim_key = str(s["isim"]).lower()
