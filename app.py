@@ -178,13 +178,25 @@ def ozet_paneli_ciz(guvenli_menzil: float, sarj_yuzdesi: int, istasyon_sayisi: i
     )
 
 
-def en_iyi_secim_ciz(istasyon: Dict[str, Any]) -> None:
+def surus_ozeti_ciz(arac: str, guvenli_menzil: float, sarj_yuzdesi: int) -> None:
+    st.markdown(
+        f"""
+        <div class="sb-drive-strip">
+            <span>{kisa_deger(arac, max_len=36)}</span>
+            <strong>%{sarj_yuzdesi} · {guvenli_menzil:.0f} km güvenli menzil</strong>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def en_iyi_secim_ciz(istasyon: Dict[str, Any], rota_linki: str) -> None:
     st.markdown(
         f"""
         <div class="sb-best-card">
             <div class="sb-best-top">
                 <div>
-                    <div class="sb-kicker">En iyi seçenek</div>
+                    <div class="sb-kicker">Şimdi şarj için en iyi durak</div>
                     <div class="sb-best-title">{kisa_deger(istasyon.get("isim"), max_len=96)}</div>
                 </div>
                 <div class="sb-score"><strong>{int(istasyon.get("Skor", 0))}</strong><span>PUAN</span></div>
@@ -194,7 +206,10 @@ def en_iyi_secim_ciz(istasyon: Dict[str, Any]) -> None:
                 <div class="sb-mini-stat"><div class="sb-mini-label">Süre</div><div class="sb-mini-value">{int(istasyon.get("TahminiSureDk", 0))} dk</div></div>
                 <div class="sb-mini-stat"><div class="sb-mini-label">Varış</div><div class="sb-mini-value">%{float(istasyon.get("VarisSarjYuzdesi", 0.0)):.0f}</div></div>
             </div>
-            <div class="sb-chip-row">{rozet_html(istasyon.get("Rozetler", []))}</div>
+            <a class="sb-route-button sb-route-primary" href="{guvenli_html(rota_linki, 260)}" target="_blank" rel="noopener noreferrer">
+                <span class="sb-route-main">Rotayı aç</span>
+                <span class="sb-route-sub">Google Maps ile yol tarifi</span>
+            </a>
         </div>
         """,
         unsafe_allow_html=True,
@@ -231,64 +246,95 @@ def istasyon_karti_ciz(istasyon: Dict[str, Any], sira: int, rota_linki: str) -> 
         unsafe_allow_html=True,
     )
 
+
+def istasyon_aksiyonlari_ciz(ist: Dict[str, Any], ist_id: str, ist_key: str, ayar_yaricap: int) -> None:
+    st.markdown('<div class="sb-action-caption">Hızlı işlemler</div>', unsafe_allow_html=True)
+    a1, a2, a3 = st.columns([1.45, 1.0, 1.15])
+    with a1:
+        with st.popover("Durum bildir"):
+            if "auth_token" not in st.session_state:
+                st.warning("Giriş yapın.")
+            else:
+                b1, b2, b3 = st.columns(3)
+                if b1.button("Uygun", key=f"btn_ok_{ist_key}"):
+                    ok, msg = yorum_gonder(ist_id, "Uygun", "Uygun", {})
+                    st.success(msg) if ok else st.error(msg)
+                if b2.button("Sorun", key=f"btn_fail_{ist_key}"):
+                    ok, msg = yorum_gonder(ist_id, "Sorun var", "Sorun var", {})
+                    st.success(msg) if ok else st.error(msg)
+                if b3.button("Sıra", key=f"btn_queue_{ist_key}"):
+                    ok, msg = yorum_gonder(ist_id, "Sıra var", "Sıra var", {})
+                    st.success(msg) if ok else st.error(msg)
+    with a2:
+        is_fav = ist_key in st.session_state["favoriler"]
+        if st.button("Kayıtlı" if is_fav else "Kaydet", key=f"fav_{ist_key}"):
+            favori_guncelle(ist_key, not is_fav)
+            st.rerun()
+    with a3:
+        yakin_yerler_acik = st.button("Yakın yerler", key=f"btn_cevre_{ist_key}")
+
+    if yakin_yerler_acik:
+        yerler = yakin_cevre_getir(ist["enlem"], ist["boylam"], ayar_yaricap)
+        if yerler:
+            yer_html = "".join(
+                f'<div class="sb-nearby-item"><span>{guvenli_html(y.get("isim"), 80)}</span><strong>{int(y.get("metre", 0))}m</strong></div>'
+                for y in yerler
+            )
+            st.markdown(f'<div class="sb-nearby-list">{yer_html}</div>', unsafe_allow_html=True)
+        else:
+            st.info("Yakında gösterilecek yer bulunamadı.")
+
+
+def hesap_paneli_ciz() -> None:
+    with st.expander("Hesap", expanded=False):
+        if "auth_token" not in st.session_state:
+            tab_giris, tab_kayit, tab_sifre = st.tabs(["Giriş", "Kayıt", "Şifre"])
+            with tab_giris:
+                email = st.text_input("E-posta", key="login_email")
+                password = st.text_input("Şifre", type="password", key="login_password")
+                if st.button("Giriş Yap", use_container_width=True):
+                    user_data = firebase_login(email, password)
+                    if user_data:
+                        st.session_state.update({"auth_token": user_data["idToken"], "auth_email": user_data.get("email", ""), "auth_uid": user_data.get("localId", ""), "auth_login_time": datetime.now().isoformat()})
+                        st.rerun()
+                    else:
+                        st.error("Giriş başarısız.")
+            with tab_kayit:
+                reg_email = st.text_input("E-posta", key="reg_email")
+                reg_password = st.text_input("Şifre", type="password", key="reg_password")
+                if st.button("Kayıt Ol", use_container_width=True):
+                    user_data = firebase_register(reg_email, reg_password)
+                    if user_data:
+                        st.session_state.update({"auth_token": user_data["idToken"], "auth_email": user_data.get("email", ""), "auth_uid": user_data.get("localId", ""), "auth_login_time": datetime.now().isoformat()})
+                        st.rerun()
+                    else:
+                        st.error("Kayıt başarısız.")
+            with tab_sifre:
+                reset_email = st.text_input("E-posta Adresiniz", key="reset_email")
+                if st.button("Sıfırlama Bağlantısı Gönder"):
+                    ok, msg = firebase_sifre_sifirla(reset_email)
+                    st.success(msg) if ok else st.error(msg)
+        else:
+            if token_suresi_doldu_mu():
+                oturumu_temizle()
+                st.rerun()
+            st.success("Hesap aktif.")
+            if st.button("Çıkış Yap", use_container_width=True):
+                oturumu_temizle()
+                st.rerun()
+
 # 1. Başlangıç Ayarları
 st.set_page_config(page_title="ŞarjBul", layout="centered", initial_sidebar_state="collapsed")
 sentry_init()
 load_css()
 
 st.title("ŞarjBul")
-st.caption("Yakındaki en uygun şarj noktasını sakin, hızlı ve anlaşılır biçimde bulun.")
-
-# 2. Kullanıcı Giriş Arayüzü
-with st.expander("Hesap", expanded=False):
-    if "auth_token" not in st.session_state:
-        tab_giris, tab_kayit, tab_sifre = st.tabs(["Giriş", "Kayıt", "Şifre"])
-        with tab_giris:
-            email = st.text_input("E-posta", key="login_email")
-            password = st.text_input("Şifre", type="password", key="login_password")
-            if st.button("Giriş Yap", use_container_width=True):
-                user_data = firebase_login(email, password)
-                if user_data:
-                    st.session_state.update({"auth_token": user_data["idToken"], "auth_email": user_data.get("email", ""), "auth_uid": user_data.get("localId", ""), "auth_login_time": datetime.now().isoformat()})
-                    st.rerun()
-                else: st.error("Giriş başarısız.")
-        with tab_kayit:
-            reg_email = st.text_input("E-posta", key="reg_email")
-            reg_password = st.text_input("Şifre", type="password", key="reg_password")
-            if st.button("Kayıt Ol", use_container_width=True):
-                user_data = firebase_register(reg_email, reg_password)
-                if user_data:
-                    st.session_state.update({"auth_token": user_data["idToken"], "auth_email": user_data.get("email", ""), "auth_uid": user_data.get("localId", ""), "auth_login_time": datetime.now().isoformat()})
-                    st.rerun()
-                else: st.error("Kayıt başarısız.")
-        with tab_sifre:
-            reset_email = st.text_input("E-posta Adresiniz", key="reset_email")
-            if st.button("Sıfırlama Bağlantısı Gönder"):
-                ok, msg = firebase_sifre_sifirla(reset_email)
-                st.success(msg) if ok else st.error(msg)
-    else:
-        if token_suresi_doldu_mu(): oturumu_temizle(); st.rerun()
-        st.success("Hesap aktif.")
-        if st.button("Çıkış Yap", use_container_width=True): oturumu_temizle(); st.rerun()
-
-# 3. Filtreler ve Veri Hazırlığı
-with st.expander("Arama", expanded=False):
-    ayar_yaricap = st.slider("Yakın yer mesafesi (m)", 100, 800, 400, 100)
-    sonuc_sayisi = st.slider("İstasyon sayısı", 1, MAX_EKRAN_KART_SAYISI, MAX_ISTASYON_SAYISI)
-    soket_filtreleri = st.multiselect("Soket", ["CCS", "CHAdeMO", "Type 2", "Schuko", "GB/T"])
-    hiz_filtresi = st.selectbox("Minimum güç", ["Tümü", "AC (≥7 kW)", "DC (≥50 kW)", "Hızlı DC (≥150 kW)"])
+st.markdown('<div class="sb-hero-copy">Bana en mantıklı şarj durağını göster.</div>', unsafe_allow_html=True)
 
 istasyonlar_verisi = istasyonlari_yukle()
 if not istasyonlar_verisi: st.stop()
 
-operator_secenekleri = sorted({str(ist.get("operator", "Bilinmiyor")) for ist in istasyonlar_verisi if str(ist.get("operator", "")).strip()})
-with st.expander("Filtreler ve görünüm", expanded=False):
-    operator_filtreleri = st.multiselect("Operatör", operator_secenekleri)
-    sadece_24_saat = st.checkbox("Sadece 24 saat açık")
-    siralama_modu = st.selectbox("Sıralama", ["Öneri", "Mesafe", "Fiyat", "Hız"])
-    gorunum_modu = st.radio("Görünüm", ["Liste", "Harita + Liste"], horizontal=True)
-
-# 4. Konum Tespiti
+# 2. Konum Tespiti
 user_lat, user_lon = None, None
 try:
     konum_verisi = get_geolocation()
@@ -309,9 +355,23 @@ if user_lat is None or user_lon is None:
         st.rerun()
     st.stop()
 
-# 5. Araç Bilgileri
-with st.expander("Araç ve menzil", expanded=False):
-    secilen_arac = st.selectbox("Model", list(ARAC_KATALOGU.keys()), label_visibility="collapsed")
+# 3. Sessiz Varsayılanlar ve Gelişmiş Ayarlar
+operator_secenekleri = sorted({str(ist.get("operator", "Bilinmiyor")) for ist in istasyonlar_verisi if str(ist.get("operator", "")).strip()})
+secilen_arac = list(ARAC_KATALOGU.keys())[0]
+niyet = "Dengeli"
+ayar_yaricap = 400
+sonuc_sayisi = min(3, MAX_EKRAN_KART_SAYISI)
+soket_filtreleri: List[str] = []
+hiz_filtresi = "Tümü"
+operator_filtreleri: List[str] = []
+sadece_24_saat = False
+haritayi_goster = False
+menzil_filtresi = True
+arama_metni = ""
+
+with st.expander("Gelişmiş ayarlar", expanded=False):
+    niyet = st.radio("Tercih", ["Dengeli", "Yakın", "Hızlı", "Ekonomik"], horizontal=True)
+    secilen_arac = st.selectbox("Araç", list(ARAC_KATALOGU.keys()))
     v = ARAC_KATALOGU[secilen_arac]
     c1, c2, c3 = st.columns(3)
     batarya = c1.number_input("Kapasite", 1.0, 250.0, float(v["batarya"]))
@@ -319,12 +379,33 @@ with st.expander("Araç ve menzil", expanded=False):
     tuketim = c3.number_input("Tüketim", 5.0, 40.0, float(v["tuketim"]))
     guvenlik_marji = st.slider("Güvenlik payı (%)", 10, 50, 25)
     menzil_filtresi = st.checkbox("Menzile göre filtrele", True)
+    arama_metni = st.text_input("İstasyon ara")
+    sonuc_sayisi = st.slider("Gösterilecek seçenek", 1, MAX_EKRAN_KART_SAYISI, min(2, MAX_EKRAN_KART_SAYISI))
+    soket_filtreleri = st.multiselect("Soket", ["CCS", "CHAdeMO", "Type 2", "Schuko", "GB/T"])
+    hiz_filtresi = st.selectbox("Minimum güç", ["Tümü", "AC (≥7 kW)", "DC (≥50 kW)", "Hızlı DC (≥150 kW)"])
+    operator_filtreleri = st.multiselect("Operatör", operator_secenekleri)
+    sadece_24_saat = st.checkbox("Sadece 24 saat açık")
+    ayar_yaricap = st.slider("Yakın yer mesafesi (m)", 100, 800, 400, 100)
+    haritayi_goster = st.checkbox("Haritayı göster")
+
+if "batarya" not in locals():
+    v = ARAC_KATALOGU[secilen_arac]
+    batarya = float(v["batarya"])
+    sarj_yuzdesi = 30
+    tuketim = float(v["tuketim"])
+    guvenlik_marji = 25
 
 guvenli_menzil = ((batarya * (sarj_yuzdesi / 100.0) / tuketim) * 100.0) * (1 - guvenlik_marji / 100.0)
-arama_metni = st.text_input("İstasyon ara...")
-ozet_paneli_ciz(guvenli_menzil, sarj_yuzdesi, len(istasyonlar_verisi))
+surus_ozeti_ciz(secilen_arac, guvenli_menzil, sarj_yuzdesi)
 
-# 6. Veri İşleme
+siralama_modu = {
+    "Dengeli": "Öneri",
+    "Yakın": "Mesafe",
+    "Hızlı": "Hız",
+    "Ekonomik": "Fiyat",
+}.get(niyet, "Öneri")
+
+# 4. Veri İşleme
 durum_ozetleri = durum_ozetleri_getir()
 uygun_istasyonlar = []
 for ist in istasyonlar_verisi:
@@ -365,63 +446,48 @@ if "auth_token" in st.session_state: st.session_state["favoriler"] = set(favoril
 # 8. Sonuç Kartları Çizimi
 if uygun_istasyonlar:
     gorunen_yorumlar = gorunen_yorumlari_getir(tuple(str(i.get("_station_key") or clean_id_uret(istasyon_id_getir(i))) for i in uygun_istasyonlar))
-    en_iyi = max(uygun_istasyonlar, key=lambda x: int(x.get("Skor", 0)))
-    en_iyi_secim_ciz(en_iyi)
+    en_iyi = uygun_istasyonlar[0]
+    en_iyi_key = str(en_iyi.get("_station_key") or clean_id_uret(istasyon_id_getir(en_iyi)))
+    en_iyi_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={en_iyi['enlem']},{en_iyi['boylam']}&travelmode=driving"
+    en_iyi_secim_ciz(en_iyi, en_iyi_link)
 
-    if gorunum_modu == "Harita + Liste": st.map({"lat": [i["enlem"] for i in uygun_istasyonlar], "lon": [i["boylam"] for i in uygun_istasyonlar]})
-    
-    for sira, ist in enumerate(uygun_istasyonlar):
-        ist_id = istasyon_id_getir(ist)
-        ist_key = str(ist.get("_station_key") or clean_id_uret(ist_id))
-        g_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={ist['enlem']},{ist['boylam']}&travelmode=driving"
-        istasyon_karti_ciz(ist, sira, g_link)
+    if haritayi_goster:
+        st.map({"lat": [i["enlem"] for i in uygun_istasyonlar], "lon": [i["boylam"] for i in uygun_istasyonlar]})
 
-        if ist.get("SonYorumlar") or gorunen_yorumlar.get(ist_key):
-            with st.expander("Son bildirimler", expanded=False):
-                for y in (ist.get("SonYorumlar") or gorunen_yorumlar.get(ist_key, []))[:MAX_SON_YORUM]:
-                    st.write(f"{durum_metni_sadelestir(y.get('durum', ''))}: {str(y.get('yorum', ''))[:100]}")
+    if en_iyi.get("SonYorumlar") or gorunen_yorumlar.get(en_iyi_key):
+        with st.expander("Son bildirimler", expanded=False):
+            for y in (en_iyi.get("SonYorumlar") or gorunen_yorumlar.get(en_iyi_key, []))[:MAX_SON_YORUM]:
+                st.write(f"{durum_metni_sadelestir(y.get('durum', ''))}: {str(y.get('yorum', ''))[:100]}")
 
-        st.markdown('<div class="sb-action-caption">Hızlı işlemler</div>', unsafe_allow_html=True)
-        a1, a2, a3 = st.columns([1.45, 1.0, 1.15])
-        with a1:
-            with st.popover("Durum bildir"):
-                if "auth_token" not in st.session_state: st.warning("Giriş yapın.")
-                else:
-                    b1, b2, b3 = st.columns(3)
-                    if b1.button("Uygun", key=f"btn_ok_{ist_key}"):
-                        ok, msg = yorum_gonder(ist_id, "Uygun", "Uygun", {})
-                        st.success(msg) if ok else st.error(msg)
-                    if b2.button("Sorun", key=f"btn_fail_{ist_key}"):
-                        ok, msg = yorum_gonder(ist_id, "Sorun var", "Sorun var", {})
-                        st.success(msg) if ok else st.error(msg)
-                    if b3.button("Sıra", key=f"btn_queue_{ist_key}"):
-                        ok, msg = yorum_gonder(ist_id, "Sıra var", "Sıra var", {})
-                        st.success(msg) if ok else st.error(msg)
-        with a2:
-            is_fav = ist_key in st.session_state["favoriler"]
-            if st.button("Kayıtlı" if is_fav else "Kaydet", key=f"fav_{ist_key}"):
-                favori_guncelle(ist_key, not is_fav)
-                st.rerun()
-        with a3:
-            yakin_yerler_acik = st.button("Yakın yerler", key=f"btn_cevre_{ist_key}")
+    alternatifler = uygun_istasyonlar[1:]
+    if alternatifler:
+        with st.expander("Diğer seçenekler", expanded=False):
+            for sira, ist in enumerate(alternatifler, start=1):
+                ist_id = istasyon_id_getir(ist)
+                ist_key = str(ist.get("_station_key") or clean_id_uret(ist_id))
+                g_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={ist['enlem']},{ist['boylam']}&travelmode=driving"
+                istasyon_karti_ciz(ist, sira, g_link)
 
-        if yakin_yerler_acik:
-            yerler = yakin_cevre_getir(ist["enlem"], ist["boylam"], ayar_yaricap)
-            if yerler:
-                yer_html = "".join(
-                    f'<div class="sb-nearby-item"><span>{guvenli_html(y.get("isim"), 80)}</span><strong>{int(y.get("metre", 0))}m</strong></div>'
-                    for y in yerler
-                )
-                st.markdown(f'<div class="sb-nearby-list">{yer_html}</div>', unsafe_allow_html=True)
-            else:
-                st.info("Yakında gösterilecek yer bulunamadı.")
+                if ist.get("SonYorumlar") or gorunen_yorumlar.get(ist_key):
+                    with st.expander("Son bildirimler", expanded=False):
+                        for y in (ist.get("SonYorumlar") or gorunen_yorumlar.get(ist_key, []))[:MAX_SON_YORUM]:
+                            st.write(f"{durum_metni_sadelestir(y.get('durum', ''))}: {str(y.get('yorum', ''))[:100]}")
+
+                istasyon_aksiyonlari_ciz(ist, ist_id, ist_key, ayar_yaricap)
+
+    with st.expander("Öneriyi kaydet veya bildir", expanded=False):
+        ist_id = istasyon_id_getir(en_iyi)
+        istasyon_aksiyonlari_ciz(en_iyi, ist_id, en_iyi_key, ayar_yaricap)
+
 else:
     st.markdown(
         """
         <div class="sb-empty-state">
             <strong>Menzil içinde uygun istasyon bulamadık.</strong>
-            <span>Güvenlik payını azaltmayı, soket/güç filtresini gevşetmeyi veya arama metnini temizlemeyi deneyin.</span>
+            <span>Gelişmiş ayarlardan menzil filtresini gevşetmeyi veya arama metnini temizlemeyi deneyin.</span>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+hesap_paneli_ciz()
