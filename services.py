@@ -62,29 +62,25 @@ def istasyonlari_yukle() -> List[Dict[str, Any]]:
     try:
         res = get_session().get(f"{FIREBASE_DB_URL}istasyonlar.json", timeout=3.0)
         if res.status_code == 200 and res.json():
-            ham_liste = list(res.json().values()) if isinstance(res.json(), dict) else res.json()
+            ham_veri = res.json()
+            ham_liste = list(ham_veri.values()) if isinstance(ham_veri, dict) else ham_veri
             return [x for item in ham_liste if (x := istasyon_normalize_et(item))]
     except Exception as e:
         sentry_sdk.capture_exception(e)
+
     try:
         with open("istasyonlar.json", "r", encoding="utf-8") as f:
-            ham_liste = list(json.load(f).values()) if isinstance(json.load(f), dict) else json.load(f)
-            return [x for item in ham_liste if (x := istasyon_normalize_et(item))]
-    except Exception:
-        return []
+            ham_veri = json.load(f)
 
-@st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
-def istasyon_yorumlari_getir(istasyon_id: str, limit: int = MAX_SON_YORUM) -> List[Dict[str, Any]]:
-    clean_id = clean_id_uret(istasyon_id)
-    try:
-        res = get_session().get(f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json", timeout=FIREBASE_TIMEOUT_S)
-        if res.status_code == 200 and res.json():
-            yorumlar = [y for y in res.json().values() if isinstance(y, dict)]
-            return sorted(yorumlar, key=lambda x: yorum_tarihi_parse(x.get("tarih", "")), reverse=True)[:limit]
+        ham_liste = list(ham_veri.values()) if isinstance(ham_veri, dict) else ham_veri
+        if not isinstance(ham_liste, list):
+            return []
+
+        return [x for item in ham_liste if (x := istasyon_normalize_et(item))]
     except Exception as e:
         sentry_sdk.capture_exception(e)
-    return []
-
+        return []
+        
 @st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
 def durum_ozetleri_getir() -> Dict[str, Dict[str, Any]]:
     try:
