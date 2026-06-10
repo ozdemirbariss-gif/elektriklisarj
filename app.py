@@ -1,7 +1,7 @@
 import streamlit as st
 import hashlib
 from datetime import datetime
-from typing import Dict, Tuple
+from typing import Any, Dict, List, Tuple
 from streamlit_js_eval import get_geolocation
 
 from config import (
@@ -19,6 +19,213 @@ from services import (
     istasyonlari_yukle, durum_ozetleri_getir, gorunen_yorumlari_getir, 
     favorileri_getir, favori_guncelle, yorum_gonder, yakin_cevre_getir
 )
+
+
+def guvenli_html(deger: Any, max_len: int = 140) -> str:
+    return guvenli_metin(deger, max_len)
+
+
+def kisa_deger(deger: Any, varsayilan: str = "Bilinmiyor", max_len: int = 80) -> str:
+    text = str(deger or "").strip() or varsayilan
+    return guvenli_html(text, max_len)
+
+
+def kaynak_sayisi_getir(istasyon: Dict[str, Any]) -> int:
+    kaynaklar = istasyon.get("kaynaklar")
+    if isinstance(kaynaklar, list):
+        return len({str(k).strip() for k in kaynaklar if str(k).strip()})
+    return 1 if istasyon.get("kaynak") else 0
+
+
+def fiyat_skoru_getir(istasyon: Dict[str, Any]) -> int:
+    fiyat = float(istasyon.get("_fiyat_sayi", 9999.0))
+    if fiyat >= 9999:
+        return 4
+    if fiyat <= 8:
+        return 9
+    if fiyat <= 12:
+        return 7
+    if fiyat <= 18:
+        return 5
+    return 3
+
+
+def hiz_skoru_getir(istasyon: Dict[str, Any]) -> int:
+    hiz = float(istasyon.get("_hiz_sayi", 0.0))
+    if hiz >= 150:
+        return 18
+    if hiz >= 50:
+        return 14
+    if hiz >= 22:
+        return 10
+    if hiz >= 7:
+        return 7
+    return 4
+
+
+def mesafe_skoru_getir(istasyon: Dict[str, Any]) -> int:
+    mesafe = float(istasyon.get("Mesafe", 999.0))
+    if mesafe <= 2:
+        return 22
+    if mesafe <= 5:
+        return 20
+    if mesafe <= 10:
+        return 16
+    if mesafe <= 20:
+        return 11
+    return max(4, int(12 - min(mesafe, 60) / 7))
+
+
+def varis_sarji_skoru_getir(istasyon: Dict[str, Any]) -> int:
+    varis = float(istasyon.get("VarisSarjYuzdesi", 0.0))
+    if varis >= 25:
+        return 13
+    if varis >= 15:
+        return 10
+    if varis >= 8:
+        return 6
+    return 2
+
+
+def durum_skoru_getir(istasyon: Dict[str, Any]) -> int:
+    durum = str(istasyon.get("ArizaDurumu", "belirsiz"))
+    if durum == "riskli":
+        return 0
+    if durum == "aktif":
+        return 14
+    return 8
+
+
+def veri_skoru_getir(istasyon: Dict[str, Any]) -> int:
+    guven = float(istasyon.get("guven_skoru", 0.62) or 0.62)
+    kaynak_bonus = min(6, max(0, kaynak_sayisi_getir(istasyon) - 1) * 3)
+    return min(15, int(round(guven * 9)) + kaynak_bonus)
+
+
+def istasyon_skoru_hesapla(istasyon: Dict[str, Any]) -> int:
+    skor = (
+        mesafe_skoru_getir(istasyon)
+        + hiz_skoru_getir(istasyon)
+        + varis_sarji_skoru_getir(istasyon)
+        + durum_skoru_getir(istasyon)
+        + fiyat_skoru_getir(istasyon)
+        + veri_skoru_getir(istasyon)
+    )
+    return max(1, min(100, int(round(skor))))
+
+
+def istasyon_rozetleri_getir(istasyon: Dict[str, Any]) -> List[Tuple[str, str]]:
+    rozetler: List[Tuple[str, str]] = []
+    durum = str(istasyon.get("ArizaDurumu", "belirsiz"))
+    hiz = float(istasyon.get("_hiz_sayi", 0.0))
+    kaynak_sayisi = kaynak_sayisi_getir(istasyon)
+    guven = float(istasyon.get("guven_skoru", 0.0) or 0.0)
+
+    if durum == "riskli":
+        rozetler.append(("Risk bildirildi", "sb-chip-risk"))
+    elif durum == "aktif":
+        rozetler.append(("Son bildirim olumlu", "sb-chip-good"))
+    else:
+        rozetler.append(("Canlı veri yok", "sb-chip-warn"))
+
+    if float(istasyon.get("VarisSarjYuzdesi", 0.0)) >= 15:
+        rozetler.append(("Varış güvenli", "sb-chip-good"))
+    else:
+        rozetler.append(("Varış düşük", "sb-chip-warn"))
+
+    if hiz >= 150:
+        rozetler.append(("Hızlı DC", "sb-chip-info"))
+    elif hiz >= 50:
+        rozetler.append(("DC", "sb-chip-info"))
+
+    if kaynak_sayisi > 1:
+        rozetler.append((f"{kaynak_sayisi} kaynak doğruladı", "sb-chip-good"))
+    elif guven >= 0.8:
+        rozetler.append(("Yüksek veri güveni", "sb-chip-good"))
+
+    return rozetler[:5]
+
+
+def rozet_html(rozetler: List[Tuple[str, str]]) -> str:
+    return "".join(
+        f'<span class="sb-chip {css_class}">{guvenli_html(metin, 40)}</span>'
+        for metin, css_class in rozetler
+    )
+
+
+def ozet_paneli_ciz(guvenli_menzil: float, sarj_yuzdesi: int, istasyon_sayisi: int) -> None:
+    st.markdown(
+        f"""
+        <div class="sb-summary-grid">
+            <div class="sb-summary-item">
+                <div class="sb-kicker">Güvenli menzil</div>
+                <div class="sb-summary-value">{guvenli_menzil:.0f} km</div>
+                <div class="sb-summary-sub">Filtre hesabı</div>
+            </div>
+            <div class="sb-summary-item">
+                <div class="sb-kicker">Şarj durumu</div>
+                <div class="sb-summary-value">%{sarj_yuzdesi}</div>
+                <div class="sb-summary-sub">Mevcut batarya</div>
+            </div>
+            <div class="sb-summary-item">
+                <div class="sb-kicker">Veri havuzu</div>
+                <div class="sb-summary-value">{istasyon_sayisi}</div>
+                <div class="sb-summary-sub">Normalize kayıt</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def en_iyi_secim_ciz(istasyon: Dict[str, Any]) -> None:
+    st.markdown(
+        f"""
+        <div class="sb-best-card">
+            <div class="sb-best-top">
+                <div>
+                    <div class="sb-kicker">En iyi seçenek</div>
+                    <div class="sb-best-title">{kisa_deger(istasyon.get("isim"), max_len=96)}</div>
+                </div>
+                <div class="sb-score"><strong>{int(istasyon.get("Skor", 0))}</strong><span>PUAN</span></div>
+            </div>
+            <div class="sb-best-grid">
+                <div class="sb-mini-stat"><div class="sb-mini-label">Mesafe</div><div class="sb-mini-value">{float(istasyon.get("Mesafe", 0.0)):.1f} km</div></div>
+                <div class="sb-mini-stat"><div class="sb-mini-label">Süre</div><div class="sb-mini-value">{int(istasyon.get("TahminiSureDk", 0))} dk</div></div>
+                <div class="sb-mini-stat"><div class="sb-mini-label">Varış</div><div class="sb-mini-value">%{float(istasyon.get("VarisSarjYuzdesi", 0.0)):.0f}</div></div>
+            </div>
+            <div class="sb-chip-row">{rozet_html(istasyon.get("Rozetler", []))}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def istasyon_karti_ciz(istasyon: Dict[str, Any], sira: int) -> None:
+    st.markdown(
+        f"""
+        <div class="sb-station-card">
+            <div class="sb-station-top">
+                <div>
+                    <div class="sb-kicker">#{sira + 1} seçenek</div>
+                    <div class="sb-station-title">{kisa_deger(istasyon.get("isim"), max_len=110)}</div>
+                </div>
+                <div class="sb-score"><strong>{int(istasyon.get("Skor", 0))}</strong><span>PUAN</span></div>
+            </div>
+            <div class="sb-station-grid">
+                <div class="sb-mini-stat"><div class="sb-mini-label">Mesafe</div><div class="sb-mini-value">{float(istasyon.get("Mesafe", 0.0)):.1f} km</div></div>
+                <div class="sb-mini-stat"><div class="sb-mini-label">Güç</div><div class="sb-mini-value">{kisa_deger(istasyon.get("hiz"), max_len=36)}</div></div>
+                <div class="sb-mini-stat"><div class="sb-mini-label">Soket</div><div class="sb-mini-value">{kisa_deger(istasyon.get("soket"), max_len=42)}</div></div>
+                <div class="sb-mini-stat"><div class="sb-mini-label">Operatör</div><div class="sb-mini-value">{kisa_deger(istasyon.get("operator"), max_len=42)}</div></div>
+                <div class="sb-mini-stat"><div class="sb-mini-label">Varış şarjı</div><div class="sb-mini-value">%{float(istasyon.get("VarisSarjYuzdesi", 0.0)):.0f}</div></div>
+                <div class="sb-mini-stat"><div class="sb-mini-label">Fiyat</div><div class="sb-mini-value">{kisa_deger(istasyon.get("fiyat"), max_len=42)}</div></div>
+            </div>
+            <div class="sb-chip-row">{rozet_html(istasyon.get("Rozetler", []))}</div>
+            <div class="sb-address">{kisa_deger(istasyon.get("adres"), max_len=180)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # 1. Başlangıç Ayarları
 st.set_page_config(page_title="ŞarjBul", layout="centered", initial_sidebar_state="collapsed")
@@ -74,7 +281,7 @@ operator_secenekleri = sorted({str(ist.get("operator", "Bilinmiyor")) for ist in
 with st.expander("Filtreler ve görünüm", expanded=False):
     operator_filtreleri = st.multiselect("Operatör", operator_secenekleri)
     sadece_24_saat = st.checkbox("Sadece 24 saat açık")
-    siralama_modu = st.selectbox("Sıralama", ["Mesafe", "Fiyat", "Hız"])
+    siralama_modu = st.selectbox("Sıralama", ["Öneri", "Mesafe", "Fiyat", "Hız"])
     gorunum_modu = st.radio("Görünüm", ["Liste", "Harita + Liste"], horizontal=True)
 
 # 4. Konum Tespiti
@@ -111,6 +318,7 @@ with st.expander("Araç ve menzil", expanded=False):
 
 guvenli_menzil = ((batarya * (sarj_yuzdesi / 100.0) / tuketim) * 100.0) * (1 - guvenlik_marji / 100.0)
 arama_metni = st.text_input("İstasyon ara...")
+ozet_paneli_ciz(guvenli_menzil, sarj_yuzdesi, len(istasyonlar_verisi))
 
 # 6. Veri İşleme
 durum_ozetleri = durum_ozetleri_getir()
@@ -122,6 +330,7 @@ for ist in istasyonlar_verisi:
     if soket_filtreleri and not any(sf.upper() in str(ist.get("_soket_upper")).upper() for sf in soket_filtreleri): continue
     if hiz_filtresi != "Tümü" and float(ist.get("_hiz_sayi", 0.0)) < HIZ_ESIK_MAP.get(hiz_filtresi, 0.0): continue
     if operator_filtreleri and str(ist.get("operator")) not in operator_filtreleri: continue
+    if sadece_24_saat and not ist.get("_acik_24_saat"): continue
     if arama_metni and arama_metni_normalize_et(arama_metni) not in str(ist.get("_search_text", "")): continue
     
     ist_key = str(ist.get("_station_key") or clean_id_uret(istasyon_id_getir(ist)))
@@ -129,9 +338,20 @@ for ist in istasyonlar_verisi:
     
     ist_kopya = ist.copy()
     ist_kopya.update({"Mesafe": round(tahmini, 1), "KusUcusuMesafe": round(kus_ucusu, 1), "TahminiSureDk": tahmini_sure_dk(tahmini), "VarisSarjYuzdesi": varis_sarj_yuzdesi_hesapla(sarj_yuzdesi, batarya, tuketim, tahmini), "KalanGuvenliMenzil": max(0.0, guvenli_menzil - tahmini), "ArizaDurumu": ariza.get("durum"), "ArizaEtiketi": ariza.get("etiket"), "SonYorumlar": ariza.get("son_yorumlar", [])})
+    ist_kopya["Skor"] = istasyon_skoru_hesapla(ist_kopya)
+    ist_kopya["Rozetler"] = istasyon_rozetleri_getir(ist_kopya)
     uygun_istasyonlar.append(ist_kopya)
 
-def ist_siralama(i: Dict) -> Tuple: return (1 if i.get("ArizaDurumu") == "riskli" else 0, float(i.get("_fiyat_sayi", 9999.0)) if siralama_modu == "Fiyat" else -float(i.get("_hiz_sayi", 0.0)) if siralama_modu == "Hız" else float(i["Mesafe"]))
+def ist_siralama(i: Dict) -> Tuple:
+    risk_sirasi = 1 if i.get("ArizaDurumu") == "riskli" else 0
+    if siralama_modu == "Öneri":
+        return (risk_sirasi, -int(i.get("Skor", 0)), float(i["Mesafe"]))
+    if siralama_modu == "Fiyat":
+        return (risk_sirasi, float(i.get("_fiyat_sayi", 9999.0)), float(i["Mesafe"]))
+    if siralama_modu == "Hız":
+        return (risk_sirasi, -float(i.get("_hiz_sayi", 0.0)), float(i["Mesafe"]))
+    return (risk_sirasi, float(i["Mesafe"]))
+
 uygun_istasyonlar = sorted(uygun_istasyonlar, key=ist_siralama)[:min(sonuc_sayisi, MAX_EKRAN_KART_SAYISI)]
 
 # 7. Favoriler
@@ -141,27 +361,18 @@ if "auth_token" in st.session_state: st.session_state["favoriler"] = set(favoril
 # 8. Sonuç Kartları Çizimi
 if uygun_istasyonlar:
     gorunen_yorumlar = gorunen_yorumlari_getir(tuple(str(i.get("_station_key") or clean_id_uret(istasyon_id_getir(i))) for i in uygun_istasyonlar))
+    en_iyi = max(uygun_istasyonlar, key=lambda x: int(x.get("Skor", 0)))
+    en_iyi_secim_ciz(en_iyi)
+
     if gorunum_modu == "Harita + Liste": st.map({"lat": [i["enlem"] for i in uygun_istasyonlar], "lon": [i["boylam"] for i in uygun_istasyonlar]})
     
     for sira, ist in enumerate(uygun_istasyonlar):
         ist_id = istasyon_id_getir(ist)
         ist_key = str(ist.get("_station_key") or clean_id_uret(ist_id))
-        durum = ist.get("ArizaDurumu", "belirsiz")
-        
-        with st.container(border=True):
-            if durum == "riskli": st.error(ist.get("ArizaEtiketi"))
-            elif durum == "aktif": st.success(ist.get("ArizaEtiketi"))
-            else: st.info(ist.get("ArizaEtiketi"))
-            
-            st.subheader(f"{ist['Mesafe']} km")
-            st.markdown(f"**{ist['isim']}**")
-            c1, c2 = st.columns(2)
-            c1.write(f"Güç: {ist.get('hiz')}\nSoket: {ist.get('soket')}")
-            c2.write(f"Operatör: {ist.get('operator')}\nFiyat: {ist.get('fiyat')}")
-            st.caption(ist.get("adres"))
+        istasyon_karti_ciz(ist, sira)
 
-            if ist.get("SonYorumlar") or gorunen_yorumlar.get(ist_key):
-                st.divider()
+        if ist.get("SonYorumlar") or gorunen_yorumlar.get(ist_key):
+            with st.expander("Son bildirimler", expanded=False):
                 for y in (ist.get("SonYorumlar") or gorunen_yorumlar.get(ist_key, []))[:MAX_SON_YORUM]:
                     st.write(f"{durum_metni_sadelestir(y.get('durum', ''))}: {str(y.get('yorum', ''))[:100]}")
 
@@ -194,4 +405,13 @@ if uygun_istasyonlar:
             yerler = yakin_cevre_getir(ist["enlem"], ist["boylam"], ayar_yaricap)
             if yerler:
                 for y in yerler: st.markdown(f"{y['isim']} · **{y['metre']}m**")
-else: st.warning("Menzilinizde uygun istasyon bulunamadı.")
+else:
+    st.markdown(
+        """
+        <div class="sb-empty-state">
+            <strong>Menzil içinde uygun istasyon bulamadık.</strong>
+            <span>Güvenlik payını azaltmayı, soket/güç filtresini gevşetmeyi veya arama metnini temizlemeyi deneyin.</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
