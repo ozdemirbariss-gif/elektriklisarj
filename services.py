@@ -101,7 +101,7 @@ def istasyon_yorumlari_getir(istasyon_id: str, limit: int = MAX_SON_YORUM) -> Li
 
     return []
     
-    @st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
+@st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
 def durum_ozetleri_getir() -> Dict[str, Dict[str, Any]]:
     try:
         res = get_session().get(f"{FIREBASE_DB_URL}station_status.json", timeout=FIREBASE_TIMEOUT_S)
