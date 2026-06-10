@@ -139,6 +139,15 @@ def load_css():
                 margin: 0.25rem 0 0.15rem !important;
             }
 
+            .sb-hero-copy {
+                color: var(--sb-text-soft);
+                font-size: 18px;
+                font-weight: 620;
+                line-height: 1.32;
+                margin: 0 0 0.95rem;
+                max-width: 420px;
+            }
+
             h2, h3 {
                 font-size: 22px !important;
             }
@@ -253,6 +262,34 @@ def load_css():
                 grid-template-columns: repeat(3, minmax(0, 1fr));
                 gap: 0.55rem;
                 margin: 0.85rem 0 0.7rem;
+            }
+
+            .sb-drive-strip {
+                align-items: center;
+                background: rgba(23, 26, 24, 0.68);
+                border: 1px solid rgba(226, 232, 220, 0.10);
+                border-radius: 8px;
+                display: flex;
+                gap: 0.75rem;
+                justify-content: space-between;
+                margin: 0.72rem 0 0.7rem;
+                min-height: 46px;
+                padding: 0.65rem 0.72rem;
+            }
+
+            .sb-drive-strip span {
+                color: var(--sb-text-muted) !important;
+                font-size: 12px;
+                font-weight: 720;
+                overflow-wrap: anywhere;
+            }
+
+            .sb-drive-strip strong {
+                color: var(--sb-text) !important;
+                flex: 0 0 auto;
+                font-size: 13px;
+                font-weight: 780;
+                text-align: right;
             }
 
             .sb-summary-item,
@@ -501,6 +538,16 @@ def load_css():
                 width: 100%;
             }
 
+            .sb-route-primary {
+                margin-top: 1rem;
+                min-height: 62px;
+                padding: 0.78rem 0.88rem;
+            }
+
+            .sb-route-primary .sb-route-main {
+                font-size: 16px;
+            }
+
             .sb-route-button:hover {
                 border-color: rgba(255, 255, 255, 0.88);
                 box-shadow:
@@ -571,6 +618,16 @@ def load_css():
                 }
 
                 .sb-route-sub {
+                    text-align: left;
+                }
+
+                .sb-drive-strip {
+                    align-items: flex-start;
+                    flex-direction: column;
+                    gap: 0.22rem;
+                }
+
+                .sb-drive-strip strong {
                     text-align: left;
                 }
             }
