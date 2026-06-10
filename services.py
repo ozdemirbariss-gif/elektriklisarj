@@ -80,8 +80,28 @@ def istasyonlari_yukle() -> List[Dict[str, Any]]:
     except Exception as e:
         sentry_sdk.capture_exception(e)
         return []
-        
+
 @st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
+def istasyon_yorumlari_getir(istasyon_id: str, limit: int = MAX_SON_YORUM) -> List[Dict[str, Any]]:
+    clean_id = clean_id_uret(istasyon_id)
+    try:
+        res = get_session().get(
+            f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json",
+            timeout=FIREBASE_TIMEOUT_S,
+        )
+        if res.status_code == 200 and res.json():
+            yorumlar = [y for y in res.json().values() if isinstance(y, dict)]
+            return sorted(
+                yorumlar,
+                key=lambda x: yorum_tarihi_parse(x.get("tarih", "")),
+                reverse=True,
+            )[:limit]
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
+
+    return []
+    
+    @st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
 def durum_ozetleri_getir() -> Dict[str, Dict[str, Any]]:
     try:
         res = get_session().get(f"{FIREBASE_DB_URL}station_status.json", timeout=FIREBASE_TIMEOUT_S)
