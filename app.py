@@ -1,6 +1,7 @@
 import streamlit as st
 import hashlib
 from datetime import datetime
+from typing import Dict, Tuple
 from streamlit_js_eval import get_geolocation
 
 from config import (
