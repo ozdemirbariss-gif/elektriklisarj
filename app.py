@@ -381,8 +381,8 @@ if uygun_istasyonlar:
                 for y in (ist.get("SonYorumlar") or gorunen_yorumlar.get(ist_key, []))[:MAX_SON_YORUM]:
                     st.write(f"{durum_metni_sadelestir(y.get('durum', ''))}: {str(y.get('yorum', ''))[:100]}")
 
-        # Aksiyon Butonları (Durum Bildir & Kaydet)
-        a1, a2 = st.columns([3, 1])
+        st.markdown('<div class="sb-action-caption">Hızlı işlemler</div>', unsafe_allow_html=True)
+        a1, a2, a3 = st.columns([1.45, 1.0, 1.15])
         with a1:
             with st.popover("Durum bildir"):
                 if "auth_token" not in st.session_state: st.warning("Giriş yapın.")
@@ -402,11 +402,19 @@ if uygun_istasyonlar:
             if st.button("Kayıtlı" if is_fav else "Kaydet", key=f"fav_{ist_key}"):
                 favori_guncelle(ist_key, not is_fav)
                 st.rerun()
+        with a3:
+            yakin_yerler_acik = st.button("Yakın yerler", key=f"btn_cevre_{ist_key}")
 
-        if st.button("Yakın yerler", key=f"btn_cevre_{ist_key}"):
+        if yakin_yerler_acik:
             yerler = yakin_cevre_getir(ist["enlem"], ist["boylam"], ayar_yaricap)
             if yerler:
-                for y in yerler: st.markdown(f"{y['isim']} · **{y['metre']}m**")
+                yer_html = "".join(
+                    f'<div class="sb-nearby-item"><span>{guvenli_html(y.get("isim"), 80)}</span><strong>{int(y.get("metre", 0))}m</strong></div>'
+                    for y in yerler
+                )
+                st.markdown(f'<div class="sb-nearby-list">{yer_html}</div>', unsafe_allow_html=True)
+            else:
+                st.info("Yakında gösterilecek yer bulunamadı.")
 else:
     st.markdown(
         """
