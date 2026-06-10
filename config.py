@@ -32,8 +32,8 @@ try:
 except (KeyError, FileNotFoundError):
     FIREBASE_DB_URL = ""
     FIREBASE_API_KEY = ""
-    st.error("Firebase bağlantı bilgileri (db_url ve api_key) bulunamadı.")
-    st.stop()
+
+FIREBASE_ENABLED = bool(FIREBASE_DB_URL and FIREBASE_API_KEY)
 
 # ==========================================
 # 📐 UYGULAMA SABİTLERİ

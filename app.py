@@ -7,7 +7,7 @@ from streamlit_js_eval import get_geolocation
 from config import (
     sentry_init, load_css, logger, MAX_ISTASYON_SAYISI, MAX_EKRAN_KART_SAYISI,
     ARAC_KATALOGU, YOL_UZAMA_KATSAYISI, HIZ_ESIK_MAP, KONUM_DOGRULAMA_ESIGI_KM,
-    MAX_SON_YORUM, MAX_YORUM_KARAKTER
+    MAX_SON_YORUM, MAX_YORUM_KARAKTER, FIREBASE_ENABLED
 )
 from utils import (
     guvenli_metin, arama_metni_normalize_et, clean_id_uret, istasyon_id_getir,
@@ -287,6 +287,10 @@ def istasyon_aksiyonlari_ciz(ist: Dict[str, Any], ist_id: str, ist_key: str, aya
 
 def hesap_paneli_ciz() -> None:
     with st.expander("Hesap", expanded=False):
+        if not FIREBASE_ENABLED:
+            st.info("Hesap, favori ve bildirim özellikleri için Firebase bağlantısı yapılandırılmalı.")
+            return
+
         if "auth_token" not in st.session_state:
             tab_giris, tab_kayit, tab_sifre = st.tabs(["Giriş", "Kayıt", "Şifre"])
             with tab_giris:

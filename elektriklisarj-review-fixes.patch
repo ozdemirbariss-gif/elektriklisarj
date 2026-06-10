@@ -1,0 +1,368 @@
+--- a/app.py
++++ b/app.py
+@@ -7,7 +7,7 @@
+ from config import (
+     sentry_init, load_css, logger, MAX_ISTASYON_SAYISI, MAX_EKRAN_KART_SAYISI,
+     ARAC_KATALOGU, YOL_UZAMA_KATSAYISI, HIZ_ESIK_MAP, KONUM_DOGRULAMA_ESIGI_KM,
+-    MAX_SON_YORUM, MAX_YORUM_KARAKTER
++    MAX_SON_YORUM, MAX_YORUM_KARAKTER, FIREBASE_ENABLED
+ )
+ from utils import (
+     guvenli_metin, arama_metni_normalize_et, clean_id_uret, istasyon_id_getir,
+@@ -287,6 +287,10 @@
+ 
+ def hesap_paneli_ciz() -> None:
+     with st.expander("Hesap", expanded=False):
++        if not FIREBASE_ENABLED:
++            st.info("Hesap, favori ve bildirim özellikleri için Firebase bağlantısı yapılandırılmalı.")
++            return
++
+         if "auth_token" not in st.session_state:
+             tab_giris, tab_kayit, tab_sifre = st.tabs(["Giriş", "Kayıt", "Şifre"])
+             with tab_giris:
+--- a/config.py
++++ b/config.py
+@@ -32,8 +32,8 @@
+ except (KeyError, FileNotFoundError):
+     FIREBASE_DB_URL = ""
+     FIREBASE_API_KEY = ""
+-    st.error("Firebase bağlantı bilgileri (db_url ve api_key) bulunamadı.")
+-    st.stop()
++
++FIREBASE_ENABLED = bool(FIREBASE_DB_URL and FIREBASE_API_KEY)
+ 
+ # ==========================================
+ # 📐 UYGULAMA SABİTLERİ
+--- a/services.py
++++ b/services.py
+@@ -7,7 +7,7 @@
+ import streamlit as st
+ 
+ from config import (
+-    logger, FIREBASE_DB_URL, FIREBASE_API_KEY, MAX_SON_YORUM, ISTASYON_CACHE_TTL, 
++    logger, FIREBASE_DB_URL, FIREBASE_API_KEY, FIREBASE_ENABLED, MAX_SON_YORUM, ISTASYON_CACHE_TTL, 
+     YORUM_CACHE_TTL, CEVRE_CACHE_TTL, FIREBASE_TIMEOUT_S, OVERPASS_TIMEOUT_S, 
+     OVERPASS_URLS, OVERPASS_HEADERS, KATEGORI_EMOJILER, MAX_YAKIN_YER, MAX_YORUM_KARAKTER, YORUM_BEKLEME_SURESI
+ )
+@@ -24,6 +24,8 @@
+     return session
+ 
+ def firebase_login(email: str, password: str) -> Optional[Dict[str, Any]]:
++    if not FIREBASE_ENABLED:
++        return None
+     url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}"
+     try:
+         r = get_session().post(url, json={"email": email, "password": password, "returnSecureToken": True}, timeout=5)
+@@ -34,6 +36,8 @@
+     return None
+ 
+ def firebase_register(email: str, password: str) -> Optional[Dict[str, Any]]:
++    if not FIREBASE_ENABLED:
++        return None
+     url = f"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={FIREBASE_API_KEY}"
+     try:
+         r = get_session().post(url, json={"email": email, "password": password, "returnSecureToken": True}, timeout=5)
+@@ -44,6 +48,8 @@
+     return None
+ 
+ def firebase_sifre_sifirla(email: str) -> Tuple[bool, str]:
++    if not FIREBASE_ENABLED:
++        return False, "Firebase bağlantısı yapılandırılmamış."
+     url = f"https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key={FIREBASE_API_KEY}"
+     try:
+         r = get_session().post(url, json={"requestType": "PASSWORD_RESET", "email": email}, timeout=5)
+@@ -59,14 +65,15 @@
+ 
+ @st.cache_data(ttl=ISTASYON_CACHE_TTL, show_spinner=False)
+ def istasyonlari_yukle() -> List[Dict[str, Any]]:
+-    try:
+-        res = get_session().get(f"{FIREBASE_DB_URL}istasyonlar.json", timeout=3.0)
+-        if res.status_code == 200 and res.json():
+-            ham_veri = res.json()
+-            ham_liste = list(ham_veri.values()) if isinstance(ham_veri, dict) else ham_veri
+-            return [x for item in ham_liste if (x := istasyon_normalize_et(item))]
+-    except Exception as e:
+-        sentry_sdk.capture_exception(e)
++    if FIREBASE_ENABLED:
++        try:
++            res = get_session().get(f"{FIREBASE_DB_URL}istasyonlar.json", timeout=3.0)
++            if res.status_code == 200 and res.json():
++                ham_veri = res.json()
++                ham_liste = list(ham_veri.values()) if isinstance(ham_veri, dict) else ham_veri
++                return [x for item in ham_liste if (x := istasyon_normalize_et(item))]
++        except Exception as e:
++            sentry_sdk.capture_exception(e)
+ 
+     try:
+         with open("istasyonlar.json", "r", encoding="utf-8") as f:
+@@ -83,6 +90,8 @@
+ 
+ @st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
+ def istasyon_yorumlari_getir(istasyon_id: str, limit: int = MAX_SON_YORUM) -> List[Dict[str, Any]]:
++    if not FIREBASE_ENABLED:
++        return []
+     clean_id = clean_id_uret(istasyon_id)
+     try:
+         res = get_session().get(
+@@ -103,6 +112,8 @@
+     
+ @st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
+ def durum_ozetleri_getir() -> Dict[str, Dict[str, Any]]:
++    if not FIREBASE_ENABLED:
++        return {}
+     try:
+         res = get_session().get(f"{FIREBASE_DB_URL}station_status.json", timeout=FIREBASE_TIMEOUT_S)
+         if res.status_code == 200 and res.json():
+@@ -117,7 +128,7 @@
+ 
+ @st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
+ def kullanici_son_yorum_zamani_getir(uid_hash: str, token: str) -> Optional[str]:
+-    if not uid_hash or not token: return None
++    if not FIREBASE_ENABLED or not uid_hash or not token: return None
+     try:
+         res = get_session().get(f"{FIREBASE_DB_URL}kullanici_yorum_meta/{uid_hash}.json", params={"auth": token}, timeout=FIREBASE_TIMEOUT_S)
+         if res.status_code == 200 and isinstance(res.json(), dict):
+@@ -134,12 +145,16 @@
+     return kalan <= 0, max(0, kalan)
+ 
+ def kullanici_yorum_meta_guncelle(uid_hash: str, token: str, tarih: str) -> None:
++    if not FIREBASE_ENABLED:
++        return
+     try:
+         get_session().patch(f"{FIREBASE_DB_URL}kullanici_yorum_meta/{uid_hash}.json", params={"auth": token}, json={"son_yorum_zamani": tarih}, timeout=FIREBASE_TIMEOUT_S)
+         cache_temizle_guvenli(kullanici_son_yorum_zamani_getir, uid_hash, token)
+     except Exception: pass
+ 
+ def istasyon_durum_ozetini_guncelle(clean_id: str, token: str) -> None:
++    if not FIREBASE_ENABLED:
++        return
+     try:
+         res = get_session().get(f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json", params={"auth": token}, timeout=FIREBASE_TIMEOUT_S)
+         if res.status_code == 200 and res.json():
+@@ -152,7 +167,7 @@
+ 
+ @st.cache_data(ttl=ISTASYON_CACHE_TTL, show_spinner=False)
+ def favorileri_getir(uid_hash: str, token: str) -> List[str]:
+-    if not uid_hash or not token: return []
++    if not FIREBASE_ENABLED or not uid_hash or not token: return []
+     try:
+         res = get_session().get(f"{FIREBASE_DB_URL}favoriler/{uid_hash}.json", params={"auth": token}, timeout=FIREBASE_TIMEOUT_S)
+         if res.status_code == 200 and isinstance(res.json(), dict):
+@@ -162,7 +177,7 @@
+ 
+ def favori_guncelle(ist_key: str, favori_mi: bool) -> Tuple[bool, str]:
+     token, uid_hash = st.session_state.get("auth_token"), auth_uid_hash_getir()
+-    if not token or not uid_hash:
++    if not FIREBASE_ENABLED or not token or not uid_hash:
+         st.session_state["favoriler"].add(ist_key) if favori_mi else st.session_state["favoriler"].discard(ist_key)
+         return True, "Oturum için güncellendi."
+     try:
+@@ -175,6 +190,8 @@
+     return False, "Favori güncellenemedi."
+ 
+ def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str, ek_bilgi: Optional[Dict[str, Any]] = None) -> Tuple[bool, str]:
++    if not FIREBASE_ENABLED:
++        return False, "Bildirim için Firebase bağlantısı gerekli."
+     if token_suresi_doldu_mu():
+         oturumu_temizle()
+         return False, "Oturum süresi dolmuş."
+--- a/scraper.py
++++ b/scraper.py
+@@ -1,7 +1,7 @@
+ import argparse
+ import os
+ from pathlib import Path
+-from typing import Callable, Dict, List
++from typing import Callable, Dict, List, Tuple
+ 
+ from scrapers.chargeiq import chargeiq_istasyonlarini_getir
+ from scrapers.common import Istasyon, atomik_json_yaz, duplicate_temizle
+@@ -21,6 +21,36 @@
+     if value is None:
+         return default
+     return value.strip().lower() not in {"0", "false", "hayir", "hayır", "no", "off"}
++
++
++def env_int(name: str, default: int) -> int:
++    try:
++        return int(os.getenv(name, str(default)))
++    except ValueError:
++        return default
++
++
++def veri_kalitesini_dogrula(
++    istasyonlar: List[Istasyon],
++    kaynak_sayilari: Dict[str, int],
++    kaynak_hatalari: List[Tuple[str, str]],
++) -> None:
++    basarili_kaynaklar = [ad for ad, adet in kaynak_sayilari.items() if adet > 0]
++    min_kaynak = env_int("MIN_SCRAPER_SOURCE_COUNT", 1)
++    min_kayit = env_int("MIN_SCRAPER_RECORD_COUNT", 1)
++
++    if env_bool("FAIL_ON_SOURCE_ERROR", False) and kaynak_hatalari:
++        ozet = "; ".join(f"{ad}: {hata}" for ad, hata in kaynak_hatalari)
++        raise RuntimeError(f"Kaynak hatası nedeniyle çıktı yazılmadı: {ozet}")
++
++    if len(basarili_kaynaklar) < min_kaynak:
++        raise RuntimeError(
++            f"Yetersiz kaynak: {len(basarili_kaynaklar)}/{min_kaynak}. "
++            f"Başarılı kaynaklar: {', '.join(basarili_kaynaklar) or 'yok'}"
++        )
++
++    if len(istasyonlar) < min_kayit:
++        raise RuntimeError(f"Yetersiz kayıt: {len(istasyonlar)}/{min_kayit}.")
+ 
+ 
+ def kaynaklari_getir() -> Dict[str, SourceFn]:
+@@ -52,31 +82,36 @@
+ def istasyonlari_kaziyici(kaynak_secimi: str = "", output: str = DEFAULT_OUTPUT) -> None:
+     secili_kaynaklar = kaynak_sec(kaynaklari_getir(), kaynak_secimi)
+     if not secili_kaynaklar:
+-        print("Aktif kaynak bulunamadı. ENABLE_* ayarlarını veya --sources değerini kontrol edin.")
+-        return
++        raise RuntimeError("Aktif kaynak bulunamadı. ENABLE_* ayarlarını veya --sources değerini kontrol edin.")
+ 
+     tum_istasyonlar: List[Istasyon] = []
++    kaynak_sayilari: Dict[str, int] = {}
++    kaynak_hatalari: List[Tuple[str, str]] = []
+ 
+     print("Çok kaynaklı istasyon toplama başladı.")
+     for kaynak_adi, kaynak_fn in secili_kaynaklar.items():
+         try:
+             print(f"{kaynak_adi}: veri alınıyor...")
+             istasyonlar = kaynak_fn()
++            kaynak_sayilari[kaynak_adi] = len(istasyonlar)
+             tum_istasyonlar.extend(istasyonlar)
+             print(f"{kaynak_adi}: {len(istasyonlar)} istasyon alındı.")
+         except Exception as exc:
++            kaynak_sayilari[kaynak_adi] = 0
++            kaynak_hatalari.append((kaynak_adi, str(exc)))
+             print(f"{kaynak_adi}: kaynak atlandı. Hata: {exc}")
+ 
+     if not tum_istasyonlar:
+-        print("Hiç istasyon alınamadı; mevcut çıktı dosyası değiştirilmedi.")
+-        return
++        raise RuntimeError("Hiç istasyon alınamadı; mevcut çıktı dosyası değiştirilmedi.")
+ 
+     mesafe_m = int(os.getenv("DEDUP_DISTANCE_M", "120"))
+     temiz_istasyonlar = duplicate_temizle(tum_istasyonlar, mesafe_m=mesafe_m)
++    veri_kalitesini_dogrula(temiz_istasyonlar, kaynak_sayilari, kaynak_hatalari)
+ 
+     atomik_json_yaz(temiz_istasyonlar, Path(output))
+     print(f"Toplam ham kayıt: {len(tum_istasyonlar)}")
+     print(f"Duplicate sonrası: {len(temiz_istasyonlar)}")
++    print(f"Başarılı kaynaklar: {', '.join(ad for ad, adet in kaynak_sayilari.items() if adet > 0)}")
+     print(f"Çıktı güncellendi: {output}")
+ 
+ 
+--- a/.github/workflows/scrape.yml
++++ b/.github/workflows/scrape.yml
+@@ -2,8 +2,7 @@
+ 
+ on:
+   schedule:
+-    - cron: "0 8 * * *"
+-      timezone: "Europe/Istanbul"
++    - cron: "0 5 * * *"
+   workflow_dispatch:
+ 
+ permissions:
+@@ -12,6 +11,10 @@
+ jobs:
+   scrape:
+     runs-on: ubuntu-latest
++    env:
++      FAIL_ON_SOURCE_ERROR: "1"
++      MIN_SCRAPER_RECORD_COUNT: "1000"
++      MIN_SCRAPER_SOURCE_COUNT: "2"
+ 
+     steps:
+       - name: Repo kodunu indir
+@@ -40,7 +43,7 @@
+           git config user.name "github-actions[bot]"
+           git config user.email "github-actions[bot]@users.noreply.github.com"
+ 
+-          git add .
++          git add istasyonlar.json
+           if git diff --staged --quiet; then
+             echo "Degisiklik yok."
+           else
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1,56 @@
++# SarjBul
++
++SarjBul, elektrikli araclar icin yakin ve mantikli sarj duragini onerir. Streamlit arayuzu konum, menzil, soket, guc, fiyat ve kullanici bildirimlerini birlikte degerlendirir.
++
++## Ozellikler
++
++- Konuma gore yakin sarj istasyonu onerisi
++- Arac batarya/tuketim degerleriyle menzil filtresi
++- Skor, rota, hiz, fiyat, soket ve operator bilgileri
++- Firebase etkinse hesap, favori ve istasyon bildirimi
++- ChargeIQ, OSM, OpenChargeMap ve opsiyonel operator API kaynakli veri toplama
++
++## Kurulum
++
++```bash
++python -m venv .venv
++source .venv/bin/activate
++pip install -r requirements.txt
++streamlit run app.py
++```
++
++Firebase secrets yoksa uygulama lokal `istasyonlar.json` dosyasi ile okunabilir demo modunda acilir. Bu modda hesap, favori ve bildirim ozellikleri kapali kalir.
++
++## Secrets
++
++Firebase ve Sentry kullanmak icin `.streamlit/secrets.toml.example` dosyasini `.streamlit/secrets.toml` olarak kopyalayip kendi degerlerinle doldur.
++
++```toml
++[firebase]
++db_url = "https://PROJECT_ID-default-rtdb.firebaseio.com"
++api_key = "FIREBASE_WEB_API_KEY"
++
++[sentry]
++dsn = ""
++traces_sample_rate = 0.10
++```
++
++## Veri Guncelleme
++
++```bash
++python scraper.py
++```
++
++Kaynaklari sinirlamak icin:
++
++```bash
++python scraper.py --sources chargeiq,osm,openchargemap
++```
++
++Kalite kapilari ortam degiskenleriyle ayarlanabilir:
++
++- `MIN_SCRAPER_SOURCE_COUNT`: Cikti yazmak icin gereken minimum basarili kaynak sayisi.
++- `MIN_SCRAPER_RECORD_COUNT`: Cikti yazmak icin gereken minimum kayit sayisi.
++- `FAIL_ON_SOURCE_ERROR`: `1` ise herhangi bir kaynak hatasi scrape'i basarisiz yapar.
++
++GitHub Actions her gun 08:00 Istanbul saatinde scrape calistirir ve yalnizca `istasyonlar.json` degistiyse commit eder.
+--- /dev/null
++++ b/.streamlit/secrets.toml.example
+@@ -0,0 +1,7 @@
++[firebase]
++db_url = "https://PROJECT_ID-default-rtdb.firebaseio.com"
++api_key = "FIREBASE_WEB_API_KEY"
++
++[sentry]
++dsn = ""
++traces_sample_rate = 0.10
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,7 @@
++.DS_Store
++.env
++.venv/
++__pycache__/
++*.py[cod]
++*.tmp
++.streamlit/secrets.toml
