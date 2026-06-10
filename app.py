@@ -201,7 +201,7 @@ def en_iyi_secim_ciz(istasyon: Dict[str, Any]) -> None:
     )
 
 
-def istasyon_karti_ciz(istasyon: Dict[str, Any], sira: int) -> None:
+def istasyon_karti_ciz(istasyon: Dict[str, Any], sira: int, rota_linki: str) -> None:
     st.markdown(
         f"""
         <div class="sb-station-card">
@@ -222,6 +222,10 @@ def istasyon_karti_ciz(istasyon: Dict[str, Any], sira: int) -> None:
             </div>
             <div class="sb-chip-row">{rozet_html(istasyon.get("Rozetler", []))}</div>
             <div class="sb-address">{kisa_deger(istasyon.get("adres"), max_len=180)}</div>
+            <a class="sb-route-button" href="{guvenli_html(rota_linki, 260)}" target="_blank" rel="noopener noreferrer">
+                <span class="sb-route-main">Rotayı aç</span>
+                <span class="sb-route-sub">Google Maps ile yol tarifi</span>
+            </a>
         </div>
         """,
         unsafe_allow_html=True,
@@ -369,15 +373,13 @@ if uygun_istasyonlar:
     for sira, ist in enumerate(uygun_istasyonlar):
         ist_id = istasyon_id_getir(ist)
         ist_key = str(ist.get("_station_key") or clean_id_uret(ist_id))
-        istasyon_karti_ciz(ist, sira)
+        g_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={ist['enlem']},{ist['boylam']}&travelmode=driving"
+        istasyon_karti_ciz(ist, sira, g_link)
 
         if ist.get("SonYorumlar") or gorunen_yorumlar.get(ist_key):
             with st.expander("Son bildirimler", expanded=False):
                 for y in (ist.get("SonYorumlar") or gorunen_yorumlar.get(ist_key, []))[:MAX_SON_YORUM]:
                     st.write(f"{durum_metni_sadelestir(y.get('durum', ''))}: {str(y.get('yorum', ''))[:100]}")
-
-        g_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={ist['enlem']},{ist['boylam']}&travelmode=driving"
-        st.link_button("Rotayı aç", g_link)
 
         # Aksiyon Butonları (Durum Bildir & Kaydet)
         a1, a2 = st.columns([3, 1])
