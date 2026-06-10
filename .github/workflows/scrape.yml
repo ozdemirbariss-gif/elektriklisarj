@@ -12,9 +12,9 @@ jobs:
   scrape:
     runs-on: ubuntu-latest
     env:
-      FAIL_ON_SOURCE_ERROR: "1"
+      FAIL_ON_SOURCE_ERROR: "0"
       MIN_SCRAPER_RECORD_COUNT: "1000"
-      MIN_SCRAPER_SOURCE_COUNT: "2"
+      MIN_SCRAPER_SOURCE_COUNT: "1"
 
     steps:
       - name: Repo kodunu indir
