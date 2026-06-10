@@ -215,5 +215,234 @@ def load_css():
             hr {
                 border-color: var(--sb-line) !important;
             }
+
+            .sb-summary-grid {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 0.55rem;
+                margin: 0.85rem 0 0.7rem;
+            }
+
+            .sb-summary-item,
+            .sb-best-card,
+            .sb-station-card,
+            .sb-empty-state {
+                background: rgba(23, 26, 24, 0.92);
+                border: 1px solid var(--sb-line);
+                border-radius: 8px;
+                box-shadow: 0 16px 36px rgba(0, 0, 0, 0.16);
+            }
+
+            .sb-summary-item {
+                min-height: 72px;
+                padding: 0.7rem 0.72rem;
+            }
+
+            .sb-kicker {
+                color: var(--sb-text-muted);
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 0 !important;
+                text-transform: uppercase;
+            }
+
+            .sb-summary-value {
+                color: var(--sb-text);
+                font-size: 20px;
+                font-weight: 760;
+                line-height: 1.15;
+                margin-top: 0.22rem;
+            }
+
+            .sb-summary-sub {
+                color: var(--sb-text-muted);
+                font-size: 12px;
+                margin-top: 0.16rem;
+            }
+
+            .sb-best-card {
+                border-color: rgba(183, 240, 208, 0.32);
+                margin: 0.9rem 0 0.9rem;
+                padding: 1rem;
+            }
+
+            .sb-best-top,
+            .sb-station-top {
+                align-items: flex-start;
+                display: flex;
+                gap: 0.8rem;
+                justify-content: space-between;
+            }
+
+            .sb-best-title,
+            .sb-station-title {
+                color: var(--sb-text);
+                font-size: 18px;
+                font-weight: 760;
+                line-height: 1.2;
+                margin-top: 0.15rem;
+                overflow-wrap: anywhere;
+            }
+
+            .sb-best-distance,
+            .sb-station-distance {
+                color: var(--sb-primary);
+                font-size: 28px;
+                font-weight: 820;
+                line-height: 1;
+                white-space: nowrap;
+            }
+
+            .sb-best-grid,
+            .sb-station-grid {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 0.55rem;
+                margin-top: 0.85rem;
+            }
+
+            .sb-mini-stat {
+                background: rgba(30, 34, 31, 0.82);
+                border: 1px solid var(--sb-line);
+                border-radius: 8px;
+                min-height: 58px;
+                padding: 0.55rem 0.62rem;
+            }
+
+            .sb-mini-label {
+                color: var(--sb-text-muted);
+                font-size: 11px;
+                font-weight: 700;
+            }
+
+            .sb-mini-value {
+                color: var(--sb-text);
+                font-size: 14px;
+                font-weight: 720;
+                margin-top: 0.16rem;
+                overflow-wrap: anywhere;
+            }
+
+            .sb-chip-row {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.4rem;
+                margin-top: 0.8rem;
+            }
+
+            .sb-chip {
+                align-items: center;
+                border: 1px solid var(--sb-line-strong);
+                border-radius: 999px;
+                color: var(--sb-text-soft);
+                display: inline-flex;
+                font-size: 12px;
+                font-weight: 680;
+                min-height: 28px;
+                padding: 0.28rem 0.55rem;
+            }
+
+            .sb-chip-good {
+                background: rgba(183, 240, 208, 0.12);
+                border-color: rgba(183, 240, 208, 0.32);
+                color: var(--sb-primary);
+            }
+
+            .sb-chip-warn {
+                background: rgba(216, 180, 106, 0.12);
+                border-color: rgba(216, 180, 106, 0.32);
+                color: var(--sb-warning);
+            }
+
+            .sb-chip-risk {
+                background: rgba(230, 132, 132, 0.12);
+                border-color: rgba(230, 132, 132, 0.32);
+                color: var(--sb-danger);
+            }
+
+            .sb-chip-info {
+                background: rgba(125, 190, 220, 0.12);
+                border-color: rgba(125, 190, 220, 0.32);
+                color: #9ED8F0;
+            }
+
+            .sb-score {
+                align-items: center;
+                background: #EAF6EF;
+                border-radius: 8px;
+                color: #101211;
+                display: flex;
+                flex: 0 0 auto;
+                flex-direction: column;
+                justify-content: center;
+                min-height: 56px;
+                min-width: 64px;
+                padding: 0.38rem 0.5rem;
+            }
+
+            .sb-score strong {
+                color: #101211 !important;
+                font-size: 20px;
+                line-height: 1;
+            }
+
+            .sb-score span {
+                color: rgba(16, 18, 17, 0.72) !important;
+                font-size: 10px;
+                font-weight: 750;
+                margin-top: 0.12rem;
+            }
+
+            .sb-station-card {
+                margin-top: 0.9rem;
+                padding: 0.95rem;
+            }
+
+            .sb-address {
+                color: var(--sb-text-muted);
+                font-size: 13px;
+                line-height: 1.35;
+                margin-top: 0.72rem;
+                overflow-wrap: anywhere;
+            }
+
+            .sb-empty-state {
+                margin-top: 0.9rem;
+                padding: 1rem;
+            }
+
+            .sb-empty-state strong {
+                color: var(--sb-text) !important;
+                display: block;
+                font-size: 18px;
+                margin-bottom: 0.3rem;
+            }
+
+            .sb-empty-state span {
+                color: var(--sb-text-soft) !important;
+                line-height: 1.45;
+            }
+
+            @media (max-width: 420px) {
+                .sb-summary-grid,
+                .sb-best-grid,
+                .sb-station-grid {
+                    grid-template-columns: 1fr;
+                }
+
+                .sb-best-top,
+                .sb-station-top {
+                    gap: 0.65rem;
+                }
+
+                .sb-best-distance,
+                .sb-station-distance {
+                    font-size: 23px;
+                }
+
+                .sb-score {
+                    min-width: 56px;
+                }
+            }
         </style>
     ''', unsafe_allow_html=True)
