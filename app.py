@@ -332,8 +332,19 @@ st.set_page_config(page_title="ŞarjBul", layout="centered", initial_sidebar_sta
 sentry_init()
 load_css()
 
-st.title("ŞarjBul")
-st.markdown('<div class="sb-hero-copy">Bana en mantıklı şarj durağını göster.</div>', unsafe_allow_html=True)
+st.markdown(
+    """
+    <section class="sb-hero-card">
+        <div class="sb-hero-media" aria-label="Gece elektrikli araç şarj istasyonu"></div>
+        <div class="sb-hero-body">
+            <div class="sb-hero-kicker">Yakındaki şarj rotan</div>
+            <h1>ŞarjBul</h1>
+            <p>Bana en mantıklı şarj durağını göster.</p>
+        </div>
+    </section>
+    """,
+    unsafe_allow_html=True,
+)
 
 istasyonlar_verisi = istasyonlari_yukle()
 if not istasyonlar_verisi: st.stop()
