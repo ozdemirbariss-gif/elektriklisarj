@@ -178,7 +178,9 @@ def favorileri_getir(uid_hash: str, token: str) -> List[str]:
         res = get_session().get(f"{FIREBASE_DB_URL}favoriler/{uid_hash}.json", params={"auth": token}, timeout=FIREBASE_TIMEOUT_S)
         if res.status_code == 200 and isinstance(res.json(), dict):
             return [str(k) for k, v in res.json().items() if v]
-    except Exception: pass
+    except Exception as e:
+        logger.warning("İstasyon durum özeti güncellenemedi (%s): %s", clean_id, e)
+        sentry_sdk.capture_exception(e)
     return []
 
 def favori_guncelle(ist_key: str, favori_mi: bool) -> Tuple[bool, str]:
