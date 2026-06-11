@@ -186,6 +186,9 @@ def favori_guncelle(ist_key: str, favori_mi: bool) -> Tuple[bool, str]:
     if not FIREBASE_ENABLED or not token or not uid_hash:
         st.session_state["favoriler"].add(ist_key) if favori_mi else st.session_state["favoriler"].discard(ist_key)
         return True, "Oturum için güncellendi."
+    if token_suresi_doldu_mu():
+        oturumu_temizle()
+        return False, "Oturum süresi dolmuş."
     try:
         url = f"{FIREBASE_DB_URL}favoriler/{uid_hash}/{ist_key}.json"
         res = get_session().put(url, params={"auth": token}, json=True, timeout=FIREBASE_TIMEOUT_S) if favori_mi else get_session().delete(url, params={"auth": token}, timeout=FIREBASE_TIMEOUT_S)
