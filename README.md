@@ -21,6 +21,10 @@ streamlit run app.py
 
 Firebase secrets yoksa uygulama lokal `istasyonlar.json` dosyasi ile okunabilir demo modunda acilir. Bu modda hesap, favori ve bildirim ozellikleri kapali kalir.
 
+## Bagimliliklar
+
+`requirements.txt` yalnizca kodda dogrudan kullanilan paketleri icerir ve Streamlit Cloud build'lerinin tekrarlanabilir olmasi icin exact version pin kullanir. Firebase islemleri REST API uzerinden yapildigi icin `firebase-admin` gerekli degildir.
+
 ## Secrets
 
 Firebase ve Sentry kullanmak icin `.streamlit/secrets.toml.example` dosyasini `.streamlit/secrets.toml` olarak kopyalayip kendi degerlerinle doldur.

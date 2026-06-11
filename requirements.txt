@@ -1,8 +1,4 @@
-streamlit
-pandas
-folium
-streamlit-folium
-requests
-firebase-admin
-streamlit-js-eval
-sentry-sdk
+streamlit==1.58.0
+requests==2.34.2
+streamlit-js-eval==1.0.0
+sentry-sdk==2.62.0
