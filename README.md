@@ -41,6 +41,8 @@ traces_sample_rate = 0.10
 
 ## Veri Guncelleme
 
+`scraper.py` komut satiri entrypoint'idir; GitHub Actions ve manuel calistirma bu dosya uzerinden yapilir. `scrapers/` klasoru kaynak bazli scraper modullerini icerir. `scraper.py`, bu modulleri cagirarak veriyi toplar, duplicate temizligi yapar ve `istasyonlar.json` dosyasini gunceller.
+
 ```bash
 python scraper.py
 ```
