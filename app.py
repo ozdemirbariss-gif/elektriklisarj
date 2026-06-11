@@ -1,6 +1,6 @@
 import streamlit as st
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple
 from streamlit_js_eval import get_geolocation
 
@@ -16,9 +16,10 @@ from utils import (
 )
 from services import (
     firebase_login, firebase_register, firebase_sifre_sifirla, oturumu_temizle,
-    istasyonlari_yukle, durum_ozetleri_getir, gorunen_yorumlari_getir, 
+    istasyonlari_yukle, durum_ozetleri_getir, gorunen_yorumlari_getir, tahmin_yorumlari_getir,
     favorileri_getir, favori_guncelle, yorum_gonder, yakin_cevre_getir
 )
+from predictor import bosluk_tahmini_hesapla, tahmin_rozetleri_getir, tahmin_skoru_getir
 
 
 def guvenli_html(deger: Any, max_len: int = 140) -> str:
@@ -110,6 +111,7 @@ def istasyon_skoru_hesapla(istasyon: Dict[str, Any]) -> int:
         + durum_skoru_getir(istasyon)
         + fiyat_skoru_getir(istasyon)
         + veri_skoru_getir(istasyon)
+        + int(istasyon.get("TahminSkoru", 0) or 0)
     )
     return max(1, min(100, int(round(skor))))
 
@@ -127,6 +129,8 @@ def istasyon_rozetleri_getir(istasyon: Dict[str, Any]) -> List[Tuple[str, str]]:
         rozetler.append(("Son bildirim olumlu", "sb-chip-good"))
     else:
         rozetler.append(("Canlı veri yok", "sb-chip-warn"))
+
+    rozetler.extend(tahmin_rozetleri_getir(istasyon.get("BoslukTahmini")))
 
     if float(istasyon.get("VarisSarjYuzdesi", 0.0)) >= 15:
         rozetler.append(("Varış güvenli", "sb-chip-good"))
@@ -151,6 +155,15 @@ def rozet_html(rozetler: List[Tuple[str, str]]) -> str:
         f'<span class="sb-chip {css_class}">{guvenli_html(metin, 40)}</span>'
         for metin, css_class in rozetler
     )
+
+
+def istasyon_tahminini_guncelle(istasyon: Dict[str, Any], yorumlar: List[Dict[str, Any]]) -> None:
+    hedef_zaman = datetime.now() + timedelta(minutes=int(istasyon.get("TahminiSureDk", 0) or 0))
+    tahmin = bosluk_tahmini_hesapla(yorumlar, hedef_zaman=hedef_zaman)
+    istasyon["BoslukTahmini"] = tahmin
+    istasyon["TahminSkoru"] = tahmin_skoru_getir(tahmin)
+    istasyon["Skor"] = istasyon_skoru_hesapla(istasyon)
+    istasyon["Rozetler"] = istasyon_rozetleri_getir(istasyon)
 
 
 def ozet_paneli_ciz(guvenli_menzil: float, sarj_yuzdesi: int, istasyon_sayisi: int) -> None:
@@ -435,9 +448,23 @@ for ist in istasyonlar_verisi:
     
     ist_key = str(ist.get("_station_key") or clean_id_uret(istasyon_id_getir(ist)))
     ariza = {**durum_ozeti_fallback(), **durum_ozetleri.get(ist_key, {})}
-    
+    tahmini_sure = tahmini_sure_dk(tahmini)
+    hedef_zaman = datetime.now() + timedelta(minutes=tahmini_sure)
+    bosluk_tahmini = bosluk_tahmini_hesapla(ariza.get("son_yorumlar", []), hedef_zaman=hedef_zaman)
+
     ist_kopya = ist.copy()
-    ist_kopya.update({"Mesafe": round(tahmini, 1), "KusUcusuMesafe": round(kus_ucusu, 1), "TahminiSureDk": tahmini_sure_dk(tahmini), "VarisSarjYuzdesi": varis_sarj_yuzdesi_hesapla(sarj_yuzdesi, batarya, tuketim, tahmini), "KalanGuvenliMenzil": max(0.0, guvenli_menzil - tahmini), "ArizaDurumu": ariza.get("durum"), "ArizaEtiketi": ariza.get("etiket"), "SonYorumlar": ariza.get("son_yorumlar", [])})
+    ist_kopya.update({
+        "Mesafe": round(tahmini, 1),
+        "KusUcusuMesafe": round(kus_ucusu, 1),
+        "TahminiSureDk": tahmini_sure,
+        "VarisSarjYuzdesi": varis_sarj_yuzdesi_hesapla(sarj_yuzdesi, batarya, tuketim, tahmini),
+        "KalanGuvenliMenzil": max(0.0, guvenli_menzil - tahmini),
+        "ArizaDurumu": ariza.get("durum"),
+        "ArizaEtiketi": ariza.get("etiket"),
+        "SonYorumlar": ariza.get("son_yorumlar", []),
+        "BoslukTahmini": bosluk_tahmini,
+        "TahminSkoru": tahmin_skoru_getir(bosluk_tahmini),
+    })
     ist_kopya["Skor"] = istasyon_skoru_hesapla(ist_kopya)
     ist_kopya["Rozetler"] = istasyon_rozetleri_getir(ist_kopya)
     uygun_istasyonlar.append(ist_kopya)
@@ -460,7 +487,15 @@ if "auth_token" in st.session_state: st.session_state["favoriler"] = set(favoril
 
 # 8. Sonuç Kartları Çizimi
 if uygun_istasyonlar:
-    gorunen_yorumlar = gorunen_yorumlari_getir(tuple(str(i.get("_station_key") or clean_id_uret(istasyon_id_getir(i))) for i in uygun_istasyonlar))
+    station_keys = tuple(str(i.get("_station_key") or clean_id_uret(istasyon_id_getir(i))) for i in uygun_istasyonlar)
+    gorunen_yorumlar = gorunen_yorumlari_getir(station_keys)
+    tahmin_yorumlari = tahmin_yorumlari_getir(station_keys)
+    for ist in uygun_istasyonlar:
+        ist_key = str(ist.get("_station_key") or clean_id_uret(istasyon_id_getir(ist)))
+        yorum_kaynagi = tahmin_yorumlari.get(ist_key) or gorunen_yorumlar.get(ist_key) or ist.get("SonYorumlar", [])
+        istasyon_tahminini_guncelle(ist, yorum_kaynagi)
+    uygun_istasyonlar = sorted(uygun_istasyonlar, key=ist_siralama)
+
     en_iyi = uygun_istasyonlar[0]
     en_iyi_key = str(en_iyi.get("_station_key") or clean_id_uret(istasyon_id_getir(en_iyi)))
     en_iyi_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={en_iyi['enlem']},{en_iyi['boylam']}&travelmode=driving"
