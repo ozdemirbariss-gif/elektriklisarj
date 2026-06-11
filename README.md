@@ -54,3 +54,9 @@ Kalite kapilari ortam degiskenleriyle ayarlanabilir:
 - `FAIL_ON_SOURCE_ERROR`: `1` ise herhangi bir kaynak hatasi scrape'i basarisiz yapar.
 
 GitHub Actions her gun 08:00 Istanbul saatinde scrape calistirir ve yalnizca `istasyonlar.json` degistiyse commit eder.
+
+## Akilli Tahmin Motoru
+
+`predictor.py`, Firebase yorum gecmisinden hafif bir istatistiksel tahmin uretir. Model; son bildirimleri, hedef varis saatine benzeyen gun/saat araliklarini ve istasyonun genel gecmisini agirliklandirir.
+
+Uygulama yeni bir ekran acmaz. Tahmin yeterli guvene ulasirsa mevcut kart rozetlerine "Bosluk ihtimali yuksek/orta" veya "Yogun olabilir" gibi kisa bir sinyal eklenir. Veri yetersizse rozet gosterilmez ve skor etkilenmez.

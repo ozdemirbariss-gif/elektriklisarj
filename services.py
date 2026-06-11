@@ -127,6 +127,12 @@ def gorunen_yorumlari_getir(station_keys: Tuple[str, ...]) -> Dict[str, List[Dic
     return {key: istasyon_yorumlari_getir(key, MAX_SON_YORUM) for key in station_keys}
 
 @st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
+def tahmin_yorumlari_getir(station_keys: Tuple[str, ...], limit: int = 120) -> Dict[str, List[Dict[str, Any]]]:
+    if not FIREBASE_ENABLED:
+        return {}
+    return {key: istasyon_yorumlari_getir(key, limit) for key in station_keys}
+
+@st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
 def kullanici_son_yorum_zamani_getir(uid_hash: str, token: str) -> Optional[str]:
     if not FIREBASE_ENABLED or not uid_hash or not token: return None
     try:
