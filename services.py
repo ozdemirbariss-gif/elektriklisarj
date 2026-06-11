@@ -1,4 +1,6 @@
 import requests
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 import json
 import asyncio
 import sentry_sdk
@@ -17,11 +19,41 @@ from utils import (
     utc_simdi, utc_isoformat
 )
 
-@st.cache_resource
-def get_session() -> requests.Session:
+RETRY_STATUS_CODES = (429, 500, 502, 503, 504)
+SAFE_RETRY_METHODS = frozenset(("GET", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"))
+OVERPASS_RETRY_METHODS = frozenset(("POST",))
+
+
+def _retry_adapter(allowed_methods: frozenset[str]) -> HTTPAdapter:
+    retry = Retry(
+        total=2,
+        connect=2,
+        read=2,
+        status=2,
+        backoff_factor=0.35,
+        status_forcelist=RETRY_STATUS_CODES,
+        allowed_methods=allowed_methods,
+        respect_retry_after_header=True,
+        raise_on_status=False,
+    )
+    return HTTPAdapter(max_retries=retry)
+
+
+def _retry_session(allowed_methods: frozenset[str]) -> requests.Session:
     session = requests.Session()
     session.headers.update({"User-Agent": "SarjBul/2.1", "Accept": "application/json"})
+    session.mount("https://", _retry_adapter(allowed_methods))
+    session.mount("http://", _retry_adapter(allowed_methods))
     return session
+
+
+@st.cache_resource
+def get_session() -> requests.Session:
+    return _retry_session(SAFE_RETRY_METHODS)
+
+@st.cache_resource
+def get_overpass_session() -> requests.Session:
+    return _retry_session(OVERPASS_RETRY_METHODS)
 
 def firebase_login(email: str, password: str) -> Optional[Dict[str, Any]]:
     if not FIREBASE_ENABLED:
@@ -247,7 +279,7 @@ def _yakin_cevre_getir_cached(enlem: float, boylam: float, yaricap_m: int) -> Op
      nwr["tourism"="hotel"](around:{yaricap_m},{enlem},{boylam}););out center tags;"""
     for url in OVERPASS_URLS:
         try:
-            res = get_session().post(url, data={"data": sorgu}, headers=OVERPASS_HEADERS, timeout=OVERPASS_TIMEOUT_S)
+            res = get_overpass_session().post(url, data={"data": sorgu}, headers=OVERPASS_HEADERS, timeout=OVERPASS_TIMEOUT_S)
             if res.status_code == 200:
                 sonuclar = []
                 for el in res.json().get("elements", []):
