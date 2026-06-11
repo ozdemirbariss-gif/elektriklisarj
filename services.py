@@ -2,7 +2,6 @@ import requests
 import json
 import asyncio
 import sentry_sdk
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 import streamlit as st
 
@@ -14,7 +13,8 @@ from config import (
 from utils import (
     istasyon_normalize_et, yorum_tarihi_parse, clean_id_uret,
     auth_uid_hash_getir, cache_temizle_guvenli, guvenli_metin, mesafe_hesapla,
-    token_suresi_doldu_mu, yorum_gonderilebilir_mi, yorumlardan_durum_ozeti_uret
+    token_suresi_doldu_mu, yorum_gonderilebilir_mi, yorumlardan_durum_ozeti_uret,
+    utc_simdi, utc_isoformat
 )
 
 @st.cache_resource
@@ -147,7 +147,7 @@ def sunucu_tarafli_hizli_cooldown_kontrol(uid_hash: str, token: str) -> Tuple[bo
     son_str = kullanici_son_yorum_zamani_getir(uid_hash, token)
     if not son_str: return True, 0
     son = yorum_tarihi_parse(son_str)
-    kalan = YORUM_BEKLEME_SURESI - int((datetime.now() - son).total_seconds())
+    kalan = YORUM_BEKLEME_SURESI - int((utc_simdi() - son).total_seconds())
     return kalan <= 0, max(0, kalan)
 
 def kullanici_yorum_meta_guncelle(uid_hash: str, token: str, tarih: str) -> None:
@@ -214,14 +214,14 @@ def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str, ek_bilgi: Optio
     sunucu_ok, sunucu_kalan = sunucu_tarafli_hizli_cooldown_kontrol(uid_hash, token)
     if not sunucu_ok: return False, f"{sunucu_kalan} saniye bekleyin."
 
-    clean_id, tarih = clean_id_uret(istasyon_id), datetime.now().isoformat(timespec="seconds")
+    clean_id, tarih = clean_id_uret(istasyon_id), utc_isoformat()
     yeni_yorum = {"kullanici": "Doğrulanmış Sürücü", "yorum": guvenli_metin(yorum_metni or durum, MAX_YORUM_KARAKTER), "durum": guvenli_metin(durum, 60), "tarih": tarih, "uid_hash": uid_hash}
     if ek_bilgi: yeni_yorum["ek_bilgi"] = ek_bilgi
 
     try:
         r = get_session().post(f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json", params={"auth": token}, json=yeni_yorum, timeout=FIREBASE_TIMEOUT_S)
         if r.status_code in (200, 201):
-            st.session_state["son_yorum_zamani"] = datetime.now()
+            st.session_state["son_yorum_zamani"] = utc_simdi()
             kullanici_yorum_meta_guncelle(uid_hash, token, tarih)
             istasyon_durum_ozetini_guncelle(clean_id, token)
             return True, "Bildirim kaydedildi."

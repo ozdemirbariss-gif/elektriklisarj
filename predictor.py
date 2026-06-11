@@ -1,6 +1,6 @@
 import math
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 
@@ -14,9 +14,21 @@ def _normalize(metin: Any) -> str:
     return " ".join(ascii_text.split())
 
 
+def _utc_simdi() -> datetime:
+    return datetime.now(timezone.utc)
+
+def _utc_yap(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+def _utc_isoformat(dt: datetime) -> str:
+    return _utc_yap(dt).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
 def _tarih_parse(tarih: Any) -> Optional[datetime]:
     try:
-        return datetime.fromisoformat(str(tarih).replace("Z", "+00:00")).replace(tzinfo=None)
+        return _utc_yap(datetime.fromisoformat(str(tarih).replace("Z", "+00:00")))
     except Exception:
         return None
 
@@ -76,8 +88,8 @@ def bosluk_tahmini_hesapla(
     hedef_zaman: Optional[datetime] = None,
     simdi: Optional[datetime] = None,
 ) -> Dict[str, Any]:
-    simdi = simdi or datetime.now()
-    hedef_zaman = hedef_zaman or simdi
+    simdi = _utc_yap(simdi) if simdi else _utc_simdi()
+    hedef_zaman = _utc_yap(hedef_zaman) if hedef_zaman else simdi
 
     genel_toplam = 0.0
     genel_bos = 0.0
@@ -149,7 +161,7 @@ def bosluk_tahmini_hesapla(
         "guven_skoru": round(guven_skoru, 3),
         "ornek_sayisi": ornek_sayisi,
         "hedef_saat": hedef_saat,
-        "son_bildirim": son_bildirim.isoformat(timespec="seconds") if son_bildirim else "",
+        "son_bildirim": _utc_isoformat(son_bildirim) if son_bildirim else "",
         "metin": f"Bugun {hedef_saat} civari bos olma ihtimali %{yuzde}.",
     }
 

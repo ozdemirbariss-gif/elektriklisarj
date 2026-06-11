@@ -1,6 +1,6 @@
 import streamlit as st
 import hashlib
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, Dict, List, Tuple
 from streamlit_js_eval import get_geolocation
 
@@ -12,7 +12,8 @@ from config import (
 from utils import (
     guvenli_metin, arama_metni_normalize_et, clean_id_uret, istasyon_id_getir,
     auth_uid_hash_getir, tahmini_sure_dk, varis_sarj_yuzdesi_hesapla, 
-    mesafe_hesapla, tahmini_yol_mesafesi_km, konum_gecerli_mi, durum_metni_sadelestir, durum_ozeti_fallback, token_suresi_doldu_mu
+    mesafe_hesapla, tahmini_yol_mesafesi_km, konum_gecerli_mi, durum_metni_sadelestir, durum_ozeti_fallback, token_suresi_doldu_mu,
+    utc_simdi, utc_isoformat
 )
 from services import (
     firebase_login, firebase_register, firebase_sifre_sifirla, oturumu_temizle,
@@ -158,7 +159,7 @@ def rozet_html(rozetler: List[Tuple[str, str]]) -> str:
 
 
 def istasyon_tahminini_guncelle(istasyon: Dict[str, Any], yorumlar: List[Dict[str, Any]]) -> None:
-    hedef_zaman = datetime.now() + timedelta(minutes=int(istasyon.get("TahminiSureDk", 0) or 0))
+    hedef_zaman = utc_simdi() + timedelta(minutes=int(istasyon.get("TahminiSureDk", 0) or 0))
     tahmin = bosluk_tahmini_hesapla(yorumlar, hedef_zaman=hedef_zaman)
     istasyon["BoslukTahmini"] = tahmin
     istasyon["TahminSkoru"] = tahmin_skoru_getir(tahmin)
@@ -312,7 +313,7 @@ def hesap_paneli_ciz() -> None:
                 if st.button("Giriş Yap", use_container_width=True):
                     user_data = firebase_login(email, password)
                     if user_data:
-                        st.session_state.update({"auth_token": user_data["idToken"], "auth_email": user_data.get("email", ""), "auth_uid": user_data.get("localId", ""), "auth_login_time": datetime.now().isoformat()})
+                        st.session_state.update({"auth_token": user_data["idToken"], "auth_email": user_data.get("email", ""), "auth_uid": user_data.get("localId", ""), "auth_login_time": utc_isoformat()})
                         st.rerun()
                     else:
                         st.error("Giriş başarısız.")
@@ -322,7 +323,7 @@ def hesap_paneli_ciz() -> None:
                 if st.button("Kayıt Ol", use_container_width=True):
                     user_data = firebase_register(reg_email, reg_password)
                     if user_data:
-                        st.session_state.update({"auth_token": user_data["idToken"], "auth_email": user_data.get("email", ""), "auth_uid": user_data.get("localId", ""), "auth_login_time": datetime.now().isoformat()})
+                        st.session_state.update({"auth_token": user_data["idToken"], "auth_email": user_data.get("email", ""), "auth_uid": user_data.get("localId", ""), "auth_login_time": utc_isoformat()})
                         st.rerun()
                     else:
                         st.error("Kayıt başarısız.")
@@ -454,7 +455,7 @@ for ist in istasyonlar_verisi:
     ist_key = str(ist.get("_station_key") or clean_id_uret(istasyon_id_getir(ist)))
     ariza = {**durum_ozeti_fallback(), **durum_ozetleri.get(ist_key, {})}
     tahmini_sure = tahmini_sure_dk(tahmini)
-    hedef_zaman = datetime.now() + timedelta(minutes=tahmini_sure)
+    hedef_zaman = utc_simdi() + timedelta(minutes=tahmini_sure)
     bosluk_tahmini = bosluk_tahmini_hesapla(ariza.get("son_yorumlar", []), hedef_zaman=hedef_zaman)
 
     ist_kopya = ist.copy()

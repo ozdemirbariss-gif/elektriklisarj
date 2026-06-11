@@ -3,7 +3,7 @@ import html
 import hashlib
 import unicodedata
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 import streamlit as st
 
@@ -97,11 +97,22 @@ def cache_temizle_guvenli(cache_fn: Any, *args: Any) -> None:
     except TypeError:
         cache_fn.clear()
 
+def utc_simdi() -> datetime:
+    return datetime.now(timezone.utc)
+
+def utc_isoformat(deger: Optional[datetime] = None) -> str:
+    dt = deger or utc_simdi()
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.isoformat(timespec="seconds").replace("+00:00", "Z")
+
 def token_suresi_doldu_mu() -> bool:
     login_time_str = st.session_state.get("auth_login_time")
     if not login_time_str: return True
     try:
-        gecen_dk = (datetime.now() - datetime.fromisoformat(login_time_str)).total_seconds() / 60
+        gecen_dk = (utc_simdi() - yorum_tarihi_parse(login_time_str)).total_seconds() / 60
         return gecen_dk > TOKEN_OMUR_DK
     except Exception:
         return True
@@ -109,14 +120,22 @@ def token_suresi_doldu_mu() -> bool:
 def yorum_gonderilebilir_mi() -> Tuple[bool, int]:
     son = st.session_state.get("son_yorum_zamani")
     if son is None: return True, 0
-    kalan = YORUM_BEKLEME_SURESI - int((datetime.now() - son).total_seconds())
+    son_zamani = son if isinstance(son, datetime) else yorum_tarihi_parse(str(son))
+    if son_zamani.tzinfo is None:
+        son_zamani = son_zamani.replace(tzinfo=timezone.utc)
+    else:
+        son_zamani = son_zamani.astimezone(timezone.utc)
+    kalan = YORUM_BEKLEME_SURESI - int((utc_simdi() - son_zamani).total_seconds())
     return kalan <= 0, max(0, kalan)
 
 def yorum_tarihi_parse(tarih_str: str) -> datetime:
     try:
-        return datetime.fromisoformat(str(tarih_str).replace("Z", "+00:00")).replace(tzinfo=None)
+        dt = datetime.fromisoformat(str(tarih_str).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
     except Exception:
-        return datetime.min
+        return datetime.min.replace(tzinfo=timezone.utc)
 
 def mesafe_hesapla(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     R = 6371.0
@@ -161,7 +180,7 @@ def istasyon_normalize_et(ist: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return None
 
 def ariza_skoru_hesapla(yorumlar: List[Dict[str, Any]]) -> Dict[str, Any]:
-    simdi = datetime.now()
+    simdi = utc_simdi()
     baslangic = simdi - timedelta(hours=ARIZA_GECERLILIK_SAATI)
     aktif_yorumlar = [y for y in yorumlar if yorum_tarihi_parse(y.get("tarih", "")) >= baslangic]
 
@@ -179,7 +198,7 @@ def ariza_skoru_hesapla(yorumlar: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {
         "skor": skor, "durum": durum, "etiket": etiket, "arizali": arizali, "sorunsuz": sorunsuz,
         "aktif_yorum_sayisi": len(aktif_yorumlar),
-        "son_bildirim_tarihi": max((yorum_tarihi_parse(y.get("tarih", "")) for y in aktif_yorumlar), default=datetime.min).isoformat(timespec="seconds") if aktif_yorumlar else "",
+        "son_bildirim_tarihi": utc_isoformat(max((yorum_tarihi_parse(y.get("tarih", "")) for y in aktif_yorumlar), default=datetime.min.replace(tzinfo=timezone.utc))) if aktif_yorumlar else "",
     }
 
 def yorumlardan_durum_ozeti_uret(yorumlar: List[Dict[str, Any]]) -> Dict[str, Any]:
