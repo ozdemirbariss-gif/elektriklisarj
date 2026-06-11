@@ -332,18 +332,23 @@ def hesap_paneli_ciz() -> None:
                     ok, msg = firebase_sifre_sifirla(reset_email)
                     st.success(msg) if ok else st.error(msg)
         else:
-            if token_suresi_doldu_mu():
-                oturumu_temizle()
-                st.rerun()
             st.success("Hesap aktif.")
             if st.button("Çıkış Yap", use_container_width=True):
                 oturumu_temizle()
                 st.rerun()
 
+
+def oturum_suresini_global_kontrol_et() -> None:
+    if "auth_token" in st.session_state and token_suresi_doldu_mu():
+        oturumu_temizle()
+        st.session_state["favoriler"] = set()
+
+
 # 1. Başlangıç Ayarları
 st.set_page_config(page_title="ŞarjBul", layout="centered", initial_sidebar_state="collapsed")
 sentry_init()
 load_css()
+oturum_suresini_global_kontrol_et()
 
 st.markdown(
     """
