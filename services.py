@@ -228,8 +228,19 @@ def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str, ek_bilgi: Optio
     except Exception: pass
     return False, "Gönderilemedi."
 
-@st.cache_data(ttl=CEVRE_CACHE_TTL, show_spinner=False)
 def yakin_cevre_getir(enlem: float, boylam: float, yaricap_m: int) -> Optional[List[Dict[str, Any]]]:
+    try:
+        normalized_enlem = round(float(enlem), 4)
+        normalized_boylam = round(float(boylam), 4)
+        normalized_yaricap = int(yaricap_m)
+    except (TypeError, ValueError):
+        return None
+
+    return _yakin_cevre_getir_cached(normalized_enlem, normalized_boylam, normalized_yaricap)
+
+
+@st.cache_data(ttl=CEVRE_CACHE_TTL, show_spinner=False)
+def _yakin_cevre_getir_cached(enlem: float, boylam: float, yaricap_m: int) -> Optional[List[Dict[str, Any]]]:
     sorgu = f"""[out:json][timeout:{int(OVERPASS_TIMEOUT_S)}];
     (nwr["amenity"~"cafe|restaurant|fast_food|parking|pharmacy|atm|toilets|fuel"](around:{yaricap_m},{enlem},{boylam});
      nwr["shop"~"supermarket|convenience|mall"](around:{yaricap_m},{enlem},{boylam});
