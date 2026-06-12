@@ -3,11 +3,13 @@ import html
 import hashlib
 import unicodedata
 import re
+import sentry_sdk
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 import streamlit as st
 
 from config import (
+    logger,
     ORTALAMA_SEYIR_HIZI_KMH, YOL_UZAMA_KATSAYISI, ARIZA_GECERLILIK_SAATI, 
     ARIZA_RISK_ESIGI, TOKEN_OMUR_DK, YORUM_BEKLEME_SURESI, MAX_SON_YORUM
 )
@@ -108,14 +110,25 @@ def utc_isoformat(deger: Optional[datetime] = None) -> str:
         dt = dt.astimezone(timezone.utc)
     return dt.isoformat(timespec="seconds").replace("+00:00", "Z")
 
-def token_suresi_doldu_mu() -> bool:
-    login_time_str = st.session_state.get("auth_login_time")
-    if not login_time_str: return True
+def token_yenileme_gerekli_mi(buffer_dk: int = 5) -> bool:
     try:
+        expires_at_str = st.session_state.get("auth_expires_at")
+        if expires_at_str:
+            expires_at = yorum_tarihi_parse(str(expires_at_str))
+            return utc_simdi() >= expires_at - timedelta(minutes=max(0, buffer_dk))
+
+        login_time_str = st.session_state.get("auth_login_time")
+        if not login_time_str:
+            return True
         gecen_dk = (utc_simdi() - yorum_tarihi_parse(login_time_str)).total_seconds() / 60
-        return gecen_dk > TOKEN_OMUR_DK
-    except Exception:
+        return gecen_dk >= max(0, TOKEN_OMUR_DK - buffer_dk)
+    except Exception as e:
+        logger.warning("Token süresi hesaplanamadı: %s", e, exc_info=True)
+        sentry_sdk.capture_exception(e)
         return True
+
+def token_suresi_doldu_mu() -> bool:
+    return token_yenileme_gerekli_mi(buffer_dk=0)
 
 def yorum_gonderilebilir_mi() -> Tuple[bool, int]:
     son = st.session_state.get("son_yorum_zamani")
@@ -156,11 +169,29 @@ def konum_gecerli_mi(lat: Any, lon: Any) -> bool:
         return False
 
 def istasyon_normalize_et(ist: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    if not isinstance(ist, dict): return None
+    if not isinstance(ist, dict):
+        logger.warning("İstasyon normalize edilemedi: veri dict değil (%s)", type(ist).__name__)
+        return None
     try:
         isim = str(ist.get("isim", "")).strip()
-        enlem, boylam = float(ist.get("enlem")), float(ist.get("boylam"))
-        if not isim or not konum_gecerli_mi(enlem, boylam): return None
+        try:
+            enlem, boylam = float(ist.get("enlem")), float(ist.get("boylam"))
+        except (TypeError, ValueError) as e:
+            logger.warning(
+                "İstasyon normalize edilemedi: koordinat okunamadı. isim=%r enlem=%r boylam=%r hata=%s",
+                isim,
+                ist.get("enlem"),
+                ist.get("boylam"),
+                e,
+            )
+            return None
+
+        if not isim:
+            logger.warning("İstasyon normalize edilemedi: isim boş. anahtarlar=%s", list(ist.keys())[:8])
+            return None
+        if not konum_gecerli_mi(enlem, boylam):
+            logger.warning("İstasyon normalize edilemedi: geçersiz konum. isim=%r enlem=%r boylam=%r", isim, enlem, boylam)
+            return None
 
         yeni = dict(ist)
         yeni["isim"], yeni["enlem"], yeni["boylam"] = isim, enlem, boylam
@@ -176,7 +207,9 @@ def istasyon_normalize_et(ist: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         yeni["_fiyat_sayi"] = fiyat_sayisi_ayikla(yeni.get("fiyat", ""))
         yeni["_acik_24_saat"] = acik_24_saat_mi(yeni)
         return yeni
-    except Exception:
+    except Exception as e:
+        logger.warning("İstasyon normalize edilemedi: beklenmeyen hata. veri=%r hata=%s", ist, e, exc_info=True)
+        sentry_sdk.capture_exception(e)
         return None
 
 def ariza_skoru_hesapla(yorumlar: List[Dict[str, Any]]) -> Dict[str, Any]:
