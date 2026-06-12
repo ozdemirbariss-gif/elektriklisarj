@@ -60,6 +60,25 @@ h1 {
     border: 1px solid rgba(226, 232, 220, 0.10);
     border-radius: 6px;
     min-height: 142px;
+    overflow: hidden;
+    position: relative;
+}
+
+.sb-hero-img {
+    display: block;
+    font-size: 0;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    width: 100%;
+}
+
+.sb-hero-media::after {
+    background: linear-gradient(180deg, rgba(16, 18, 17, 0.04) 0%, rgba(16, 18, 17, 0.38) 100%);
+    content: "";
+    inset: 0;
+    pointer-events: none;
+    position: absolute;
 }
 
 .sb-hero-body {
