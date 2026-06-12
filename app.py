@@ -1,7 +1,7 @@
 import streamlit as st
 import pydeck as pdk
 from datetime import timedelta
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from streamlit_js_eval import get_geolocation
 
 from config import (
@@ -33,11 +33,21 @@ def kisa_deger(deger: Any, varsayilan: str = "Bilinmiyor", max_len: int = 80) ->
 
 def secili_arac_getir() -> str:
     varsayilan = list(ARAC_KATALOGU.keys())[0]
-    secili = st.session_state.get("secilen_arac", varsayilan)
-    if secili not in ARAC_KATALOGU:
-        secili = varsayilan
-    st.session_state["secilen_arac"] = secili
-    return secili
+    secili = st.session_state.get("secilen_arac")
+    return secili if secili in ARAC_KATALOGU else varsayilan
+
+
+def hero_araci_getir() -> Optional[str]:
+    secili = st.session_state.get("secilen_arac")
+    return secili if secili in ARAC_KATALOGU else None
+
+
+def arac_gorseli_getir(arac: Optional[str]) -> str:
+    gorsel = ARAC_GORSELLERI.get(arac or "", VARSAYILAN_ARAC_GORSELI)
+    temiz_url = str(gorsel or "").strip()
+    if temiz_url.startswith(("https://", "http://")):
+        return temiz_url
+    return VARSAYILAN_ARAC_GORSELI
 
 
 def css_url_olustur(url: str) -> str:
@@ -48,13 +58,15 @@ def css_url_olustur(url: str) -> str:
     return f"url('{temiz_url}')"
 
 
-def hero_ciz(arac: str) -> None:
-    gorsel = ARAC_GORSELLERI.get(arac, VARSAYILAN_ARAC_GORSELI)
-    aria = "Elektrikli araç şarj görseli" if arac == "Özel Araç (Manuel)" else f"{arac} araç görseli"
+def hero_ciz(arac: Optional[str]) -> None:
+    gorsel = arac_gorseli_getir(arac)
+    aria = "Elektrikli araç şarj görseli" if not arac or arac == "Özel Araç (Manuel)" else f"{arac} araç görseli"
     st.markdown(
         f"""
-        <section class="sb-hero-card" style="--sb-hero-image: {css_url_olustur(gorsel)};">
-            <div class="sb-hero-media" aria-label="{guvenli_metin(aria, 90)}"></div>
+        <section class="sb-hero-card" style="--sb-hero-image: {css_url_olustur(VARSAYILAN_ARAC_GORSELI)};">
+            <div class="sb-hero-media">
+                <img class="sb-hero-img" src="{guvenli_metin(gorsel)}" alt="{guvenli_metin(aria, 90)}">
+            </div>
             <div class="sb-hero-body">
                 <div class="sb-hero-kicker">Yakındaki şarj rotan</div>
                 <h1>ŞarjBul</h1>
@@ -481,8 +493,7 @@ sentry_init()
 load_css()
 oturum_suresini_global_kontrol_et()
 
-secilen_arac = secili_arac_getir()
-hero_ciz(secilen_arac)
+hero_ciz(hero_araci_getir())
 
 istasyonlar_verisi = istasyonlari_yukle()
 if not istasyonlar_verisi: st.stop()
