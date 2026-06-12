@@ -116,7 +116,8 @@ def load_css() -> None:
         logger.warning("CSS dosyası okunamadı: %s", e)
         css = ""
 
-    st.markdown(
-        f'<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>{css}</style>',
-        unsafe_allow_html=True,
-    )
+    html = f"<style>\n{css}\n</style>"
+    if hasattr(st, "html"):
+        st.html(html)
+    else:
+        st.markdown(html, unsafe_allow_html=True)
