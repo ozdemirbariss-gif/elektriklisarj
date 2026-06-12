@@ -1,35 +1,129 @@
 import streamlit as st
-import hashlib
+import pydeck as pdk
 from datetime import timedelta
 from typing import Any, Dict, List, Tuple
 from streamlit_js_eval import get_geolocation
 
 from config import (
-    sentry_init, load_css, logger, MAX_ISTASYON_SAYISI, MAX_EKRAN_KART_SAYISI,
-    ARAC_KATALOGU, YOL_UZAMA_KATSAYISI, HIZ_ESIK_MAP, KONUM_DOGRULAMA_ESIGI_KM,
-    MAX_SON_YORUM, MAX_YORUM_KARAKTER, FIREBASE_ENABLED
+    sentry_init, load_css, logger, MAX_EKRAN_KART_SAYISI,
+    ARAC_KATALOGU, HIZ_ESIK_MAP, KONUM_DOGRULAMA_ESIGI_KM,
+    MAX_SON_YORUM, FIREBASE_ENABLED, YAKIN_CEVRE_MIN_M,
+    YAKIN_CEVRE_VARSAYILAN_M, YAKIN_CEVRE_MAX_M, YAKIN_CEVRE_ADIM_M
 )
 from utils import (
     guvenli_metin, arama_metni_normalize_et, clean_id_uret, istasyon_id_getir,
     auth_uid_hash_getir, tahmini_sure_dk, varis_sarj_yuzdesi_hesapla, 
-    mesafe_hesapla, tahmini_yol_mesafesi_km, konum_gecerli_mi, durum_metni_sadelestir, durum_ozeti_fallback, token_suresi_doldu_mu,
-    utc_simdi, utc_isoformat
+    mesafe_hesapla, tahmini_yol_mesafesi_km, konum_gecerli_mi,
+    durum_metni_sadelestir, durum_ozeti_fallback, utc_simdi
 )
 from services import (
     firebase_login, firebase_register, firebase_sifre_sifirla, oturumu_temizle,
     istasyonlari_yukle, durum_ozetleri_getir, gorunen_yorumlari_getir, tahmin_yorumlari_getir,
-    favorileri_getir, favori_guncelle, yorum_gonder, yakin_cevre_getir
+    favorileri_getir, favori_guncelle, yorum_gonder, yakin_cevre_getir,
+    oturum_bilgilerini_kaydet, oturum_gecerli_tut
 )
 from predictor import bosluk_tahmini_hesapla, tahmin_rozetleri_getir, tahmin_skoru_getir
 
 
-def guvenli_html(deger: Any, max_len: int = 140) -> str:
-    return guvenli_metin(deger, max_len)
-
-
 def kisa_deger(deger: Any, varsayilan: str = "Bilinmiyor", max_len: int = 80) -> str:
     text = str(deger or "").strip() or varsayilan
-    return guvenli_html(text, max_len)
+    return guvenli_metin(text, max_len)
+
+
+SABIT_KONUMLAR: Dict[str, Tuple[float, float]] = {
+    "İstanbul (Kadıköy)": (40.9901, 29.0284),
+    "İstanbul (Maslak)": (41.1082, 29.0195),
+    "Ankara (Çankaya)": (39.9208, 32.8541),
+    "İzmir (Alsancak)": (38.4374, 27.1422),
+    "İzmir (Buca)": (38.3844, 27.1748),
+    "Bursa (Nilüfer)": (40.2140, 28.9847),
+    "Antalya (Muratpaşa)": (36.8841, 30.7056),
+    "Muğla (Fethiye)": (36.6217, 29.1164),
+    "Kocaeli (Gebze)": (40.8028, 29.4307),
+    "Eskişehir (Odunpazarı)": (39.7667, 30.5256),
+    "Konya (Selçuklu)": (37.9464, 32.4932),
+    "Adana (Seyhan)": (36.9914, 35.3308),
+    "Mersin (Yenişehir)": (36.8121, 34.6415),
+    "Samsun (Atakum)": (41.3452, 36.2496),
+}
+
+
+def konumu_sessiona_yaz(lat: float, lon: float) -> Tuple[float, float]:
+    onceki_lat = st.session_state.get("last_valid_lat")
+    onceki_lon = st.session_state.get("last_valid_lon")
+    if konum_gecerli_mi(onceki_lat, onceki_lon):
+        fark_km = mesafe_hesapla(float(onceki_lat), float(onceki_lon), lat, lon)
+        if fark_km <= KONUM_DOGRULAMA_ESIGI_KM:
+            return float(onceki_lat), float(onceki_lon)
+
+    st.session_state.update({"last_valid_lat": lat, "last_valid_lon": lon})
+    return lat, lon
+
+
+def manuel_konum_ciz() -> None:
+    manuel = st.selectbox("Lütfen mevcut konumunuzu seçin:", ["Seçiniz...", *SABIT_KONUMLAR.keys()])
+    if manuel in SABIT_KONUMLAR:
+        konumu_sessiona_yaz(*SABIT_KONUMLAR[manuel])
+        st.rerun()
+
+    with st.expander("Koordinat gir", expanded=False):
+        lat = st.number_input("Enlem", min_value=-90.0, max_value=90.0, value=39.0000, step=0.0001, format="%.6f")
+        lon = st.number_input("Boylam", min_value=-180.0, max_value=180.0, value=35.0000, step=0.0001, format="%.6f")
+        if st.button("Konumu kullan", use_container_width=True):
+            if konum_gecerli_mi(lat, lon):
+                konumu_sessiona_yaz(float(lat), float(lon))
+                st.rerun()
+            else:
+                st.error("Geçerli bir enlem/boylam girin.")
+
+
+def harita_rengi_getir(skor: int) -> List[int]:
+    if skor >= 80:
+        return [85, 210, 140, 210]
+    if skor >= 60:
+        return [245, 205, 95, 210]
+    return [230, 120, 120, 210]
+
+
+def harita_ciz(istasyonlar: List[Dict[str, Any]]) -> None:
+    harita_verisi = [
+        {
+            "lat": float(i["enlem"]),
+            "lon": float(i["boylam"]),
+            "isim": str(i.get("isim", "İstasyon")),
+            "skor": int(i.get("Skor", 0)),
+            "mesafe": float(i.get("Mesafe", 0.0)),
+            "guc": str(i.get("hiz", "Bilinmiyor")),
+            "renk": harita_rengi_getir(int(i.get("Skor", 0))),
+        }
+        for i in istasyonlar
+    ]
+    if not harita_verisi:
+        return
+
+    merkez_lat = sum(i["lat"] for i in harita_verisi) / len(harita_verisi)
+    merkez_lon = sum(i["lon"] for i in harita_verisi) / len(harita_verisi)
+    layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=harita_verisi,
+        get_position="[lon, lat]",
+        get_fill_color="renk",
+        get_radius=120,
+        radius_min_pixels=8,
+        radius_max_pixels=28,
+        pickable=True,
+        stroked=True,
+        get_line_color=[255, 255, 255, 190],
+        line_width_min_pixels=1,
+    )
+    st.pydeck_chart(
+        pdk.Deck(
+            layers=[layer],
+            initial_view_state=pdk.ViewState(latitude=merkez_lat, longitude=merkez_lon, zoom=10.5),
+            tooltip={"text": "{isim}\nSkor: {skor}\nMesafe: {mesafe} km\nGüç: {guc}"},
+        ),
+        use_container_width=True,
+    )
 
 
 def kaynak_sayisi_getir(istasyon: Dict[str, Any]) -> int:
@@ -153,7 +247,7 @@ def istasyon_rozetleri_getir(istasyon: Dict[str, Any]) -> List[Tuple[str, str]]:
 
 def rozet_html(rozetler: List[Tuple[str, str]]) -> str:
     return "".join(
-        f'<span class="sb-chip {css_class}">{guvenli_html(metin, 40)}</span>'
+        f'<span class="sb-chip {css_class}">{guvenli_metin(metin, 40)}</span>'
         for metin, css_class in rozetler
     )
 
@@ -220,7 +314,7 @@ def en_iyi_secim_ciz(istasyon: Dict[str, Any], rota_linki: str) -> None:
                 <div class="sb-mini-stat"><div class="sb-mini-label">Süre</div><div class="sb-mini-value">{int(istasyon.get("TahminiSureDk", 0))} dk</div></div>
                 <div class="sb-mini-stat"><div class="sb-mini-label">Varış</div><div class="sb-mini-value">%{float(istasyon.get("VarisSarjYuzdesi", 0.0)):.0f}</div></div>
             </div>
-            <a class="sb-route-button sb-route-primary" href="{guvenli_html(rota_linki, 260)}" target="_blank" rel="noopener noreferrer">
+            <a class="sb-route-button sb-route-primary" href="{guvenli_metin(rota_linki, 260)}" target="_blank" rel="noopener noreferrer">
                 <span class="sb-route-main">Rotayı aç</span>
                 <span class="sb-route-sub">Google Maps ile yol tarifi</span>
             </a>
@@ -251,7 +345,7 @@ def istasyon_karti_ciz(istasyon: Dict[str, Any], sira: int, rota_linki: str) -> 
             </div>
             <div class="sb-chip-row">{rozet_html(istasyon.get("Rozetler", []))}</div>
             <div class="sb-address">{kisa_deger(istasyon.get("adres"), max_len=180)}</div>
-            <a class="sb-route-button" href="{guvenli_html(rota_linki, 260)}" target="_blank" rel="noopener noreferrer">
+            <a class="sb-route-button" href="{guvenli_metin(rota_linki, 260)}" target="_blank" rel="noopener noreferrer">
                 <span class="sb-route-main">Rotayı aç</span>
                 <span class="sb-route-sub">Google Maps ile yol tarifi</span>
             </a>
@@ -291,7 +385,7 @@ def istasyon_aksiyonlari_ciz(ist: Dict[str, Any], ist_id: str, ist_key: str, aya
         yerler = yakin_cevre_getir(ist["enlem"], ist["boylam"], ayar_yaricap)
         if yerler:
             yer_html = "".join(
-                f'<div class="sb-nearby-item"><span>{guvenli_html(y.get("isim"), 80)}</span><strong>{int(y.get("metre", 0))}m</strong></div>'
+                f'<div class="sb-nearby-item"><span>{guvenli_metin(y.get("isim"), 80)}</span><strong>{int(y.get("metre", 0))}m</strong></div>'
                 for y in yerler
             )
             st.markdown(f'<div class="sb-nearby-list">{yer_html}</div>', unsafe_allow_html=True)
@@ -312,8 +406,7 @@ def hesap_paneli_ciz() -> None:
                 password = st.text_input("Şifre", type="password", key="login_password")
                 if st.button("Giriş Yap", use_container_width=True):
                     user_data = firebase_login(email, password)
-                    if user_data:
-                        st.session_state.update({"auth_token": user_data["idToken"], "auth_email": user_data.get("email", ""), "auth_uid": user_data.get("localId", ""), "auth_login_time": utc_isoformat()})
+                    if user_data and oturum_bilgilerini_kaydet(user_data):
                         st.rerun()
                     else:
                         st.error("Giriş başarısız.")
@@ -322,8 +415,7 @@ def hesap_paneli_ciz() -> None:
                 reg_password = st.text_input("Şifre", type="password", key="reg_password")
                 if st.button("Kayıt Ol", use_container_width=True):
                     user_data = firebase_register(reg_email, reg_password)
-                    if user_data:
-                        st.session_state.update({"auth_token": user_data["idToken"], "auth_email": user_data.get("email", ""), "auth_uid": user_data.get("localId", ""), "auth_login_time": utc_isoformat()})
+                    if user_data and oturum_bilgilerini_kaydet(user_data):
                         st.rerun()
                     else:
                         st.error("Kayıt başarısız.")
@@ -333,6 +425,9 @@ def hesap_paneli_ciz() -> None:
                     ok, msg = firebase_sifre_sifirla(reset_email)
                     st.success(msg) if ok else st.error(msg)
         else:
+            if not oturum_gecerli_tut():
+                st.warning("Oturum yenilenemedi. Lütfen tekrar giriş yapın.")
+                st.rerun()
             st.success("Hesap aktif.")
             if st.button("Çıkış Yap", use_container_width=True):
                 oturumu_temizle()
@@ -340,9 +435,8 @@ def hesap_paneli_ciz() -> None:
 
 
 def oturum_suresini_global_kontrol_et() -> None:
-    if "auth_token" in st.session_state and token_suresi_doldu_mu():
-        oturumu_temizle()
-        st.session_state["favoriler"] = set()
+    if "auth_token" in st.session_state:
+        oturum_gecerli_tut()
 
 
 # 1. Başlangıç Ayarları
@@ -375,25 +469,24 @@ try:
     if isinstance(konum_verisi, dict) and "coords" in konum_verisi:
         if konum_gecerli_mi(konum_verisi["coords"].get("latitude"), konum_verisi["coords"].get("longitude")):
             user_lat, user_lon = float(konum_verisi["coords"]["latitude"]), float(konum_verisi["coords"]["longitude"])
-            st.session_state.update({"last_valid_lat": user_lat, "last_valid_lon": user_lon})
-except Exception: pass
+            user_lat, user_lon = konumu_sessiona_yaz(user_lat, user_lon)
+except Exception as e:
+    logger.warning("Tarayıcı konumu okunamadı: %s", e, exc_info=True)
 
 if user_lat is None: user_lat = st.session_state.get("last_valid_lat")
 if user_lon is None: user_lon = st.session_state.get("last_valid_lon")
 
 if user_lat is None or user_lon is None:
-    manuel = st.selectbox("Lütfen Mevcut Konumunuzu Seçin:", ["Seçiniz...", "İstanbul (Kadıköy)", "Ankara (Çankaya)", "İzmir (Alsancak)"])
-    SABIT_K = {"İstanbul (Kadıköy)": (40.9901, 29.0284), "Ankara (Çankaya)": (39.9208, 32.8541), "İzmir (Alsancak)": (38.4374, 27.1422)}
-    if manuel in SABIT_K:
-        st.session_state.update({"last_valid_lat": SABIT_K[manuel][0], "last_valid_lon": SABIT_K[manuel][1]})
-        st.rerun()
+    manuel_konum_ciz()
     st.stop()
+
+user_lat, user_lon = float(user_lat), float(user_lon)
 
 # 3. Sessiz Varsayılanlar ve Gelişmiş Ayarlar
 operator_secenekleri = sorted({str(ist.get("operator", "Bilinmiyor")) for ist in istasyonlar_verisi if str(ist.get("operator", "")).strip()})
 secilen_arac = list(ARAC_KATALOGU.keys())[0]
 niyet = "Dengeli"
-ayar_yaricap = 400
+ayar_yaricap = YAKIN_CEVRE_VARSAYILAN_M
 sonuc_sayisi = min(3, MAX_EKRAN_KART_SAYISI)
 soket_filtreleri: List[str] = []
 hiz_filtresi = "Tümü"
@@ -419,7 +512,13 @@ with st.expander("Gelişmiş ayarlar", expanded=False):
     hiz_filtresi = st.selectbox("Minimum güç", ["Tümü", "AC (≥7 kW)", "DC (≥50 kW)", "Hızlı DC (≥150 kW)"])
     operator_filtreleri = st.multiselect("Operatör", operator_secenekleri)
     sadece_24_saat = st.checkbox("Sadece 24 saat açık")
-    ayar_yaricap = st.slider("Yakın yer mesafesi (m)", 100, 800, 400, 100)
+    ayar_yaricap = st.slider(
+        "Yakın yer mesafesi (m)",
+        YAKIN_CEVRE_MIN_M,
+        YAKIN_CEVRE_MAX_M,
+        YAKIN_CEVRE_VARSAYILAN_M,
+        YAKIN_CEVRE_ADIM_M,
+    )
     haritayi_goster = st.checkbox("Haritayı göster")
 
 if "batarya" not in locals():
@@ -489,7 +588,14 @@ uygun_istasyonlar = sorted(uygun_istasyonlar, key=ist_siralama)[:min(sonuc_sayis
 
 # 7. Favoriler
 if "favoriler" not in st.session_state: st.session_state["favoriler"] = set()
-if "auth_token" in st.session_state: st.session_state["favoriler"] = set(favorileri_getir(auth_uid_hash_getir(), st.session_state["auth_token"]))
+if "auth_token" in st.session_state and oturum_gecerli_tut():
+    uid_hash = auth_uid_hash_getir()
+    favoriler_yuklu = st.session_state.get("favoriler_yuklendi") is True
+    favoriler_kullanici_ayni = st.session_state.get("favoriler_uid_hash") == uid_hash
+    if not favoriler_yuklu or not favoriler_kullanici_ayni:
+        st.session_state["favoriler"] = set(favorileri_getir(uid_hash, st.session_state["auth_token"]))
+        st.session_state["favoriler_uid_hash"] = uid_hash
+        st.session_state["favoriler_yuklendi"] = True
 
 # 8. Sonuç Kartları Çizimi
 if uygun_istasyonlar:
@@ -508,7 +614,7 @@ if uygun_istasyonlar:
     en_iyi_secim_ciz(en_iyi, en_iyi_link)
 
     if haritayi_goster:
-        st.map({"lat": [i["enlem"] for i in uygun_istasyonlar], "lon": [i["boylam"] for i in uygun_istasyonlar]})
+        harita_ciz(uygun_istasyonlar)
 
     if en_iyi.get("SonYorumlar") or gorunen_yorumlar.get(en_iyi_key):
         with st.expander("Son bildirimler", expanded=False):

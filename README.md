@@ -8,6 +8,9 @@ SarjBul, elektrikli araclar icin yakin ve mantikli sarj duragini onerir. Streaml
 - Arac batarya/tuketim degerleriyle menzil filtresi
 - Skor, rota, hiz, fiyat, soket ve operator bilgileri
 - Firebase etkinse hesap, favori ve istasyon bildirimi
+- Firebase Auth refresh token yenileme ile daha uzun oturum deneyimi
+- Pydeck haritasinda skor rengine gore istasyon noktalarini gosterme
+- Konum izni yoksa genis sehir listesi veya manuel koordinat girisi
 - ChargeIQ, OSM, OpenChargeMap ve opsiyonel operator API kaynakli veri toplama
 
 ## Kurulum
@@ -38,6 +41,24 @@ api_key = "FIREBASE_WEB_API_KEY"
 dsn = ""
 traces_sample_rate = 0.10
 ```
+
+`firebase.db_url` ve `firebase.api_key` hesap, favori ve bildirim ozellikleri icin gereklidir. `sentry` blogu opsiyoneldir.
+
+## Firebase Veri Yollari
+
+- `istasyonlar`: normalize edilecek istasyon kayitlari
+- `yorumlar/{station_id}`: kullanici durum bildirimleri
+- `station_status/{station_id}`: yorumlardan uretilmis son durum ozeti
+- `favoriler/{uid_hash}`: kullanicinin kaydettigi istasyonlar
+- `kullanici_yorum_meta/{uid_hash}`: yorum bekleme suresi icin son gonderim zamani
+
+## Streamlit Cloud Deploy
+
+1. Repoyu GitHub'a gonder.
+2. Streamlit Cloud'da yeni app olusturup ana dosya olarak `app.py` sec.
+3. `requirements.txt` dosyasinin repoda oldugundan emin ol.
+4. Secrets alanina yukaridaki TOML semasini ekle.
+5. Firebase Auth domain ayarlarinda Streamlit Cloud domainini izinli alanlara ekle.
 
 ## Veri Guncelleme
 
