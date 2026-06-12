@@ -6,9 +6,10 @@ from streamlit_js_eval import get_geolocation
 
 from config import (
     sentry_init, load_css, logger, MAX_EKRAN_KART_SAYISI,
-    ARAC_KATALOGU, HIZ_ESIK_MAP, KONUM_DOGRULAMA_ESIGI_KM,
+    ARAC_GORSELLERI, ARAC_KATALOGU, HIZ_ESIK_MAP, KONUM_DOGRULAMA_ESIGI_KM,
     MAX_SON_YORUM, FIREBASE_ENABLED, YAKIN_CEVRE_MIN_M,
-    YAKIN_CEVRE_VARSAYILAN_M, YAKIN_CEVRE_MAX_M, YAKIN_CEVRE_ADIM_M
+    YAKIN_CEVRE_VARSAYILAN_M, YAKIN_CEVRE_MAX_M, YAKIN_CEVRE_ADIM_M,
+    VARSAYILAN_ARAC_GORSELI
 )
 from utils import (
     guvenli_metin, arama_metni_normalize_et, clean_id_uret, istasyon_id_getir,
@@ -28,6 +29,41 @@ from predictor import bosluk_tahmini_hesapla, tahmin_rozetleri_getir, tahmin_sko
 def kisa_deger(deger: Any, varsayilan: str = "Bilinmiyor", max_len: int = 80) -> str:
     text = str(deger or "").strip() or varsayilan
     return guvenli_metin(text, max_len)
+
+
+def secili_arac_getir() -> str:
+    varsayilan = list(ARAC_KATALOGU.keys())[0]
+    secili = st.session_state.get("secilen_arac", varsayilan)
+    if secili not in ARAC_KATALOGU:
+        secili = varsayilan
+    st.session_state["secilen_arac"] = secili
+    return secili
+
+
+def css_url_olustur(url: str) -> str:
+    temiz_url = str(url or "").strip()
+    if not temiz_url.startswith(("https://", "http://")):
+        return "none"
+    temiz_url = temiz_url.replace("\\", "").replace('"', "%22").replace("'", "%27").replace(")", "%29")
+    return f"url('{temiz_url}')"
+
+
+def hero_ciz(arac: str) -> None:
+    gorsel = ARAC_GORSELLERI.get(arac, VARSAYILAN_ARAC_GORSELI)
+    aria = "Elektrikli araç şarj görseli" if arac == "Özel Araç (Manuel)" else f"{arac} araç görseli"
+    st.markdown(
+        f"""
+        <section class="sb-hero-card" style="--sb-hero-image: {css_url_olustur(gorsel)};">
+            <div class="sb-hero-media" aria-label="{guvenli_metin(aria, 90)}"></div>
+            <div class="sb-hero-body">
+                <div class="sb-hero-kicker">Yakındaki şarj rotan</div>
+                <h1>ŞarjBul</h1>
+                <p>Bana en mantıklı şarj durağını göster.</p>
+            </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 SABIT_KONUMLAR: Dict[str, Tuple[float, float]] = {
@@ -445,19 +481,8 @@ sentry_init()
 load_css()
 oturum_suresini_global_kontrol_et()
 
-st.markdown(
-    """
-    <section class="sb-hero-card">
-        <div class="sb-hero-media" aria-label="Gece elektrikli araç şarj istasyonu"></div>
-        <div class="sb-hero-body">
-            <div class="sb-hero-kicker">Yakındaki şarj rotan</div>
-            <h1>ŞarjBul</h1>
-            <p>Bana en mantıklı şarj durağını göster.</p>
-        </div>
-    </section>
-    """,
-    unsafe_allow_html=True,
-)
+secilen_arac = secili_arac_getir()
+hero_ciz(secilen_arac)
 
 istasyonlar_verisi = istasyonlari_yukle()
 if not istasyonlar_verisi: st.stop()
@@ -484,7 +509,6 @@ user_lat, user_lon = float(user_lat), float(user_lon)
 
 # 3. Sessiz Varsayılanlar ve Gelişmiş Ayarlar
 operator_secenekleri = sorted({str(ist.get("operator", "Bilinmiyor")) for ist in istasyonlar_verisi if str(ist.get("operator", "")).strip()})
-secilen_arac = list(ARAC_KATALOGU.keys())[0]
 niyet = "Dengeli"
 ayar_yaricap = YAKIN_CEVRE_VARSAYILAN_M
 sonuc_sayisi = min(3, MAX_EKRAN_KART_SAYISI)
@@ -498,7 +522,7 @@ arama_metni = ""
 
 with st.expander("Gelişmiş ayarlar", expanded=False):
     niyet = st.radio("Tercih", ["Dengeli", "Yakın", "Hızlı", "Ekonomik"], horizontal=True)
-    secilen_arac = st.selectbox("Araç", list(ARAC_KATALOGU.keys()))
+    secilen_arac = st.selectbox("Araç", list(ARAC_KATALOGU.keys()), key="secilen_arac")
     v = ARAC_KATALOGU[secilen_arac]
     c1, c2, c3 = st.columns(3)
     batarya = c1.number_input("Kapasite", 1.0, 250.0, float(v["batarya"]))
