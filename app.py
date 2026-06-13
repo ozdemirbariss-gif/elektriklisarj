@@ -59,12 +59,16 @@ def css_url_olustur(url: str) -> str:
     return f"url('{temiz_url}')"
 
 
-def hero_ciz(arac: Optional[str]) -> None:
+def hero_html_olustur(arac: Optional[str]) -> str:
     gorsel = arac_gorseli_getir(arac)
     aria = "Elektrikli araç şarj görseli" if not arac or arac == "Özel Araç (Manuel)" else f"{arac} araç görseli"
-    st.markdown(
-        f"""
-        <section class="sb-hero-card" style="--sb-hero-image: {css_url_olustur(VARSAYILAN_ARAC_GORSELI)};">
+    arac_etiketi = arac or "Varsayılan"
+    return f"""
+        <section
+            class="sb-hero-card"
+            data-arac="{guvenli_metin(arac_etiketi, 90)}"
+            style="--sb-hero-image: {css_url_olustur(gorsel)}; --sb-hero-fallback-image: {css_url_olustur(VARSAYILAN_ARAC_GORSELI)};"
+        >
             <div class="sb-hero-media">
                 <img class="sb-hero-img" src="{guvenli_metin(gorsel)}" alt="{guvenli_metin(aria, 90)}">
             </div>
@@ -74,9 +78,12 @@ def hero_ciz(arac: Optional[str]) -> None:
                 <p>Bana en mantıklı şarj durağını göster.</p>
             </div>
         </section>
-        """,
-        unsafe_allow_html=True,
-    )
+    """
+
+
+def hero_ciz(arac: Optional[str], hedef: Any = None) -> None:
+    hedef = hedef or st
+    hedef.markdown(hero_html_olustur(arac), unsafe_allow_html=True)
 
 
 SABIT_KONUMLAR: Dict[str, Tuple[float, float]] = {
@@ -376,8 +383,7 @@ load_css()
 oturum_suresini_global_kontrol_et()
 
 hero_alani = st.empty()
-with hero_alani.container():
-    hero_ciz(hero_araci_getir())
+hero_ciz(hero_araci_getir(), hero_alani)
 
 istasyonlar_verisi = istasyonlari_yukle()
 if not istasyonlar_verisi: st.stop()
@@ -440,9 +446,7 @@ with st.expander("Gelişmiş ayarlar", expanded=False):
     )
     haritayi_goster = st.checkbox("Haritayı göster")
 
-hero_alani.empty()
-with hero_alani.container():
-    hero_ciz(secilen_arac)
+hero_ciz(secilen_arac, hero_alani)
 
 if "batarya" not in locals():
     v = ARAC_KATALOGU[secilen_arac]
