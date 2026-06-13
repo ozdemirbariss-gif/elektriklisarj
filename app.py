@@ -375,7 +375,9 @@ sentry_init()
 load_css()
 oturum_suresini_global_kontrol_et()
 
-hero_ciz(hero_araci_getir())
+hero_alani = st.empty()
+with hero_alani.container():
+    hero_ciz(hero_araci_getir())
 
 istasyonlar_verisi = istasyonlari_yukle()
 if not istasyonlar_verisi: st.stop()
@@ -437,6 +439,10 @@ with st.expander("Gelişmiş ayarlar", expanded=False):
         YAKIN_CEVRE_ADIM_M,
     )
     haritayi_goster = st.checkbox("Haritayı göster")
+
+hero_alani.empty()
+with hero_alani.container():
+    hero_ciz(secilen_arac)
 
 if "batarya" not in locals():
     v = ARAC_KATALOGU[secilen_arac]
