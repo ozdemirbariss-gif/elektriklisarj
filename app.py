@@ -71,11 +71,18 @@ def hero_html_olustur(arac: Optional[str]) -> str:
         >
             <div class="sb-hero-media">
                 <img class="sb-hero-img" src="{guvenli_metin(gorsel)}" alt="{guvenli_metin(aria, 90)}">
+                <svg class="sb-hero-curve" viewBox="0 0 480 82" preserveAspectRatio="none" aria-hidden="true">
+                    <path d="M0 20 C120 78 360 78 480 20 L480 82 L0 82 Z"></path>
+                    <path d="M0 20 C120 78 360 78 480 20"></path>
+                </svg>
             </div>
             <div class="sb-hero-body">
-                <div class="sb-hero-kicker">Yakındaki şarj rotan</div>
-                <h1>ŞarjBul</h1>
-                <p>Bana en mantıklı şarj durağını göster.</p>
+                <a class="sb-hero-button" href="#rotayi-ac" aria-label="Rotayı aç bölümüne git">Şarj Bul</a>
+                <div class="sb-hero-copy">
+                    <div class="sb-hero-kicker">Yakındaki şarj rotan</div>
+                    <h1>SarjBul</h1>
+                    <p>En mantıklı istasyonu bul, Rotayı Aç ile yola devam et.</p>
+                </div>
             </div>
         </section>
     """
@@ -238,7 +245,7 @@ def surus_ozeti_ciz(arac: str, guvenli_menzil: float, sarj_yuzdesi: int) -> None
 def en_iyi_secim_ciz(istasyon: Dict[str, Any], rota_linki: str) -> None:
     st.markdown(
         f"""
-        <div class="sb-best-card">
+        <div class="sb-best-card" id="rotayi-ac">
             <div class="sb-best-top">
                 <div>
                     <div class="sb-kicker">Şimdi şarj için en iyi durak</div>
@@ -252,7 +259,7 @@ def en_iyi_secim_ciz(istasyon: Dict[str, Any], rota_linki: str) -> None:
                 <div class="sb-mini-stat"><div class="sb-mini-label">Varış</div><div class="sb-mini-value">%{float(istasyon.get("VarisSarjYuzdesi", 0.0)):.0f}</div></div>
             </div>
             <a class="sb-route-button sb-route-primary" href="{guvenli_metin(rota_linki, 260)}" target="_blank" rel="noopener noreferrer">
-                <span class="sb-route-main">Rotayı aç</span>
+                <span class="sb-route-main">Rotayı Aç</span>
                 <span class="sb-route-sub">Google Maps ile yol tarifi</span>
             </a>
         </div>
@@ -283,7 +290,7 @@ def istasyon_karti_ciz(istasyon: Dict[str, Any], sira: int, rota_linki: str) -> 
             <div class="sb-chip-row">{rozet_html(istasyon.get("Rozetler", []))}</div>
             <div class="sb-address">{kisa_deger(istasyon.get("adres"), max_len=180)}</div>
             <a class="sb-route-button" href="{guvenli_metin(rota_linki, 260)}" target="_blank" rel="noopener noreferrer">
-                <span class="sb-route-main">Rotayı aç</span>
+                <span class="sb-route-main">Rotayı Aç</span>
                 <span class="sb-route-sub">Google Maps ile yol tarifi</span>
             </a>
         </div>
