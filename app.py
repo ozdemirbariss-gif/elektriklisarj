@@ -77,7 +77,7 @@ def hero_html_olustur(arac: Optional[str]) -> str:
                 </svg>
             </div>
             <div class="sb-hero-body">
-                <a class="sb-hero-button" href="#rotayi-ac" aria-label="Rotayı aç bölümüne git">Şarj Bul</a>
+                <a class="sb-hero-button" href="#sarj-katalogu" aria-label="Araç kataloğuna git">Şarj Bul</a>
                 <div class="sb-hero-copy">
                     <div class="sb-hero-kicker">Yakındaki şarj rotan</div>
                     <h1>SarjBul</h1>
@@ -91,6 +91,274 @@ def hero_html_olustur(arac: Optional[str]) -> str:
 def hero_ciz(arac: Optional[str], hedef: Any = None) -> None:
     hedef = hedef or st
     hedef.markdown(hero_html_olustur(arac), unsafe_allow_html=True)
+
+
+def rota_sonucunu_sifirla() -> None:
+    st.session_state["rota_goster"] = False
+
+
+def uygulama_akisini_hazirla() -> None:
+    st.session_state.setdefault("sb_access_granted", False)
+    st.session_state.setdefault("sb_guest_mode", False)
+    st.session_state.setdefault("rota_goster", False)
+
+    if "auth_token" in st.session_state:
+        st.session_state["sb_access_granted"] = True
+        st.session_state["sb_guest_mode"] = False
+
+
+def uygulama_girisini_ac(misafir: bool = False) -> None:
+    st.session_state["sb_access_granted"] = True
+    st.session_state["sb_guest_mode"] = misafir
+    st.session_state["rota_goster"] = False
+
+
+def giris_formlari_ciz() -> None:
+    tab_giris, tab_kayit, tab_sifre = st.tabs(["Giriş yap", "Kaydol", "Şifre"])
+    with tab_giris:
+        if not FIREBASE_ENABLED:
+            st.info("Firebase bağlantısı yapılandırılınca giriş yapma aktif olur.")
+            st.button("Giriş Yap", use_container_width=True, key="entry_login_disabled", disabled=True)
+        else:
+            email = st.text_input("E-posta", key="login_email")
+            password = st.text_input("Şifre", type="password", key="login_password")
+            if st.button("Giriş Yap", use_container_width=True, key="entry_login_btn"):
+                user_data = firebase_login(email, password)
+                if user_data and oturum_bilgilerini_kaydet(user_data):
+                    uygulama_girisini_ac(misafir=False)
+                    st.rerun()
+                st.error("Giriş başarısız.")
+
+    with tab_kayit:
+        if not FIREBASE_ENABLED:
+            st.info("Kaydolma için Firebase bağlantısı gerekiyor.")
+            st.button("Kaydol", use_container_width=True, key="entry_register_disabled", disabled=True)
+        else:
+            reg_email = st.text_input("E-posta", key="reg_email")
+            reg_password = st.text_input("Şifre", type="password", key="reg_password")
+            if st.button("Kaydol", use_container_width=True, key="entry_register_btn"):
+                user_data = firebase_register(reg_email, reg_password)
+                if user_data and oturum_bilgilerini_kaydet(user_data):
+                    uygulama_girisini_ac(misafir=False)
+                    st.rerun()
+                st.error("Kayıt başarısız.")
+
+    with tab_sifre:
+        if not FIREBASE_ENABLED:
+            st.info("Şifre sıfırlama Firebase bağlantısından sonra kullanılabilir.")
+            st.button("Sıfırlama Bağlantısı Gönder", use_container_width=True, key="entry_reset_disabled", disabled=True)
+        else:
+            reset_email = st.text_input("E-posta Adresiniz", key="reset_email")
+            if st.button("Sıfırlama Bağlantısı Gönder", use_container_width=True, key="entry_reset_btn"):
+                ok, msg = firebase_sifre_sifirla(reset_email)
+                st.success(msg) if ok else st.error(msg)
+
+
+def giris_ekrani_ciz() -> None:
+    st.markdown(
+        """
+        <section class="sb-entry-hero">
+            <div class="sb-kicker">SarjBul'a hoş geldin</div>
+            <h1>Önce hesabını seç, sonra en yakın şarj rotanı bul.</h1>
+            <p>Kaydolabilir, giriş yapabilir ya da hızlıca misafir olarak devam edebilirsin.</p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    hesap_col, misafir_col = st.columns([1.45, 1.0])
+    with hesap_col:
+        st.markdown('<div class="sb-panel-label">Hesap</div>', unsafe_allow_html=True)
+        giris_formlari_ciz()
+
+    with misafir_col:
+        st.markdown(
+            """
+            <div class="sb-guest-panel">
+                <div class="sb-kicker">Hızlı başlangıç</div>
+                <strong>Hesap açmadan rota oluştur.</strong>
+                <span>Favoriler ve durum bildirimi için sonradan giriş yapabilirsin.</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button("Giriş yapmadan devam et", key="guest_continue", use_container_width=True):
+            uygulama_girisini_ac(misafir=True)
+            st.rerun()
+
+
+def ust_bilgi_ciz() -> None:
+    oturumlu = "auth_token" in st.session_state
+    hesap_metni = st.session_state.get("auth_email") if oturumlu else "Misafir kullanım"
+    adim_metni = "3 / 3 · Rota" if st.session_state.get("rota_goster") else "2 / 3 · Araç ve rota"
+    st.markdown(
+        f"""
+        <div class="sb-flow-top">
+            <span>{adim_metni}</span>
+            <strong>{guvenli_metin(hesap_metni, 80)}</strong>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if oturumlu:
+        if st.button("Çıkış yap", key="top_logout", use_container_width=True):
+            oturumu_temizle()
+            st.session_state["sb_access_granted"] = False
+            st.session_state["sb_guest_mode"] = False
+            st.session_state["rota_goster"] = False
+            st.rerun()
+    elif st.button("Giriş ekranına dön", key="back_to_login", use_container_width=True):
+        st.session_state["sb_access_granted"] = False
+        st.session_state["sb_guest_mode"] = False
+        st.session_state["rota_goster"] = False
+        st.rerun()
+
+
+def arac_secimi_degisti() -> None:
+    secilen = st.session_state.get("secilen_arac")
+    if secilen in ARAC_KATALOGU:
+        st.session_state["batarya_kwh"] = float(ARAC_KATALOGU[secilen]["batarya"])
+        st.session_state["tuketim_kwh"] = float(ARAC_KATALOGU[secilen]["tuketim"])
+    rota_sonucunu_sifirla()
+
+
+def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tuple[
+    str, float, int, float, int, str, int, int, List[str], str, List[str], bool, bool, bool, str
+]:
+    secilen_baslangic = secili_arac_getir()
+    st.session_state.setdefault("secilen_arac", secilen_baslangic)
+
+    st.markdown(
+        """
+        <section class="sb-catalog-panel" id="sarj-katalogu">
+            <div class="sb-kicker">SarjBul kataloğu</div>
+            <h2>Aracını seç, şarj rotanı tek adımda hazırla.</h2>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    secilen_arac = st.selectbox(
+        "Araç kataloğu",
+        list(ARAC_KATALOGU.keys()),
+        key="secilen_arac",
+        on_change=arac_secimi_degisti,
+    )
+    v = ARAC_KATALOGU[secilen_arac]
+
+    c1, c2, c3 = st.columns(3)
+    batarya_kwargs = {
+        "label": "Kapasite",
+        "min_value": 1.0,
+        "max_value": 250.0,
+        "key": "batarya_kwh",
+        "on_change": rota_sonucunu_sifirla,
+    }
+    if "batarya_kwh" not in st.session_state:
+        batarya_kwargs["value"] = float(v["batarya"])
+    batarya = c1.number_input(**batarya_kwargs)
+
+    sarj_kwargs = {
+        "label": "Şarj %",
+        "min_value": 1,
+        "max_value": 100,
+        "key": "sarj_yuzdesi",
+        "on_change": rota_sonucunu_sifirla,
+    }
+    if "sarj_yuzdesi" not in st.session_state:
+        sarj_kwargs["value"] = 30
+    sarj_yuzdesi = c2.slider(**sarj_kwargs)
+
+    tuketim_kwargs = {
+        "label": "Tüketim",
+        "min_value": 5.0,
+        "max_value": 40.0,
+        "key": "tuketim_kwh",
+        "on_change": rota_sonucunu_sifirla,
+    }
+    if "tuketim_kwh" not in st.session_state:
+        tuketim_kwargs["value"] = float(v["tuketim"])
+    tuketim = c3.number_input(**tuketim_kwargs)
+
+    st.markdown(
+        f"""
+        <div class="sb-catalog-meta">
+            <div><span>Varsayılan batarya</span><strong>{float(v["batarya"]):.1f} kWh</strong></div>
+            <div><span>Ortalama tüketim</span><strong>{float(v["tuketim"]):.1f} kWh</strong></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    niyet = "Dengeli"
+    ayar_yaricap = YAKIN_CEVRE_VARSAYILAN_M
+    sonuc_sayisi = min(2, MAX_EKRAN_KART_SAYISI)
+    soket_filtreleri: List[str] = []
+    hiz_filtresi = "Tümü"
+    operator_filtreleri: List[str] = []
+    sadece_24_saat = False
+    haritayi_goster = False
+    menzil_filtresi = True
+    arama_metni = ""
+
+    with st.expander("Filtreler ve sürüş ayarları", expanded=False):
+        niyet = st.radio("Tercih", ["Dengeli", "Yakın", "Hızlı", "Ekonomik"], horizontal=True, on_change=rota_sonucunu_sifirla)
+        guvenlik_kwargs = {
+            "label": "Güvenlik payı (%)",
+            "min_value": 10,
+            "max_value": 50,
+            "key": "guvenlik_marji",
+            "on_change": rota_sonucunu_sifirla,
+        }
+        if "guvenlik_marji" not in st.session_state:
+            guvenlik_kwargs["value"] = 25
+        guvenlik_marji = st.slider(**guvenlik_kwargs)
+        menzil_filtresi = st.checkbox("Menzile göre filtrele", True, on_change=rota_sonucunu_sifirla)
+        arama_metni = st.text_input("İstasyon ara", on_change=rota_sonucunu_sifirla)
+        sonuc_sayisi = st.slider(
+            "Gösterilecek seçenek",
+            1,
+            MAX_EKRAN_KART_SAYISI,
+            min(2, MAX_EKRAN_KART_SAYISI),
+            on_change=rota_sonucunu_sifirla,
+        )
+        soket_filtreleri = st.multiselect("Soket", ["CCS", "CHAdeMO", "Type 2", "Schuko", "GB/T"], on_change=rota_sonucunu_sifirla)
+        hiz_filtresi = st.selectbox("Minimum güç", ["Tümü", "AC (≥7 kW)", "DC (≥50 kW)", "Hızlı DC (≥150 kW)"], on_change=rota_sonucunu_sifirla)
+        operator_filtreleri = st.multiselect("Operatör", operator_secenekleri, on_change=rota_sonucunu_sifirla)
+        sadece_24_saat = st.checkbox("Sadece 24 saat açık", on_change=rota_sonucunu_sifirla)
+        ayar_yaricap = st.slider(
+            "Yakın yer mesafesi (m)",
+            YAKIN_CEVRE_MIN_M,
+            YAKIN_CEVRE_MAX_M,
+            YAKIN_CEVRE_VARSAYILAN_M,
+            YAKIN_CEVRE_ADIM_M,
+            on_change=rota_sonucunu_sifirla,
+        )
+        haritayi_goster = st.checkbox("Haritayı göster", on_change=rota_sonucunu_sifirla)
+
+    if st.button("Şarj Bul", key="find_route_btn", use_container_width=True, disabled=not konum_hazir):
+        st.session_state["rota_goster"] = True
+        st.rerun()
+
+    guvenlik_marji = int(st.session_state.get("guvenlik_marji", 25))
+    return (
+        secilen_arac,
+        float(batarya),
+        int(sarj_yuzdesi),
+        float(tuketim),
+        guvenlik_marji,
+        niyet,
+        int(ayar_yaricap),
+        int(sonuc_sayisi),
+        soket_filtreleri,
+        hiz_filtresi,
+        operator_filtreleri,
+        sadece_24_saat,
+        haritayi_goster,
+        menzil_filtresi,
+        arama_metni,
+    )
 
 
 SABIT_KONUMLAR: Dict[str, Tuple[float, float]] = {
@@ -388,12 +656,24 @@ st.set_page_config(page_title="ŞarjBul", layout="centered", initial_sidebar_sta
 sentry_init()
 load_css()
 oturum_suresini_global_kontrol_et()
+uygulama_akisini_hazirla()
 
+if not st.session_state.get("sb_access_granted"):
+    giris_ekrani_ciz()
+    st.stop()
+
+ust_bilgi_ciz()
 hero_alani = st.empty()
 hero_ciz(hero_araci_getir(), hero_alani)
 
 istasyonlar_verisi = istasyonlari_yukle()
 if not istasyonlar_verisi: st.stop()
+
+operator_secenekleri = sorted({
+    str(ist.get("operator", "Bilinmiyor"))
+    for ist in istasyonlar_verisi
+    if str(ist.get("operator", "")).strip()
+})
 
 # 2. Konum Tespiti
 user_lat, user_lon = None, None
@@ -409,61 +689,58 @@ except Exception as e:
 if user_lat is None: user_lat = st.session_state.get("last_valid_lat")
 if user_lon is None: user_lon = st.session_state.get("last_valid_lon")
 
-if user_lat is None or user_lon is None:
+konum_hazir = user_lat is not None and user_lon is not None
+
+# 3. Araç Kataloğu ve Katmanlı Arama
+(
+    secilen_arac,
+    batarya,
+    sarj_yuzdesi,
+    tuketim,
+    guvenlik_marji,
+    niyet,
+    ayar_yaricap,
+    sonuc_sayisi,
+    soket_filtreleri,
+    hiz_filtresi,
+    operator_filtreleri,
+    sadece_24_saat,
+    haritayi_goster,
+    menzil_filtresi,
+    arama_metni,
+) = arac_katalogu_ciz(konum_hazir, operator_secenekleri)
+
+hero_ciz(secilen_arac, hero_alani)
+
+guvenli_menzil = ((batarya * (sarj_yuzdesi / 100.0) / tuketim) * 100.0) * (1 - guvenlik_marji / 100.0)
+surus_ozeti_ciz(secilen_arac, guvenli_menzil, sarj_yuzdesi)
+
+if not konum_hazir:
+    st.markdown(
+        """
+        <div class="sb-step-panel">
+            <strong>Rotayı hazırlamak için konum seç.</strong>
+            <span>Konum seçildikten sonra Şarj Bul butonu aktif olur.</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     manuel_konum_ciz()
     st.stop()
 
 user_lat, user_lon = float(user_lat), float(user_lon)
 
-# 3. Sessiz Varsayılanlar ve Gelişmiş Ayarlar
-operator_secenekleri = sorted({str(ist.get("operator", "Bilinmiyor")) for ist in istasyonlar_verisi if str(ist.get("operator", "")).strip()})
-niyet = "Dengeli"
-ayar_yaricap = YAKIN_CEVRE_VARSAYILAN_M
-sonuc_sayisi = min(3, MAX_EKRAN_KART_SAYISI)
-soket_filtreleri: List[str] = []
-hiz_filtresi = "Tümü"
-operator_filtreleri: List[str] = []
-sadece_24_saat = False
-haritayi_goster = False
-menzil_filtresi = True
-arama_metni = ""
-
-with st.expander("Gelişmiş ayarlar", expanded=False):
-    niyet = st.radio("Tercih", ["Dengeli", "Yakın", "Hızlı", "Ekonomik"], horizontal=True)
-    secilen_arac = st.selectbox("Araç", list(ARAC_KATALOGU.keys()), key="secilen_arac")
-    v = ARAC_KATALOGU[secilen_arac]
-    c1, c2, c3 = st.columns(3)
-    batarya = c1.number_input("Kapasite", 1.0, 250.0, float(v["batarya"]))
-    sarj_yuzdesi = c2.slider("Şarj %", 1, 100, 30)
-    tuketim = c3.number_input("Tüketim", 5.0, 40.0, float(v["tuketim"]))
-    guvenlik_marji = st.slider("Güvenlik payı (%)", 10, 50, 25)
-    menzil_filtresi = st.checkbox("Menzile göre filtrele", True)
-    arama_metni = st.text_input("İstasyon ara")
-    sonuc_sayisi = st.slider("Gösterilecek seçenek", 1, MAX_EKRAN_KART_SAYISI, min(2, MAX_EKRAN_KART_SAYISI))
-    soket_filtreleri = st.multiselect("Soket", ["CCS", "CHAdeMO", "Type 2", "Schuko", "GB/T"])
-    hiz_filtresi = st.selectbox("Minimum güç", ["Tümü", "AC (≥7 kW)", "DC (≥50 kW)", "Hızlı DC (≥150 kW)"])
-    operator_filtreleri = st.multiselect("Operatör", operator_secenekleri)
-    sadece_24_saat = st.checkbox("Sadece 24 saat açık")
-    ayar_yaricap = st.slider(
-        "Yakın yer mesafesi (m)",
-        YAKIN_CEVRE_MIN_M,
-        YAKIN_CEVRE_MAX_M,
-        YAKIN_CEVRE_VARSAYILAN_M,
-        YAKIN_CEVRE_ADIM_M,
+if not st.session_state.get("rota_goster"):
+    st.markdown(
+        """
+        <div class="sb-step-panel">
+            <strong>Aracın hazır.</strong>
+            <span>Şarj Bul'a bastığında en iyi istasyon ve Rotayı Aç kartı burada gösterilir.</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
-    haritayi_goster = st.checkbox("Haritayı göster")
-
-hero_ciz(secilen_arac, hero_alani)
-
-if "batarya" not in locals():
-    v = ARAC_KATALOGU[secilen_arac]
-    batarya = float(v["batarya"])
-    sarj_yuzdesi = 30
-    tuketim = float(v["tuketim"])
-    guvenlik_marji = 25
-
-guvenli_menzil = ((batarya * (sarj_yuzdesi / 100.0) / tuketim) * 100.0) * (1 - guvenlik_marji / 100.0)
-surus_ozeti_ciz(secilen_arac, guvenli_menzil, sarj_yuzdesi)
+    st.stop()
 
 siralama_modu = {
     "Dengeli": "Öneri",
@@ -484,7 +761,7 @@ for ist in istasyonlar_verisi:
     if operator_filtreleri and str(ist.get("operator")) not in operator_filtreleri: continue
     if sadece_24_saat and not ist.get("_acik_24_saat"): continue
     if arama_metni and arama_metni_normalize_et(arama_metni) not in str(ist.get("_search_text", "")): continue
-    
+
     ist_key = str(ist.get("_station_key") or clean_id_uret(istasyon_id_getir(ist)))
     ariza = {**durum_ozeti_fallback(), **durum_ozetleri.get(ist_key, {})}
     tahmini_sure = tahmini_sure_dk(tahmini)
@@ -571,9 +848,20 @@ if uygun_istasyonlar:
 
                 istasyon_aksiyonlari_ciz(ist, ist_id, ist_key, ayar_yaricap)
 
-    with st.expander("Öneriyi kaydet veya bildir", expanded=False):
-        ist_id = istasyon_id_getir(en_iyi)
-        istasyon_aksiyonlari_ciz(en_iyi, ist_id, en_iyi_key, ayar_yaricap)
+    if "auth_token" in st.session_state:
+        with st.expander("Öneriyi kaydet veya bildir", expanded=False):
+            ist_id = istasyon_id_getir(en_iyi)
+            istasyon_aksiyonlari_ciz(en_iyi, ist_id, en_iyi_key, ayar_yaricap)
+    else:
+        st.markdown(
+            """
+            <div class="sb-step-panel">
+                <strong>Kaydetmek ve durum bildirmek için giriş yapabilirsin.</strong>
+                <span>Misafir olarak rota oluşturma devam eder.</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 else:
     st.markdown(
@@ -585,5 +873,3 @@ else:
         """,
         unsafe_allow_html=True,
     )
-
-hesap_paneli_ciz()
