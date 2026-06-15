@@ -72,18 +72,14 @@ def hero_html_olustur(arac: Optional[str]) -> str:
         >
             <div class="sb-hero-media">
                 <img class="sb-hero-img" src="{guvenli_metin(gorsel)}" alt="{guvenli_metin(aria, 90)}">
-                <svg class="sb-hero-curve" viewBox="0 0 480 82" preserveAspectRatio="none" aria-hidden="true">
-                    <path d="M0 20 C120 78 360 78 480 20 L480 82 L0 82 Z"></path>
-                    <path d="M0 20 C120 78 360 78 480 20"></path>
-                </svg>
+                <div class="sb-neon-floor" aria-hidden="true"></div>
             </div>
             <div class="sb-hero-body">
-                <a class="sb-hero-button" href="#sarj-katalogu" aria-label="Araç kataloğuna git">Şarj Bul</a>
-                <div class="sb-hero-copy">
-                    <div class="sb-hero-kicker">Yakındaki şarj rotan</div>
-                    <h1>SarjBul</h1>
-                    <p>En mantıklı istasyonu bul, Rotayı Aç ile yola devam et.</p>
+                <div class="sb-hero-meta">
+                    <span>Seçili araç</span>
+                    <strong>{guvenli_metin(arac_etiketi, 80)}</strong>
                 </div>
+                <a class="sb-hero-button" href="#sarj-katalogu" aria-label="Araç kataloğuna git">Şarj Bul</a>
             </div>
         </section>
     """
@@ -119,106 +115,104 @@ def uygulama_girisini_ac(misafir: bool = False) -> None:
     st.session_state["rota_goster"] = False
 
 
-def giris_formlari_ciz() -> None:
-    tab_giris, tab_kayit, tab_sifre = st.tabs(["Giriş yap", "Kaydol", "Şifre"])
-    with tab_giris:
-        if not FIREBASE_ENABLED:
-            st.info("Firebase bağlantısı yapılandırılınca giriş yapma aktif olur.")
-            st.button("Giriş Yap", use_container_width=True, key="entry_login_disabled", disabled=True)
-        else:
-            email = st.text_input("E-posta", key="login_email")
-            password = st.text_input("Şifre", type="password", key="login_password")
-            if st.button("Giriş Yap", use_container_width=True, key="entry_login_btn"):
-                user_data = firebase_login(email, password)
-                if user_data and oturum_bilgilerini_kaydet(user_data):
-                    uygulama_girisini_ac(misafir=False)
-                    st.rerun()
-                bildirim_goster("Giriş başarısız.", basarili=False)
+def sosyal_giris_butonlari_ciz() -> None:
+    sosyal1, sosyal2, sosyal3 = st.columns(3)
+    sosyal_butonlar = (
+        (sosyal1, "G  Google", "social_google", "Google girişi yakında aktif olacak."),
+        (sosyal2, "Apple", "social_apple", "Apple girişi yakında aktif olacak."),
+        (sosyal3, "T  Tesla", "social_tesla", "Tesla hesabı bağlantısı yakında aktif olacak."),
+    )
+    for kolon, metin, anahtar, mesaj in sosyal_butonlar:
+        with kolon:
+            if st.button(metin, key=anahtar, use_container_width=True):
+                bildirim_goster(mesaj, basarili=False)
 
-    with tab_kayit:
+
+def giris_formlari_ciz() -> None:
+    st.markdown('<section class="sb-entry-panel">', unsafe_allow_html=True)
+    if not FIREBASE_ENABLED:
+        st.info("Firebase bağlantısı yapılandırılınca giriş yapma aktif olur.")
+        st.button("Devam Et", use_container_width=True, key="entry_login_disabled", disabled=True)
+    else:
+        email = st.text_input("E-posta", key="login_email", placeholder="sen@ornek.com")
+        password = st.text_input("Şifre", type="password", key="login_password", placeholder="Şifren")
+        if st.button("Devam Et", use_container_width=True, key="entry_login_btn", type="primary"):
+            user_data = firebase_login(email, password)
+            if user_data and oturum_bilgilerini_kaydet(user_data):
+                uygulama_girisini_ac(misafir=False)
+                st.rerun()
+            bildirim_goster("Giriş başarısız.", basarili=False)
+
+    if st.button("Veya hızlıca misafir olarak devam et", key="guest_continue", use_container_width=True):
+        uygulama_girisini_ac(misafir=True)
+        st.rerun()
+
+    st.markdown('<div class="sb-social-separator"><span>veya</span></div>', unsafe_allow_html=True)
+    sosyal_giris_butonlari_ciz()
+
+    with st.expander("Hesap oluştur veya şifreni sıfırla", expanded=False):
         if not FIREBASE_ENABLED:
-            st.info("Kaydolma için Firebase bağlantısı gerekiyor.")
-            st.button("Kaydol", use_container_width=True, key="entry_register_disabled", disabled=True)
+            st.info("Kayıt ve şifre sıfırlama Firebase bağlantısından sonra kullanılabilir.")
         else:
-            reg_email = st.text_input("E-posta", key="reg_email")
-            reg_password = st.text_input("Şifre", type="password", key="reg_password")
+            reg_email = st.text_input("Yeni hesap e-postası", key="reg_email")
+            reg_password = st.text_input("Yeni hesap şifresi", type="password", key="reg_password")
             if st.button("Kaydol", use_container_width=True, key="entry_register_btn"):
                 user_data = firebase_register(reg_email, reg_password)
                 if user_data and oturum_bilgilerini_kaydet(user_data):
                     uygulama_girisini_ac(misafir=False)
                     st.rerun()
                 bildirim_goster("Kayıt başarısız.", basarili=False)
-
-    with tab_sifre:
-        if not FIREBASE_ENABLED:
-            st.info("Şifre sıfırlama Firebase bağlantısından sonra kullanılabilir.")
-            st.button("Sıfırlama Bağlantısı Gönder", use_container_width=True, key="entry_reset_disabled", disabled=True)
-        else:
             reset_email = st.text_input("E-posta Adresiniz", key="reset_email")
             if st.button("Sıfırlama Bağlantısı Gönder", use_container_width=True, key="entry_reset_btn"):
                 ok, msg = firebase_sifre_sifirla(reset_email)
                 bildirim_goster(msg, ok)
+    st.markdown('</section>', unsafe_allow_html=True)
 
 
 def giris_ekrani_ciz() -> None:
     st.markdown(
         """
         <section class="sb-entry-hero">
-            <div class="sb-kicker">SarjBul'a hoş geldin</div>
-            <h1>Önce hesabını seç, sonra en yakın şarj rotanı bul.</h1>
-            <p>Kaydolabilir, giriş yapabilir ya da hızlıca misafir olarak devam edebilirsin.</p>
+            <div class="sb-entry-mark">SarjBul</div>
+            <h1>Elektrikli rotanı premium bir kokpit hissiyle başlat.</h1>
+            <p>Şarj, menzil ve rota kararını tek ekranda netleştir.</p>
         </section>
         """,
         unsafe_allow_html=True,
     )
 
-    hesap_col, misafir_col = st.columns([1.45, 1.0])
-    with hesap_col:
-        st.markdown('<div class="sb-panel-label">Hesap</div>', unsafe_allow_html=True)
-        giris_formlari_ciz()
-
-    with misafir_col:
-        st.markdown(
-            """
-            <div class="sb-guest-panel">
-                <div class="sb-kicker">Hızlı başlangıç</div>
-                <strong>Hesap açmadan rota oluştur.</strong>
-                <span>Favoriler ve durum bildirimi için sonradan giriş yapabilirsin.</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        if st.button("Giriş yapmadan devam et", key="guest_continue", use_container_width=True):
-            uygulama_girisini_ac(misafir=True)
-            st.rerun()
+    giris_formlari_ciz()
 
 
 def ust_bilgi_ciz() -> None:
     oturumlu = "auth_token" in st.session_state
     hesap_metni = st.session_state.get("auth_email") if oturumlu else "Misafir kullanım"
     adim_metni = "3 / 3 · Rota" if st.session_state.get("rota_goster") else "2 / 3 · Araç ve rota"
-    st.markdown(
-        f"""
-        <div class="sb-flow-top">
-            <span>{adim_metni}</span>
-            <strong>{guvenli_metin(hesap_metni, 80)}</strong>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    ilerleme = 100 if st.session_state.get("rota_goster") else 66
+    geri_col, durum_col = st.columns([0.16, 0.84])
 
-    if oturumlu:
-        if st.button("Çıkış yap", key="top_logout", use_container_width=True):
-            oturumu_temizle()
+    with geri_col:
+        if st.button("<", key="top_nav_back", help="Geri", use_container_width=True):
+            if oturumlu:
+                oturumu_temizle()
             st.session_state["sb_access_granted"] = False
             st.session_state["sb_guest_mode"] = False
             st.session_state["rota_goster"] = False
             st.rerun()
-    elif st.button("Giriş ekranına dön", key="back_to_login", use_container_width=True):
-        st.session_state["sb_access_granted"] = False
-        st.session_state["sb_guest_mode"] = False
-        st.session_state["rota_goster"] = False
-        st.rerun()
+
+    with durum_col:
+        st.markdown(
+            f"""
+            <div class="sb-flow-top">
+                <div class="sb-progress-track"><span style="width: {ilerleme}%"></span></div>
+                <div class="sb-flow-meta">
+                    <span>{adim_metni}</span>
+                    <strong>{guvenli_metin(hesap_metni, 80)}</strong>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 def arac_secimi_degisti() -> None:
@@ -343,7 +337,7 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
         )
         haritayi_goster = st.checkbox("Haritayı göster", on_change=rota_sonucunu_sifirla)
 
-    if st.button("Şarj Bul", key="find_route_btn", use_container_width=True, disabled=not konum_hazir):
+    if st.button("Şarj Bul", key="find_route_btn", use_container_width=True, disabled=not konum_hazir, type="primary"):
         st.session_state["rota_goster"] = True
         st.rerun()
 
@@ -652,28 +646,24 @@ def hesap_paneli_ciz() -> None:
             return
 
         if "auth_token" not in st.session_state:
-            tab_giris, tab_kayit, tab_sifre = st.tabs(["Giriş", "Kayıt", "Şifre"])
-            with tab_giris:
-                email = st.text_input("E-posta", key="login_email")
-                password = st.text_input("Şifre", type="password", key="login_password")
-                if st.button("Giriş Yap", use_container_width=True):
-                    user_data = firebase_login(email, password)
-                    if user_data and oturum_bilgilerini_kaydet(user_data):
-                        st.rerun()
-                    else:
-                        bildirim_goster("Giriş başarısız.", basarili=False)
-            with tab_kayit:
+            email = st.text_input("E-posta", key="account_login_email")
+            password = st.text_input("Şifre", type="password", key="account_login_password")
+            if st.button("Hesabı Bağla", use_container_width=True, key="account_login_btn", type="primary"):
+                user_data = firebase_login(email, password)
+                if user_data and oturum_bilgilerini_kaydet(user_data):
+                    st.rerun()
+                bildirim_goster("Giriş başarısız.", basarili=False)
+
+            with st.expander("Kaydol veya şifre sıfırla", expanded=False):
                 reg_email = st.text_input("E-posta", key="reg_email")
                 reg_password = st.text_input("Şifre", type="password", key="reg_password")
-                if st.button("Kayıt Ol", use_container_width=True):
+                if st.button("Kayıt Ol", use_container_width=True, key="account_register_btn"):
                     user_data = firebase_register(reg_email, reg_password)
                     if user_data and oturum_bilgilerini_kaydet(user_data):
                         st.rerun()
-                    else:
-                        bildirim_goster("Kayıt başarısız.", basarili=False)
-            with tab_sifre:
+                    bildirim_goster("Kayıt başarısız.", basarili=False)
                 reset_email = st.text_input("E-posta Adresiniz", key="reset_email")
-                if st.button("Sıfırlama Bağlantısı Gönder"):
+                if st.button("Sıfırlama Bağlantısı Gönder", key="account_reset_btn"):
                     ok, msg = firebase_sifre_sifirla(reset_email)
                     bildirim_goster(msg, ok)
         else:
