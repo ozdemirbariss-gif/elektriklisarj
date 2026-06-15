@@ -1,8 +1,9 @@
 import streamlit as st
-import pydeck as pdk
+import folium
 from datetime import timedelta
 from typing import Any, Dict, List, Optional, Tuple
 from streamlit_js_eval import get_geolocation
+from streamlit_folium import st_folium
 
 from config import (
     sentry_init, load_css, logger, MAX_EKRAN_KART_SAYISI,
@@ -93,6 +94,11 @@ def hero_ciz(arac: Optional[str], hedef: Any = None) -> None:
     hedef.markdown(hero_html_olustur(arac), unsafe_allow_html=True)
 
 
+def bildirim_goster(metin: str, basarili: bool = True) -> None:
+    onek = "Tamam" if basarili else "Hata"
+    st.toast(f"{onek}: {metin}")
+
+
 def rota_sonucunu_sifirla() -> None:
     st.session_state["rota_goster"] = False
 
@@ -127,7 +133,7 @@ def giris_formlari_ciz() -> None:
                 if user_data and oturum_bilgilerini_kaydet(user_data):
                     uygulama_girisini_ac(misafir=False)
                     st.rerun()
-                st.error("Giriş başarısız.")
+                bildirim_goster("Giriş başarısız.", basarili=False)
 
     with tab_kayit:
         if not FIREBASE_ENABLED:
@@ -141,7 +147,7 @@ def giris_formlari_ciz() -> None:
                 if user_data and oturum_bilgilerini_kaydet(user_data):
                     uygulama_girisini_ac(misafir=False)
                     st.rerun()
-                st.error("Kayıt başarısız.")
+                bildirim_goster("Kayıt başarısız.", basarili=False)
 
     with tab_sifre:
         if not FIREBASE_ENABLED:
@@ -151,7 +157,7 @@ def giris_formlari_ciz() -> None:
             reset_email = st.text_input("E-posta Adresiniz", key="reset_email")
             if st.button("Sıfırlama Bağlantısı Gönder", use_container_width=True, key="entry_reset_btn"):
                 ok, msg = firebase_sifre_sifirla(reset_email)
-                st.success(msg) if ok else st.error(msg)
+                bildirim_goster(msg, ok)
 
 
 def giris_ekrani_ciz() -> None:
@@ -359,8 +365,6 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
         menzil_filtresi,
         arama_metni,
     )
-
-
 SABIT_KONUMLAR: Dict[str, Tuple[float, float]] = {
     "İstanbul (Kadıköy)": (40.9901, 29.0284),
     "İstanbul (Maslak)": (41.1082, 29.0195),
@@ -405,55 +409,91 @@ def manuel_konum_ciz() -> None:
                 konumu_sessiona_yaz(float(lat), float(lon))
                 st.rerun()
             else:
-                st.error("Geçerli bir enlem/boylam girin.")
+                bildirim_goster("Geçerli bir enlem/boylam girin.", basarili=False)
 
 
-def harita_rengi_getir(skor: int) -> List[int]:
+def harita_rengi_getir(skor: int) -> str:
     if skor >= 80:
-        return [85, 210, 140, 210]
+        return "#55D28C"
     if skor >= 60:
-        return [245, 205, 95, 210]
-    return [230, 120, 120, 210]
+        return "#F5CD5F"
+    return "#E67878"
+
+
+def harita_popup_html_olustur(istasyon: Dict[str, Any]) -> str:
+    isim = kisa_deger(istasyon.get("isim"), "İstasyon", 90)
+    operator = kisa_deger(istasyon.get("operator"), "Operatör bilinmiyor", 70)
+    skor = int(istasyon.get("Skor", 0) or 0)
+    mesafe = float(istasyon.get("Mesafe", 0.0) or 0.0)
+    guc = kisa_deger(istasyon.get("hiz"), "Güç bilinmiyor", 42)
+    durum = kisa_deger(istasyon.get("ArizaEtiketi"), "Canlı veri yok", 60)
+    renk = harita_rengi_getir(skor)
+    return f"""
+        <div style="min-width:190px;font-family:Inter,Arial,sans-serif;color:#101211;">
+            <div style="font-size:14px;font-weight:800;line-height:1.2;margin-bottom:4px;">{isim}</div>
+            <div style="font-size:12px;color:#596158;margin-bottom:8px;">{operator}</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                <div style="border:1px solid #E1E7DD;border-radius:6px;padding:6px;">
+                    <div style="font-size:10px;color:#6B7468;font-weight:700;">Skor</div>
+                    <div style="font-size:16px;font-weight:850;color:{renk};">{skor}</div>
+                </div>
+                <div style="border:1px solid #E1E7DD;border-radius:6px;padding:6px;">
+                    <div style="font-size:10px;color:#6B7468;font-weight:700;">Mesafe</div>
+                    <div style="font-size:16px;font-weight:850;">{mesafe:.1f} km</div>
+                </div>
+            </div>
+            <div style="font-size:12px;margin-top:8px;"><strong>Güç:</strong> {guc}</div>
+            <div style="font-size:12px;margin-top:3px;"><strong>Durum:</strong> {durum}</div>
+        </div>
+    """
 
 
 def harita_ciz(istasyonlar: List[Dict[str, Any]]) -> None:
-    harita_verisi = [
-        {
-            "lat": float(i["enlem"]),
-            "lon": float(i["boylam"]),
-            "isim": str(i.get("isim", "İstasyon")),
-            "skor": int(i.get("Skor", 0)),
-            "mesafe": float(i.get("Mesafe", 0.0)),
-            "guc": str(i.get("hiz", "Bilinmiyor")),
-            "renk": harita_rengi_getir(int(i.get("Skor", 0))),
-        }
-        for i in istasyonlar
-    ]
+    harita_verisi: List[Dict[str, Any]] = []
+    for istasyon in istasyonlar:
+        try:
+            harita_verisi.append({**istasyon, "lat": float(istasyon["enlem"]), "lon": float(istasyon["boylam"])})
+        except (KeyError, TypeError, ValueError) as e:
+            logger.warning("Harita noktası çizilemedi: %s", e)
+
     if not harita_verisi:
         return
 
     merkez_lat = sum(i["lat"] for i in harita_verisi) / len(harita_verisi)
     merkez_lon = sum(i["lon"] for i in harita_verisi) / len(harita_verisi)
-    layer = pdk.Layer(
-        "ScatterplotLayer",
-        data=harita_verisi,
-        get_position="[lon, lat]",
-        get_fill_color="renk",
-        get_radius=120,
-        radius_min_pixels=8,
-        radius_max_pixels=28,
-        pickable=True,
-        stroked=True,
-        get_line_color=[255, 255, 255, 190],
-        line_width_min_pixels=1,
+    harita = folium.Map(
+        location=[merkez_lat, merkez_lon],
+        zoom_start=11,
+        tiles="CartoDB positron",
+        control_scale=True,
     )
-    st.pydeck_chart(
-        pdk.Deck(
-            layers=[layer],
-            initial_view_state=pdk.ViewState(latitude=merkez_lat, longitude=merkez_lon, zoom=10.5),
-            tooltip={"text": "{isim}\nSkor: {skor}\nMesafe: {mesafe} km\nGüç: {guc}"},
-        ),
+
+    bounds = []
+    for istasyon in harita_verisi:
+        skor = int(istasyon.get("Skor", 0) or 0)
+        isim = kisa_deger(istasyon.get("isim"), "İstasyon", 70)
+        konum = [istasyon["lat"], istasyon["lon"]]
+        bounds.append(konum)
+        folium.CircleMarker(
+            location=konum,
+            radius=8 + min(6, max(0, skor) / 18),
+            color=harita_rengi_getir(skor),
+            weight=2,
+            fill=True,
+            fill_color=harita_rengi_getir(skor),
+            fill_opacity=0.84,
+            popup=folium.Popup(harita_popup_html_olustur(istasyon), max_width=280),
+            tooltip=f"{isim} - {skor} puan",
+        ).add_to(harita)
+
+    if len(bounds) > 1:
+        harita.fit_bounds(bounds, padding=(24, 24))
+
+    st_folium(
+        harita,
+        height=360,
         use_container_width=True,
+        returned_objects=[],
     )
 
 
@@ -578,13 +618,13 @@ def istasyon_aksiyonlari_ciz(ist: Dict[str, Any], ist_id: str, ist_key: str, aya
                 b1, b2, b3 = st.columns(3)
                 if b1.button("Uygun", key=f"btn_ok_{ist_key}"):
                     ok, msg = yorum_gonder(ist_id, "Uygun", "Uygun", {})
-                    st.success(msg) if ok else st.error(msg)
+                    bildirim_goster(msg, ok)
                 if b2.button("Sorun", key=f"btn_fail_{ist_key}"):
                     ok, msg = yorum_gonder(ist_id, "Sorun var", "Sorun var", {})
-                    st.success(msg) if ok else st.error(msg)
+                    bildirim_goster(msg, ok)
                 if b3.button("Sıra", key=f"btn_queue_{ist_key}"):
                     ok, msg = yorum_gonder(ist_id, "Sıra var", "Sıra var", {})
-                    st.success(msg) if ok else st.error(msg)
+                    bildirim_goster(msg, ok)
     with a2:
         is_fav = ist_key in st.session_state["favoriler"]
         if st.button("Kayıtlı" if is_fav else "Kaydet", key=f"fav_{ist_key}"):
@@ -621,7 +661,7 @@ def hesap_paneli_ciz() -> None:
                     if user_data and oturum_bilgilerini_kaydet(user_data):
                         st.rerun()
                     else:
-                        st.error("Giriş başarısız.")
+                        bildirim_goster("Giriş başarısız.", basarili=False)
             with tab_kayit:
                 reg_email = st.text_input("E-posta", key="reg_email")
                 reg_password = st.text_input("Şifre", type="password", key="reg_password")
@@ -630,17 +670,17 @@ def hesap_paneli_ciz() -> None:
                     if user_data and oturum_bilgilerini_kaydet(user_data):
                         st.rerun()
                     else:
-                        st.error("Kayıt başarısız.")
+                        bildirim_goster("Kayıt başarısız.", basarili=False)
             with tab_sifre:
                 reset_email = st.text_input("E-posta Adresiniz", key="reset_email")
                 if st.button("Sıfırlama Bağlantısı Gönder"):
                     ok, msg = firebase_sifre_sifirla(reset_email)
-                    st.success(msg) if ok else st.error(msg)
+                    bildirim_goster(msg, ok)
         else:
             if not oturum_gecerli_tut():
                 st.warning("Oturum yenilenemedi. Lütfen tekrar giriş yapın.")
                 st.rerun()
-            st.success("Hesap aktif.")
+            st.caption("Hesap aktif.")
             if st.button("Çıkış Yap", use_container_width=True):
                 oturumu_temizle()
                 st.rerun()
