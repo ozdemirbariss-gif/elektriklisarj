@@ -656,124 +656,245 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
         ensure_ascii=False,
     ).replace("</", "<\\/")
 
-    st.markdown('<div class="sb-route-feed-mode" aria-hidden="true"></div>', unsafe_allow_html=True)
-    components.html(
-        f"""
+    feed_html = """
         <section class="sb-feed-shell" id="rotayi-ac" aria-label="İstasyon akışı">
-            <div class="sb-feed-card" id="station-card" tabindex="0"></div>
+            <div class="sb-feed-viewport" id="station-feed" tabindex="0" aria-live="polite">
+                <div class="sb-feed-track" id="station-track"></div>
+            </div>
+            <div class="sb-feed-dots" id="station-dots" aria-label="İstasyon konumu"></div>
         </section>
         <script>
-            const stations = {payload_json};
-            const card = document.getElementById("station-card");
+            const stations = __STATIONS_JSON__;
+            const viewport = document.getElementById("station-feed");
+            const track = document.getElementById("station-track");
+            const dots = document.getElementById("station-dots");
+            const visibleWindowSize = Math.min(5, Math.max(1, stations.length));
             let activeIndex = 0;
-            let gestureLocked = false;
-            let touchStartY = 0;
+            let visibleIndex = 0;
+            let windowStart = 0;
+            let observer = null;
+            let scrollTimer = null;
 
-            const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({{
+            const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
                 "&": "&amp;",
                 "<": "&lt;",
                 ">": "&gt;",
-                "\\"": "&quot;",
+                '"': "&quot;",
                 "'": "&#39;"
-            }}[char]));
+            }[char]));
 
-            const clamp = (value) => Math.max(0, Math.min(stations.length - 1, value));
-            const chipHtml = (chips) => chips.length
-                ? `<div class="sb-feed-chips">${{chips.map((chip) => `<span>${{esc(chip)}}</span>`).join("")}}</div>`
-                : "";
-            const commentHtml = (comments) => comments.length
-                ? `<div class="sb-feed-comments">${{comments.map((item) => `
-                    <div><strong>${{esc(item.durum || "Bildirim")}}</strong><span>${{esc(item.yorum)}}</span></div>
-                `).join("")}}</div>`
-                : "";
+            const clampIndex = (value) => Math.max(0, Math.min(stations.length - 1, value));
+            const localIndex = (index) => index - windowStart;
+            const windowEnd = () => Math.min(stations.length, windowStart + visibleWindowSize);
 
-            function render(direction = 0) {{
-                const station = stations[activeIndex];
-                const directionClass = direction > 0 ? "is-next" : direction < 0 ? "is-prev" : "";
-                card.className = `sb-feed-card ${{station.featured ? "is-featured" : ""}} ${{directionClass}}`;
-                card.innerHTML = `
-                    <div class="sb-feed-glow"></div>
-                    <div class="sb-feed-top">
-                        <div class="sb-feed-title">
-                            <div class="sb-feed-eyebrow">${{esc(station.eyebrow)}}</div>
-                            <h2>${{esc(station.name)}}</h2>
-                            <p>${{esc(station.operator)}}</p>
+            function nextWindowStart(index) {
+                if (stations.length <= visibleWindowSize) return 0;
+                const middleOffset = Math.floor(visibleWindowSize / 2);
+                return Math.max(0, Math.min(index - middleOffset, stations.length - visibleWindowSize));
+            }
+
+            function chipHtml(chips) {
+                return chips.length
+                    ? `<div class="sb-feed-chips">${chips.map((chip) => `<span>${esc(chip)}</span>`).join("")}</div>`
+                    : "";
+            }
+
+            function commentHtml(comments) {
+                return comments.length
+                    ? `<div class="sb-feed-comments">${comments.map((item) => `
+                        <div><strong>${esc(item.durum || "Bildirim")}</strong><span>${esc(item.yorum)}</span></div>
+                    `).join("")}</div>`
+                    : "";
+            }
+
+            function cardHtml(station, index) {
+                const rank = String(station.rank).padStart(2, "0");
+                return `
+                    <article
+                        class="sb-feed-card ${station.featured ? "is-featured" : ""}"
+                        data-card-index="${index}"
+                        aria-label="${esc(station.name)}"
+                    >
+                        <div class="sb-feed-glow"></div>
+                        <div class="sb-feed-top">
+                            <div class="sb-feed-title">
+                                <div class="sb-feed-eyebrow">${esc(station.eyebrow)}</div>
+                                <h2>${esc(station.name)}</h2>
+                                <p>${esc(station.operator)}</p>
+                            </div>
+                            <div class="sb-feed-counter">
+                                <strong>${rank}</strong>
+                                <span>/ ${station.total}</span>
+                            </div>
                         </div>
-                        <div class="sb-feed-counter">
-                            <strong>${{String(station.rank).padStart(2, "0")}}</strong>
-                            <span>/ ${{station.total}}</span>
+                        <div class="sb-feed-hero">
+                            <strong>${esc(station.distance)}</strong>
+                            <span>${esc(station.duration)} · varış ${esc(station.arrival)}</span>
                         </div>
-                    </div>
-                    <div class="sb-feed-hero">
-                        <strong>${{esc(station.distance)}}</strong>
-                        <span>${{esc(station.duration)}} · varış ${{esc(station.arrival)}}</span>
-                    </div>
-                    <div class="sb-feed-score-row">
-                        <div class="sb-feed-score"><strong>${{station.score}}</strong><span>PUAN</span></div>
-                        <div class="sb-feed-status">${{esc(station.status)}}</div>
-                    </div>
-                    <div class="sb-feed-grid">
-                        <div><span>Güç</span><strong>${{esc(station.power)}}</strong></div>
-                        <div><span>Soket</span><strong>${{esc(station.socket)}}</strong></div>
-                        <div><span>Fiyat</span><strong>${{esc(station.price)}}</strong></div>
-                    </div>
-                    ${{chipHtml(station.chips)}}
-                    ${{commentHtml(station.comments)}}
-                    <div class="sb-feed-address">${{esc(station.address)}}</div>
-                    <a class="sb-feed-route" href="${{esc(station.routeUrl)}}" target="_blank" rel="noopener noreferrer">
-                        <span>Rotayı Aç</span><small>Google Maps</small>
-                    </a>
-                    <div class="sb-feed-rail" aria-hidden="true">
-                        <span class="${{activeIndex === 0 ? "is-active" : ""}}"></span>
-                        <span class="${{activeIndex > 0 && activeIndex < stations.length - 1 ? "is-active" : ""}}"></span>
-                        <span class="${{activeIndex === stations.length - 1 ? "is-active" : ""}}"></span>
-                    </div>
+                        <div class="sb-feed-score-row">
+                            <div class="sb-feed-score"><strong>${station.score}</strong><span>PUAN</span></div>
+                            <div class="sb-feed-status">${esc(station.status)}</div>
+                        </div>
+                        <div class="sb-feed-grid">
+                            <div><span>Güç</span><strong>${esc(station.power)}</strong></div>
+                            <div><span>Soket</span><strong>${esc(station.socket)}</strong></div>
+                            <div><span>Fiyat</span><strong>${esc(station.price)}</strong></div>
+                        </div>
+                        ${chipHtml(station.chips)}
+                        ${commentHtml(station.comments)}
+                        <div class="sb-feed-address">${esc(station.address)}</div>
+                        <a class="sb-feed-route" href="${esc(station.routeUrl)}" target="_blank" rel="noopener noreferrer">
+                            <span>Rotayı Aç</span><small>Google Maps</small>
+                        </a>
+                    </article>
                 `;
-                window.requestAnimationFrame(() => card.classList.add("is-settled"));
-            }}
+            }
 
-            function goTo(nextIndex) {{
-                const next = clamp(nextIndex);
-                if (gestureLocked || next === activeIndex) return;
-                const direction = next > activeIndex ? 1 : -1;
+            function renderDots() {
+                const maxDots = Math.min(7, stations.length);
+                const dotStart = Math.max(0, Math.min(visibleIndex - Math.floor(maxDots / 2), stations.length - maxDots));
+                dots.innerHTML = Array.from({ length: maxDots }, (_, offset) => {
+                    const index = dotStart + offset;
+                    const classes = [
+                        "sb-feed-dot",
+                        index === visibleIndex ? "is-active" : "",
+                        index === 0 || index === stations.length - 1 ? "is-edge" : ""
+                    ].filter(Boolean).join(" ");
+                    return `<button class="${classes}" type="button" data-target="${index}" aria-label="${index + 1}. istasyona git"></button>`;
+                }).join("");
+            }
+
+            function paintActiveSlide() {
+                const slides = Array.from(track.querySelectorAll(".sb-feed-slide"));
+                slides.forEach((slide) => {
+                    const index = Number(slide.dataset.index);
+                    const isActive = index === visibleIndex;
+                    const isNear = Math.abs(index - visibleIndex) === 1;
+                    slide.classList.toggle("is-active", isActive);
+                    slide.classList.toggle("is-near", isNear);
+                    const card = slide.querySelector(".sb-feed-card");
+                    if (card) {
+                        card.toggleAttribute("aria-current", isActive);
+                    }
+                });
+                renderDots();
+            }
+
+            function syncMotion() {
+                const height = Math.max(1, viewport.clientHeight);
+                const center = viewport.scrollTop / height;
+                Array.from(track.querySelectorAll(".sb-feed-slide")).forEach((slide, local) => {
+                    const distance = Math.min(2, Math.abs(local - center));
+                    const card = slide.querySelector(".sb-feed-card");
+                    if (!card) return;
+                    card.style.setProperty("--sb-card-scale", String(1 - Math.min(0.12, distance * 0.065)));
+                    card.style.setProperty("--sb-card-opacity", String(1 - Math.min(0.62, distance * 0.46)));
+                    card.style.setProperty("--sb-card-shift", `${Math.min(34, distance * 22)}px`);
+                });
+            }
+
+            function setupObserver() {
+                if (observer) observer.disconnect();
+                observer = new IntersectionObserver((entries) => {
+                    const best = entries
+                        .filter((entry) => entry.isIntersecting)
+                        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+                    if (!best || best.intersectionRatio < 0.52) return;
+                    visibleIndex = clampIndex(Number(best.target.dataset.index));
+                    paintActiveSlide();
+                }, {
+                    root: viewport,
+                    threshold: [0.28, 0.52, 0.72, 0.9]
+                });
+                Array.from(track.querySelectorAll(".sb-feed-slide")).forEach((slide) => observer.observe(slide));
+            }
+
+            function renderWindow(instant = true) {
+                windowStart = nextWindowStart(activeIndex);
+                const end = windowEnd();
+                track.innerHTML = Array.from({ length: end - windowStart }, (_, offset) => {
+                    const index = windowStart + offset;
+                    return `<div class="sb-feed-slide" data-index="${index}">${cardHtml(stations[index], index)}</div>`;
+                }).join("");
+                setupObserver();
+                visibleIndex = activeIndex;
+                paintActiveSlide();
+                window.requestAnimationFrame(() => {
+                    const targetTop = Math.max(0, localIndex(activeIndex)) * viewport.clientHeight;
+                    if (instant) {
+                        viewport.scrollTop = targetTop;
+                    } else {
+                        viewport.scrollTo({ top: targetTop, behavior: "smooth" });
+                    }
+                    syncMotion();
+                    viewport.focus({ preventScroll: true });
+                });
+            }
+
+            function settleToSnap() {
+                const height = Math.max(1, viewport.clientHeight);
+                const next = clampIndex(windowStart + Math.round(viewport.scrollTop / height));
                 activeIndex = next;
-                gestureLocked = true;
-                render(direction);
-                window.setTimeout(() => {{ gestureLocked = false; }}, 360);
-            }}
+                visibleIndex = next;
+                const local = localIndex(activeIndex);
+                const shouldRecenter = (
+                    (local <= 1 && windowStart > 0) ||
+                    (local >= visibleWindowSize - 2 && windowEnd() < stations.length)
+                );
+                if (shouldRecenter) {
+                    renderWindow(true);
+                    return;
+                }
+                viewport.scrollTo({ top: Math.max(0, local) * height, behavior: "smooth" });
+                paintActiveSlide();
+            }
 
-            window.addEventListener("wheel", (event) => {{
-                if (Math.abs(event.deltaY) < 16) return;
-                event.preventDefault();
-                goTo(activeIndex + (event.deltaY > 0 ? 1 : -1));
-            }}, {{ passive: false }});
+            function scrollToIndex(index) {
+                const next = clampIndex(index);
+                if (next < windowStart || next >= windowEnd()) {
+                    activeIndex = next;
+                    visibleIndex = next;
+                    renderWindow(false);
+                    return;
+                }
+                viewport.scrollTo({ top: localIndex(next) * viewport.clientHeight, behavior: "smooth" });
+            }
 
-            window.addEventListener("touchstart", (event) => {{
-                touchStartY = event.touches[0].clientY;
-            }}, {{ passive: true }});
+            viewport.addEventListener("scroll", () => {
+                syncMotion();
+                window.clearTimeout(scrollTimer);
+                scrollTimer = window.setTimeout(settleToSnap, 120);
+            }, { passive: true });
 
-            window.addEventListener("touchend", (event) => {{
-                const delta = touchStartY - event.changedTouches[0].clientY;
-                if (Math.abs(delta) < 34) return;
-                goTo(activeIndex + (delta > 0 ? 1 : -1));
-            }}, {{ passive: true }});
-
-            window.addEventListener("keydown", (event) => {{
-                if (event.key === "ArrowDown" || event.key === "PageDown" || event.key === " ") {{
+            viewport.addEventListener("keydown", (event) => {
+                if (event.key === "ArrowDown" || event.key === "PageDown" || event.key === " ") {
                     event.preventDefault();
-                    goTo(activeIndex + 1);
-                }}
-                if (event.key === "ArrowUp" || event.key === "PageUp") {{
+                    scrollToIndex(visibleIndex + 1);
+                }
+                if (event.key === "ArrowUp" || event.key === "PageUp") {
                     event.preventDefault();
-                    goTo(activeIndex - 1);
-                }}
-            }});
+                    scrollToIndex(visibleIndex - 1);
+                }
+                if (event.key === "Home") {
+                    event.preventDefault();
+                    scrollToIndex(0);
+                }
+                if (event.key === "End") {
+                    event.preventDefault();
+                    scrollToIndex(stations.length - 1);
+                }
+            });
 
-            render();
-            card.focus({{ preventScroll: true }});
+            dots.addEventListener("click", (event) => {
+                const button = event.target.closest("button[data-target]");
+                if (!button) return;
+                scrollToIndex(Number(button.dataset.target));
+            });
+
+            renderWindow(true);
         </script>
         <style>
-            :root {{
+            :root {
                 color-scheme: dark;
                 --feed-bg: #0F1115;
                 --feed-text: #F7FAF7;
@@ -781,39 +902,72 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 --feed-muted: rgba(247, 250, 247, 0.46);
                 --feed-green: #49FF9A;
                 --feed-blue: #38BDF8;
+                --feed-frame-height: 640px;
                 --feed-font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
                 --feed-font-body: "Inter", system-ui, sans-serif;
-            }}
+            }
 
-            * {{ box-sizing: border-box; }}
-            html, body {{
+            * { box-sizing: border-box; }
+            html,
+            body {
                 background: transparent;
                 margin: 0;
                 min-height: 100%;
                 overflow: hidden;
                 overscroll-behavior: contain;
-            }}
+            }
 
-            body {{
+            body {
                 font-family: var(--feed-font-body);
                 padding: 0;
-            }}
+            }
 
-            .sb-feed-shell {{
-                align-items: stretch;
+            .sb-feed-shell {
                 background:
                     radial-gradient(circle at 50% 8%, rgba(73, 255, 154, 0.13), transparent 34%),
                     radial-gradient(circle at 90% 70%, rgba(56, 189, 248, 0.13), transparent 30%),
                     linear-gradient(180deg, rgba(15, 17, 21, 0.10), rgba(15, 17, 21, 0.82));
-                display: flex;
-                height: 640px;
-                justify-content: center;
+                height: var(--feed-frame-height);
                 overflow: hidden;
-                padding: 10px 0 18px;
+                position: relative;
                 width: 100%;
-            }}
+            }
 
-            .sb-feed-card {{
+            .sb-feed-viewport {
+                height: 100%;
+                outline: 0;
+                overflow-x: hidden;
+                overflow-y: auto;
+                scroll-behavior: smooth;
+                scroll-padding: 0;
+                scroll-snap-type: y mandatory;
+                scrollbar-width: none;
+                touch-action: pan-y;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .sb-feed-viewport::-webkit-scrollbar {
+                display: none;
+            }
+
+            .sb-feed-track {
+                min-height: 100%;
+            }
+
+            .sb-feed-slide {
+                align-items: stretch;
+                display: flex;
+                height: var(--feed-frame-height);
+                justify-content: center;
+                padding: 10px 0 18px;
+                scroll-snap-align: center;
+                scroll-snap-stop: always;
+            }
+
+            .sb-feed-card {
+                --sb-card-opacity: 0.44;
+                --sb-card-scale: 0.92;
+                --sb-card-shift: 24px;
                 background:
                     linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.036)),
                     linear-gradient(160deg, rgba(14, 20, 28, 0.96), rgba(8, 10, 15, 0.98));
@@ -823,34 +977,39 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 color: var(--feed-text);
                 display: flex;
                 flex-direction: column;
-                min-height: 614px;
+                height: calc(var(--feed-frame-height) - 28px);
                 outline: 0;
                 overflow: hidden;
                 padding: 24px 20px 18px;
                 position: relative;
-                transform: translateY(12px) scale(0.988);
-                transition: opacity 280ms ease, transform 280ms ease;
+                opacity: var(--sb-card-opacity);
+                transform: translateY(var(--sb-card-shift)) scale(var(--sb-card-scale));
+                transform-origin: center center;
+                transition:
+                    box-shadow 260ms ease,
+                    filter 260ms ease,
+                    opacity 180ms ease,
+                    transform 180ms ease;
                 width: min(100%, 500px);
-            }}
+                will-change: opacity, transform;
+            }
 
-            .sb-feed-card.is-settled {{
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }}
+            .sb-feed-slide.is-active .sb-feed-card {
+                --sb-card-opacity: 1;
+                --sb-card-scale: 1;
+                --sb-card-shift: 0px;
+                filter: saturate(1.08);
+            }
 
-            .sb-feed-card.is-next {{
-                animation: feedInNext 320ms ease both;
-            }}
+            .sb-feed-slide.is-near .sb-feed-card {
+                box-shadow: 0 20px 54px rgba(0, 0, 0, 0.34), 0 0 36px rgba(73, 255, 154, 0.08);
+            }
 
-            .sb-feed-card.is-prev {{
-                animation: feedInPrev 320ms ease both;
-            }}
-
-            .sb-feed-card.is-featured {{
+            .sb-feed-card.is-featured {
                 box-shadow: 0 30px 86px rgba(0, 0, 0, 0.42), 0 0 56px rgba(73, 255, 154, 0.17);
-            }}
+            }
 
-            .sb-feed-glow {{
+            .sb-feed-glow {
                 background:
                     linear-gradient(90deg, transparent, rgba(73, 255, 154, 0.58), rgba(56, 189, 248, 0.42), transparent);
                 filter: blur(13px);
@@ -861,27 +1020,27 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 right: 14%;
                 top: 47%;
                 transform: perspective(140px) rotateX(55deg);
-            }}
+            }
 
-            .sb-feed-top {{
+            .sb-feed-top {
                 align-items: flex-start;
                 display: flex;
                 gap: 14px;
                 justify-content: space-between;
                 position: relative;
                 z-index: 2;
-            }}
+            }
 
-            .sb-feed-eyebrow {{
+            .sb-feed-eyebrow {
                 color: var(--feed-green);
                 font-size: 10px;
                 font-weight: 800;
                 letter-spacing: 0;
                 margin-bottom: 8px;
                 text-transform: uppercase;
-            }}
+            }
 
-            .sb-feed-title h2 {{
+            .sb-feed-title h2 {
                 color: var(--feed-text);
                 font-family: var(--feed-font-display);
                 font-size: 28px;
@@ -889,69 +1048,69 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 line-height: 1.04;
                 margin: 0;
                 overflow-wrap: anywhere;
-            }}
+            }
 
-            .sb-feed-title p {{
+            .sb-feed-title p {
                 color: var(--feed-soft);
                 font-size: 13px;
                 font-weight: 600;
                 margin: 8px 0 0;
-            }}
+            }
 
-            .sb-feed-counter {{
+            .sb-feed-counter {
                 align-items: flex-end;
                 display: flex;
                 flex: 0 0 auto;
                 gap: 2px;
                 line-height: 1;
-            }}
+            }
 
-            .sb-feed-counter strong {{
+            .sb-feed-counter strong {
                 color: var(--feed-green);
                 font-family: var(--feed-font-display);
                 font-size: 28px;
-            }}
+            }
 
-            .sb-feed-counter span {{
+            .sb-feed-counter span {
                 color: var(--feed-muted);
                 font-size: 12px;
                 font-weight: 800;
                 padding-bottom: 4px;
-            }}
+            }
 
-            .sb-feed-hero {{
+            .sb-feed-hero {
                 margin: auto 0 18px;
                 position: relative;
                 z-index: 2;
-            }}
+            }
 
-            .sb-feed-hero strong {{
+            .sb-feed-hero strong {
                 color: var(--feed-text);
                 display: block;
                 font-family: var(--feed-font-display);
                 font-size: 50px;
                 letter-spacing: 0;
                 line-height: 0.95;
-            }}
+            }
 
-            .sb-feed-hero span {{
+            .sb-feed-hero span {
                 color: var(--feed-soft);
                 display: block;
                 font-size: 14px;
                 font-weight: 700;
                 margin-top: 10px;
-            }}
+            }
 
-            .sb-feed-score-row {{
+            .sb-feed-score-row {
                 align-items: center;
                 display: flex;
                 gap: 10px;
                 margin-bottom: 12px;
                 position: relative;
                 z-index: 2;
-            }}
+            }
 
-            .sb-feed-score {{
+            .sb-feed-score {
                 align-items: center;
                 background: linear-gradient(135deg, var(--feed-green), var(--feed-blue));
                 border-radius: 8px;
@@ -964,21 +1123,21 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 min-height: 58px;
                 min-width: 68px;
                 padding: 7px 9px;
-            }}
+            }
 
-            .sb-feed-score strong {{
+            .sb-feed-score strong {
                 font-family: var(--feed-font-display);
                 font-size: 22px;
                 line-height: 1;
-            }}
+            }
 
-            .sb-feed-score span {{
+            .sb-feed-score span {
                 font-size: 10px;
                 font-weight: 900;
                 opacity: 0.72;
-            }}
+            }
 
-            .sb-feed-status {{
+            .sb-feed-status {
                 background: rgba(255, 255, 255, 0.065);
                 border: 1px solid rgba(255, 255, 255, 0.075);
                 border-radius: 8px;
@@ -988,51 +1147,51 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 font-weight: 750;
                 min-height: 58px;
                 padding: 13px 14px;
-            }}
+            }
 
-            .sb-feed-grid {{
+            .sb-feed-grid {
                 display: grid;
                 gap: 8px;
                 grid-template-columns: repeat(3, minmax(0, 1fr));
                 position: relative;
                 z-index: 2;
-            }}
+            }
 
-            .sb-feed-grid div {{
+            .sb-feed-grid div {
                 background: rgba(255, 255, 255, 0.055);
                 border: 1px solid rgba(255, 255, 255, 0.065);
                 border-radius: 8px;
                 min-height: 70px;
                 padding: 10px;
-            }}
+            }
 
-            .sb-feed-grid span {{
+            .sb-feed-grid span {
                 color: var(--feed-muted);
                 display: block;
                 font-size: 10px;
                 font-weight: 800;
                 text-transform: uppercase;
-            }}
+            }
 
-            .sb-feed-grid strong {{
+            .sb-feed-grid strong {
                 color: var(--feed-text);
                 display: block;
                 font-size: 13px;
                 line-height: 1.18;
                 margin-top: 6px;
                 overflow-wrap: anywhere;
-            }}
+            }
 
-            .sb-feed-chips {{
+            .sb-feed-chips {
                 display: flex;
                 flex-wrap: wrap;
                 gap: 6px;
                 margin-top: 12px;
                 position: relative;
                 z-index: 2;
-            }}
+            }
 
-            .sb-feed-chips span {{
+            .sb-feed-chips span {
                 background: rgba(73, 255, 154, 0.10);
                 border: 1px solid rgba(73, 255, 154, 0.22);
                 border-radius: 999px;
@@ -1041,41 +1200,41 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 font-weight: 800;
                 min-height: 26px;
                 padding: 6px 9px;
-            }}
+            }
 
-            .sb-feed-comments {{
+            .sb-feed-comments {
                 display: grid;
                 gap: 7px;
                 margin-top: 12px;
                 position: relative;
                 z-index: 2;
-            }}
+            }
 
-            .sb-feed-comments div {{
+            .sb-feed-comments div {
                 background: rgba(255, 255, 255, 0.052);
                 border: 1px solid rgba(255, 255, 255, 0.06);
                 border-radius: 8px;
                 min-height: 48px;
                 padding: 8px 10px;
-            }}
+            }
 
             .sb-feed-comments strong,
-            .sb-feed-comments span {{
+            .sb-feed-comments span {
                 display: block;
                 font-size: 11px;
                 line-height: 1.25;
-            }}
+            }
 
-            .sb-feed-comments strong {{
+            .sb-feed-comments strong {
                 color: var(--feed-green);
                 margin-bottom: 3px;
-            }}
+            }
 
-            .sb-feed-comments span {{
+            .sb-feed-comments span {
                 color: var(--feed-soft);
-            }}
+            }
 
-            .sb-feed-address {{
+            .sb-feed-address {
                 color: var(--feed-muted);
                 font-size: 12px;
                 line-height: 1.34;
@@ -1084,9 +1243,9 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 overflow-wrap: anywhere;
                 position: relative;
                 z-index: 2;
-            }}
+            }
 
-            .sb-feed-route {{
+            .sb-feed-route {
                 align-items: center;
                 background:
                     linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent 30%, transparent 70%, rgba(255, 255, 255, 0.14)),
@@ -1102,81 +1261,106 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 position: relative;
                 text-decoration: none;
                 z-index: 2;
-            }}
+            }
 
-            .sb-feed-route span {{
+            .sb-feed-route span {
                 font-family: var(--feed-font-display);
                 font-size: 16px;
                 font-weight: 850;
-            }}
+            }
 
-            .sb-feed-route small {{
+            .sb-feed-route small {
                 font-size: 11px;
                 font-weight: 800;
                 opacity: 0.66;
-            }}
+            }
 
-            .sb-feed-rail {{
-                bottom: 22px;
-                display: grid;
+            .sb-feed-dots {
+                align-items: center;
+                bottom: 18px;
+                display: flex;
                 gap: 7px;
+                justify-content: center;
+                left: 50%;
+                pointer-events: auto;
                 position: absolute;
-                right: 12px;
-                z-index: 3;
-            }}
+                transform: translateX(-50%);
+                z-index: 6;
+            }
 
-            .sb-feed-rail span {{
-                background: rgba(255, 255, 255, 0.22);
+            .sb-feed-dot {
+                appearance: none;
+                background: rgba(255, 255, 255, 0.24);
+                border: 0;
                 border-radius: 999px;
-                height: 22px;
-                width: 3px;
-            }}
+                cursor: pointer;
+                height: 6px;
+                opacity: 0.82;
+                padding: 0;
+                transition: background 180ms ease, box-shadow 180ms ease, transform 180ms ease, width 180ms ease;
+                width: 6px;
+            }
 
-            .sb-feed-rail span.is-active {{
-                background: linear-gradient(180deg, var(--feed-green), var(--feed-blue));
-                box-shadow: 0 0 16px rgba(73, 255, 154, 0.48);
-                height: 34px;
-            }}
+            .sb-feed-dot.is-edge {
+                opacity: 0.48;
+                transform: scale(0.82);
+            }
 
-            @keyframes feedInNext {{
-                from {{ opacity: 0; transform: translateY(48px) scale(0.982); }}
-                to {{ opacity: 1; transform: translateY(0) scale(1); }}
-            }}
+            .sb-feed-dot.is-active {
+                background: linear-gradient(90deg, var(--feed-green), var(--feed-blue));
+                box-shadow: 0 0 18px rgba(73, 255, 154, 0.55);
+                opacity: 1;
+                transform: scale(1);
+                width: 26px;
+            }
 
-            @keyframes feedInPrev {{
-                from {{ opacity: 0; transform: translateY(-48px) scale(0.982); }}
-                to {{ opacity: 1; transform: translateY(0) scale(1); }}
-            }}
+            @media (prefers-reduced-motion: reduce) {
+                .sb-feed-viewport {
+                    scroll-behavior: auto;
+                }
 
-            @media (max-width: 430px) {{
-                .sb-feed-shell {{
-                    height: 636px;
+                .sb-feed-card,
+                .sb-feed-dot {
+                    transition: none;
+                }
+            }
+
+            @media (max-width: 430px) {
+                :root {
+                    --feed-frame-height: 636px;
+                }
+
+                .sb-feed-slide {
                     padding: 8px 0 12px;
-                }}
+                }
 
-                .sb-feed-card {{
-                    min-height: 610px;
+                .sb-feed-card {
+                    height: calc(var(--feed-frame-height) - 20px);
                     padding: 21px 16px 16px;
-                }}
+                }
 
-                .sb-feed-title h2 {{
+                .sb-feed-title h2 {
                     font-size: 24px;
-                }}
+                }
 
-                .sb-feed-hero strong {{
+                .sb-feed-hero strong {
                     font-size: 42px;
-                }}
+                }
 
-                .sb-feed-grid {{
+                .sb-feed-grid {
                     grid-template-columns: 1fr;
-                }}
+                }
 
-                .sb-feed-grid div {{
+                .sb-feed-grid div {
                     min-height: 54px;
-                }}
-            }}
+                }
+            }
         </style>
-        """,
+    """.replace("__STATIONS_JSON__", payload_json)
+
+    st.markdown('<div class="sb-route-feed-mode" aria-hidden="true"></div>', unsafe_allow_html=True)
+    components.html(
+        feed_html,
         height=650,
         scrolling=False,
     )
