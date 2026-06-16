@@ -1,12 +1,14 @@
+import json
 import streamlit as st
 import folium
 from datetime import timedelta
 from typing import Any, Dict, List, Optional, Tuple
+import streamlit.components.v1 as components
 from streamlit_js_eval import get_geolocation
 from streamlit_folium import st_folium
 
 from config import (
-    sentry_init, load_css, logger, MAX_EKRAN_KART_SAYISI,
+    sentry_init, load_css, logger,
     ARAC_GORSELLERI, ARAC_KATALOGU, HIZ_ESIK_MAP, KONUM_DOGRULAMA_ESIGI_KM,
     MAX_SON_YORUM, FIREBASE_ENABLED, YAKIN_CEVRE_MIN_M,
     YAKIN_CEVRE_VARSAYILAN_M, YAKIN_CEVRE_MAX_M, YAKIN_CEVRE_ADIM_M,
@@ -20,7 +22,7 @@ from utils import (
 )
 from services import (
     firebase_login, firebase_register, firebase_sifre_sifirla, oturumu_temizle,
-    istasyonlari_yukle, durum_ozetleri_getir, gorunen_yorumlari_getir, tahmin_yorumlari_getir,
+    istasyonlari_yukle, durum_ozetleri_getir,
     favorileri_getir, favori_guncelle, yorum_gonder, yakin_cevre_getir,
     oturum_bilgilerini_kaydet, oturum_gecerli_tut
 )
@@ -31,6 +33,11 @@ from scoring import istasyon_rozetleri_getir, istasyon_skoru_hesapla
 def kisa_deger(deger: Any, varsayilan: str = "Bilinmiyor", max_len: int = 80) -> str:
     text = str(deger or "").strip() or varsayilan
     return guvenli_metin(text, max_len)
+
+
+def kisa_duz_metin(deger: Any, varsayilan: str = "Bilinmiyor", max_len: int = 120) -> str:
+    text = str(deger or "").strip() or varsayilan
+    return text[:max_len]
 
 
 def secili_arac_getir() -> str:
@@ -193,6 +200,9 @@ def ust_bilgi_ciz() -> None:
 
     with geri_col:
         if st.button("<", key="top_nav_back", help="Geri", use_container_width=True):
+            if st.session_state.get("rota_goster"):
+                st.session_state["rota_goster"] = False
+                st.rerun()
             if oturumlu:
                 oturumu_temizle()
             st.session_state["sb_access_granted"] = False
@@ -224,7 +234,7 @@ def arac_secimi_degisti() -> None:
 
 
 def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tuple[
-    str, float, int, float, int, str, int, int, List[str], str, List[str], bool, bool, bool, str
+    str, float, int, float, int, str, int, List[str], str, List[str], bool, bool, bool, str
 ]:
     secilen_baslangic = secili_arac_getir()
     st.session_state.setdefault("secilen_arac", secilen_baslangic)
@@ -293,7 +303,6 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
 
     niyet = "Dengeli"
     ayar_yaricap = YAKIN_CEVRE_VARSAYILAN_M
-    sonuc_sayisi = min(2, MAX_EKRAN_KART_SAYISI)
     soket_filtreleri: List[str] = []
     hiz_filtresi = "Tümü"
     operator_filtreleri: List[str] = []
@@ -303,7 +312,13 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
     arama_metni = ""
 
     with st.expander("Filtreler ve sürüş ayarları", expanded=False):
-        niyet = st.radio("Tercih", ["Dengeli", "Yakın", "Hızlı", "Ekonomik"], horizontal=True, on_change=rota_sonucunu_sifirla)
+        niyet = st.radio(
+            "Tercih",
+            ["Dengeli", "Yakın", "Hızlı", "Ekonomik"],
+            horizontal=True,
+            key="niyet",
+            on_change=rota_sonucunu_sifirla,
+        )
         guvenlik_kwargs = {
             "label": "Güvenlik payı (%)",
             "min_value": 10,
@@ -314,28 +329,46 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
         if "guvenlik_marji" not in st.session_state:
             guvenlik_kwargs["value"] = 25
         guvenlik_marji = st.slider(**guvenlik_kwargs)
-        menzil_filtresi = st.checkbox("Menzile göre filtrele", True, on_change=rota_sonucunu_sifirla)
-        arama_metni = st.text_input("İstasyon ara", on_change=rota_sonucunu_sifirla)
-        sonuc_sayisi = st.slider(
-            "Gösterilecek seçenek",
-            1,
-            MAX_EKRAN_KART_SAYISI,
-            min(2, MAX_EKRAN_KART_SAYISI),
+        menzil_filtresi = st.checkbox(
+            "Menzile göre filtrele",
+            True,
+            key="menzil_filtresi",
             on_change=rota_sonucunu_sifirla,
         )
-        soket_filtreleri = st.multiselect("Soket", ["CCS", "CHAdeMO", "Type 2", "Schuko", "GB/T"], on_change=rota_sonucunu_sifirla)
-        hiz_filtresi = st.selectbox("Minimum güç", ["Tümü", "AC (≥7 kW)", "DC (≥50 kW)", "Hızlı DC (≥150 kW)"], on_change=rota_sonucunu_sifirla)
-        operator_filtreleri = st.multiselect("Operatör", operator_secenekleri, on_change=rota_sonucunu_sifirla)
-        sadece_24_saat = st.checkbox("Sadece 24 saat açık", on_change=rota_sonucunu_sifirla)
+        arama_metni = st.text_input("İstasyon ara", key="arama_metni", on_change=rota_sonucunu_sifirla)
+        soket_filtreleri = st.multiselect(
+            "Soket",
+            ["CCS", "CHAdeMO", "Type 2", "Schuko", "GB/T"],
+            key="soket_filtreleri",
+            on_change=rota_sonucunu_sifirla,
+        )
+        hiz_filtresi = st.selectbox(
+            "Minimum güç",
+            ["Tümü", "AC (≥7 kW)", "DC (≥50 kW)", "Hızlı DC (≥150 kW)"],
+            key="hiz_filtresi",
+            on_change=rota_sonucunu_sifirla,
+        )
+        operator_filtreleri = st.multiselect(
+            "Operatör",
+            operator_secenekleri,
+            key="operator_filtreleri",
+            on_change=rota_sonucunu_sifirla,
+        )
+        sadece_24_saat = st.checkbox(
+            "Sadece 24 saat açık",
+            key="sadece_24_saat",
+            on_change=rota_sonucunu_sifirla,
+        )
         ayar_yaricap = st.slider(
             "Yakın yer mesafesi (m)",
             YAKIN_CEVRE_MIN_M,
             YAKIN_CEVRE_MAX_M,
             YAKIN_CEVRE_VARSAYILAN_M,
             YAKIN_CEVRE_ADIM_M,
+            key="ayar_yaricap",
             on_change=rota_sonucunu_sifirla,
         )
-        haritayi_goster = st.checkbox("Haritayı göster", on_change=rota_sonucunu_sifirla)
+        haritayi_goster = st.checkbox("Haritayı göster", key="haritayi_goster", on_change=rota_sonucunu_sifirla)
 
     if st.button("Şarj Bul", key="find_route_btn", use_container_width=True, disabled=not konum_hazir, type="primary"):
         st.session_state["rota_goster"] = True
@@ -350,7 +383,6 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
         guvenlik_marji,
         niyet,
         int(ayar_yaricap),
-        int(sonuc_sayisi),
         soket_filtreleri,
         hiz_filtresi,
         operator_filtreleri,
@@ -358,6 +390,29 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
         haritayi_goster,
         menzil_filtresi,
         arama_metni,
+    )
+
+
+def arac_ayarlarini_sessiondan_getir() -> Tuple[
+    str, float, int, float, int, str, int, List[str], str, List[str], bool, bool, bool, str
+]:
+    secilen_arac = secili_arac_getir()
+    v = ARAC_KATALOGU[secilen_arac]
+    return (
+        secilen_arac,
+        float(st.session_state.get("batarya_kwh", v["batarya"])),
+        int(st.session_state.get("sarj_yuzdesi", 30)),
+        float(st.session_state.get("tuketim_kwh", v["tuketim"])),
+        int(st.session_state.get("guvenlik_marji", 25)),
+        str(st.session_state.get("niyet", "Dengeli")),
+        int(st.session_state.get("ayar_yaricap", YAKIN_CEVRE_VARSAYILAN_M)),
+        list(st.session_state.get("soket_filtreleri", [])),
+        str(st.session_state.get("hiz_filtresi", "Tümü")),
+        list(st.session_state.get("operator_filtreleri", [])),
+        bool(st.session_state.get("sadece_24_saat", False)),
+        bool(st.session_state.get("haritayi_goster", False)),
+        bool(st.session_state.get("menzil_filtresi", True)),
+        str(st.session_state.get("arama_metni", "")),
     )
 SABIT_KONUMLAR: Dict[str, Tuple[float, float]] = {
     "İstanbul (Kadıköy)": (40.9901, 29.0284),
@@ -544,60 +599,586 @@ def surus_ozeti_ciz(arac: str, guvenli_menzil: float, sarj_yuzdesi: int) -> None
     )
 
 
-def en_iyi_secim_ciz(istasyon: Dict[str, Any], rota_linki: str) -> None:
-    st.markdown(
-        f"""
-        <div class="sb-best-card" id="rotayi-ac">
-            <div class="sb-best-top">
-                <div>
-                    <div class="sb-kicker">Şimdi şarj için en iyi durak</div>
-                    <div class="sb-best-title">{kisa_deger(istasyon.get("isim"), max_len=96)}</div>
-                </div>
-                <div class="sb-score"><strong>{int(istasyon.get("Skor", 0))}</strong><span>PUAN</span></div>
-            </div>
-            <div class="sb-best-grid">
-                <div class="sb-mini-stat"><div class="sb-mini-label">Mesafe</div><div class="sb-mini-value">{float(istasyon.get("Mesafe", 0.0)):.1f} km</div></div>
-                <div class="sb-mini-stat"><div class="sb-mini-label">Süre</div><div class="sb-mini-value">{int(istasyon.get("TahminiSureDk", 0))} dk</div></div>
-                <div class="sb-mini-stat"><div class="sb-mini-label">Varış</div><div class="sb-mini-value">%{float(istasyon.get("VarisSarjYuzdesi", 0.0)):.0f}</div></div>
-            </div>
-            <a class="sb-route-button sb-route-primary" href="{guvenli_metin(rota_linki, 260)}" target="_blank" rel="noopener noreferrer">
-                <span class="sb-route-main">Rotayı Aç</span>
-                <span class="sb-route-sub">Google Maps ile yol tarifi</span>
-            </a>
-        </div>
-        """,
-        unsafe_allow_html=True,
+def rota_linki_olustur(istasyon: Dict[str, Any], user_lat: float, user_lon: float) -> str:
+    return (
+        "https://www.google.com/maps/dir/?api=1"
+        f"&origin={user_lat},{user_lon}"
+        f"&destination={istasyon['enlem']},{istasyon['boylam']}"
+        "&travelmode=driving"
     )
 
 
-def istasyon_karti_ciz(istasyon: Dict[str, Any], sira: int, rota_linki: str) -> None:
-    st.markdown(
+def istasyon_akis_verisi_hazirla(
+    istasyonlar: List[Dict[str, Any]],
+    user_lat: float,
+    user_lon: float,
+) -> List[Dict[str, Any]]:
+    toplam = len(istasyonlar)
+    payload = []
+    for sira, istasyon in enumerate(istasyonlar, start=1):
+        son_yorumlar = []
+        for yorum in istasyon.get("SonYorumlar", [])[:MAX_SON_YORUM]:
+            son_yorumlar.append(
+                {
+                    "durum": kisa_duz_metin(durum_metni_sadelestir(yorum.get("durum", "")), "", 32),
+                    "yorum": kisa_duz_metin(yorum.get("yorum", ""), "", 86),
+                }
+            )
+
+        payload.append(
+            {
+                "rank": sira,
+                "total": toplam,
+                "featured": sira == 1,
+                "eyebrow": "En yakın uygun durak" if sira == 1 else "Yakın seçenek",
+                "name": kisa_duz_metin(istasyon.get("isim"), "İstasyon", 118),
+                "operator": kisa_duz_metin(istasyon.get("operator"), "Operatör bilinmiyor", 64),
+                "address": kisa_duz_metin(istasyon.get("adres"), "Adres bilgisi yok", 160),
+                "distance": f"{float(istasyon.get('Mesafe', 0.0) or 0.0):.1f} km",
+                "duration": f"{int(istasyon.get('TahminiSureDk', 0) or 0)} dk",
+                "arrival": f"%{float(istasyon.get('VarisSarjYuzdesi', 0.0) or 0.0):.0f}",
+                "power": kisa_duz_metin(istasyon.get("hiz"), "Güç bilinmiyor", 42),
+                "socket": kisa_duz_metin(istasyon.get("soket"), "Soket bilinmiyor", 42),
+                "price": kisa_duz_metin(istasyon.get("fiyat"), "Fiyat yok", 42),
+                "status": kisa_duz_metin(istasyon.get("ArizaEtiketi"), "Canlı veri yok", 48),
+                "score": int(istasyon.get("Skor", 0) or 0),
+                "routeUrl": rota_linki_olustur(istasyon, user_lat, user_lon),
+                "chips": [kisa_duz_metin(metin, "", 38) for metin, _ in istasyon.get("Rozetler", [])],
+                "comments": son_yorumlar,
+            }
+        )
+    return payload
+
+
+def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_lon: float) -> None:
+    payload_json = json.dumps(
+        istasyon_akis_verisi_hazirla(istasyonlar, user_lat, user_lon),
+        ensure_ascii=False,
+    ).replace("</", "<\\/")
+
+    st.markdown('<div class="sb-route-feed-mode" aria-hidden="true"></div>', unsafe_allow_html=True)
+    components.html(
         f"""
-        <div class="sb-station-card">
-            <div class="sb-station-top">
-                <div>
-                    <div class="sb-kicker">#{sira + 1} seçenek</div>
-                    <div class="sb-station-title">{kisa_deger(istasyon.get("isim"), max_len=110)}</div>
-                </div>
-                <div class="sb-score"><strong>{int(istasyon.get("Skor", 0))}</strong><span>PUAN</span></div>
-            </div>
-            <div class="sb-station-grid">
-                <div class="sb-mini-stat"><div class="sb-mini-label">Mesafe</div><div class="sb-mini-value">{float(istasyon.get("Mesafe", 0.0)):.1f} km</div></div>
-                <div class="sb-mini-stat"><div class="sb-mini-label">Güç</div><div class="sb-mini-value">{kisa_deger(istasyon.get("hiz"), max_len=36)}</div></div>
-                <div class="sb-mini-stat"><div class="sb-mini-label">Soket</div><div class="sb-mini-value">{kisa_deger(istasyon.get("soket"), max_len=42)}</div></div>
-                <div class="sb-mini-stat"><div class="sb-mini-label">Operatör</div><div class="sb-mini-value">{kisa_deger(istasyon.get("operator"), max_len=42)}</div></div>
-                <div class="sb-mini-stat"><div class="sb-mini-label">Varış şarjı</div><div class="sb-mini-value">%{float(istasyon.get("VarisSarjYuzdesi", 0.0)):.0f}</div></div>
-                <div class="sb-mini-stat"><div class="sb-mini-label">Fiyat</div><div class="sb-mini-value">{kisa_deger(istasyon.get("fiyat"), max_len=42)}</div></div>
-            </div>
-            <div class="sb-chip-row">{rozet_html(istasyon.get("Rozetler", []))}</div>
-            <div class="sb-address">{kisa_deger(istasyon.get("adres"), max_len=180)}</div>
-            <a class="sb-route-button" href="{guvenli_metin(rota_linki, 260)}" target="_blank" rel="noopener noreferrer">
-                <span class="sb-route-main">Rotayı Aç</span>
-                <span class="sb-route-sub">Google Maps ile yol tarifi</span>
-            </a>
-        </div>
+        <section class="sb-feed-shell" id="rotayi-ac" aria-label="İstasyon akışı">
+            <div class="sb-feed-card" id="station-card" tabindex="0"></div>
+        </section>
+        <script>
+            const stations = {payload_json};
+            const card = document.getElementById("station-card");
+            let activeIndex = 0;
+            let gestureLocked = false;
+            let touchStartY = 0;
+
+            const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({{
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                "\\"": "&quot;",
+                "'": "&#39;"
+            }}[char]));
+
+            const clamp = (value) => Math.max(0, Math.min(stations.length - 1, value));
+            const chipHtml = (chips) => chips.length
+                ? `<div class="sb-feed-chips">${{chips.map((chip) => `<span>${{esc(chip)}}</span>`).join("")}}</div>`
+                : "";
+            const commentHtml = (comments) => comments.length
+                ? `<div class="sb-feed-comments">${{comments.map((item) => `
+                    <div><strong>${{esc(item.durum || "Bildirim")}}</strong><span>${{esc(item.yorum)}}</span></div>
+                `).join("")}}</div>`
+                : "";
+
+            function render(direction = 0) {{
+                const station = stations[activeIndex];
+                const directionClass = direction > 0 ? "is-next" : direction < 0 ? "is-prev" : "";
+                card.className = `sb-feed-card ${{station.featured ? "is-featured" : ""}} ${{directionClass}}`;
+                card.innerHTML = `
+                    <div class="sb-feed-glow"></div>
+                    <div class="sb-feed-top">
+                        <div class="sb-feed-title">
+                            <div class="sb-feed-eyebrow">${{esc(station.eyebrow)}}</div>
+                            <h2>${{esc(station.name)}}</h2>
+                            <p>${{esc(station.operator)}}</p>
+                        </div>
+                        <div class="sb-feed-counter">
+                            <strong>${{String(station.rank).padStart(2, "0")}}</strong>
+                            <span>/ ${{station.total}}</span>
+                        </div>
+                    </div>
+                    <div class="sb-feed-hero">
+                        <strong>${{esc(station.distance)}}</strong>
+                        <span>${{esc(station.duration)}} · varış ${{esc(station.arrival)}}</span>
+                    </div>
+                    <div class="sb-feed-score-row">
+                        <div class="sb-feed-score"><strong>${{station.score}}</strong><span>PUAN</span></div>
+                        <div class="sb-feed-status">${{esc(station.status)}}</div>
+                    </div>
+                    <div class="sb-feed-grid">
+                        <div><span>Güç</span><strong>${{esc(station.power)}}</strong></div>
+                        <div><span>Soket</span><strong>${{esc(station.socket)}}</strong></div>
+                        <div><span>Fiyat</span><strong>${{esc(station.price)}}</strong></div>
+                    </div>
+                    ${{chipHtml(station.chips)}}
+                    ${{commentHtml(station.comments)}}
+                    <div class="sb-feed-address">${{esc(station.address)}}</div>
+                    <a class="sb-feed-route" href="${{esc(station.routeUrl)}}" target="_blank" rel="noopener noreferrer">
+                        <span>Rotayı Aç</span><small>Google Maps</small>
+                    </a>
+                    <div class="sb-feed-rail" aria-hidden="true">
+                        <span class="${{activeIndex === 0 ? "is-active" : ""}}"></span>
+                        <span class="${{activeIndex > 0 && activeIndex < stations.length - 1 ? "is-active" : ""}}"></span>
+                        <span class="${{activeIndex === stations.length - 1 ? "is-active" : ""}}"></span>
+                    </div>
+                `;
+                window.requestAnimationFrame(() => card.classList.add("is-settled"));
+            }}
+
+            function goTo(nextIndex) {{
+                const next = clamp(nextIndex);
+                if (gestureLocked || next === activeIndex) return;
+                const direction = next > activeIndex ? 1 : -1;
+                activeIndex = next;
+                gestureLocked = true;
+                render(direction);
+                window.setTimeout(() => {{ gestureLocked = false; }}, 360);
+            }}
+
+            window.addEventListener("wheel", (event) => {{
+                if (Math.abs(event.deltaY) < 16) return;
+                event.preventDefault();
+                goTo(activeIndex + (event.deltaY > 0 ? 1 : -1));
+            }}, {{ passive: false }});
+
+            window.addEventListener("touchstart", (event) => {{
+                touchStartY = event.touches[0].clientY;
+            }}, {{ passive: true }});
+
+            window.addEventListener("touchend", (event) => {{
+                const delta = touchStartY - event.changedTouches[0].clientY;
+                if (Math.abs(delta) < 34) return;
+                goTo(activeIndex + (delta > 0 ? 1 : -1));
+            }}, {{ passive: true }});
+
+            window.addEventListener("keydown", (event) => {{
+                if (event.key === "ArrowDown" || event.key === "PageDown" || event.key === " ") {{
+                    event.preventDefault();
+                    goTo(activeIndex + 1);
+                }}
+                if (event.key === "ArrowUp" || event.key === "PageUp") {{
+                    event.preventDefault();
+                    goTo(activeIndex - 1);
+                }}
+            }});
+
+            render();
+            card.focus({{ preventScroll: true }});
+        </script>
+        <style>
+            :root {{
+                color-scheme: dark;
+                --feed-bg: #0F1115;
+                --feed-text: #F7FAF7;
+                --feed-soft: rgba(247, 250, 247, 0.68);
+                --feed-muted: rgba(247, 250, 247, 0.46);
+                --feed-green: #49FF9A;
+                --feed-blue: #38BDF8;
+                --feed-font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+                --feed-font-body: "Inter", system-ui, sans-serif;
+            }}
+
+            * {{ box-sizing: border-box; }}
+            html, body {{
+                background: transparent;
+                margin: 0;
+                min-height: 100%;
+                overflow: hidden;
+                overscroll-behavior: contain;
+            }}
+
+            body {{
+                font-family: var(--feed-font-body);
+                padding: 0;
+            }}
+
+            .sb-feed-shell {{
+                align-items: stretch;
+                background:
+                    radial-gradient(circle at 50% 8%, rgba(73, 255, 154, 0.13), transparent 34%),
+                    radial-gradient(circle at 90% 70%, rgba(56, 189, 248, 0.13), transparent 30%),
+                    linear-gradient(180deg, rgba(15, 17, 21, 0.10), rgba(15, 17, 21, 0.82));
+                display: flex;
+                height: 640px;
+                justify-content: center;
+                overflow: hidden;
+                padding: 10px 0 18px;
+                width: 100%;
+            }}
+
+            .sb-feed-card {{
+                background:
+                    linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.036)),
+                    linear-gradient(160deg, rgba(14, 20, 28, 0.96), rgba(8, 10, 15, 0.98));
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 8px;
+                box-shadow: 0 28px 76px rgba(0, 0, 0, 0.40), 0 0 48px rgba(73, 255, 154, 0.11);
+                color: var(--feed-text);
+                display: flex;
+                flex-direction: column;
+                min-height: 614px;
+                outline: 0;
+                overflow: hidden;
+                padding: 24px 20px 18px;
+                position: relative;
+                transform: translateY(12px) scale(0.988);
+                transition: opacity 280ms ease, transform 280ms ease;
+                width: min(100%, 500px);
+            }}
+
+            .sb-feed-card.is-settled {{
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }}
+
+            .sb-feed-card.is-next {{
+                animation: feedInNext 320ms ease both;
+            }}
+
+            .sb-feed-card.is-prev {{
+                animation: feedInPrev 320ms ease both;
+            }}
+
+            .sb-feed-card.is-featured {{
+                box-shadow: 0 30px 86px rgba(0, 0, 0, 0.42), 0 0 56px rgba(73, 255, 154, 0.17);
+            }}
+
+            .sb-feed-glow {{
+                background:
+                    linear-gradient(90deg, transparent, rgba(73, 255, 154, 0.58), rgba(56, 189, 248, 0.42), transparent);
+                filter: blur(13px);
+                height: 18px;
+                left: 14%;
+                opacity: 0.70;
+                position: absolute;
+                right: 14%;
+                top: 47%;
+                transform: perspective(140px) rotateX(55deg);
+            }}
+
+            .sb-feed-top {{
+                align-items: flex-start;
+                display: flex;
+                gap: 14px;
+                justify-content: space-between;
+                position: relative;
+                z-index: 2;
+            }}
+
+            .sb-feed-eyebrow {{
+                color: var(--feed-green);
+                font-size: 10px;
+                font-weight: 800;
+                letter-spacing: 0;
+                margin-bottom: 8px;
+                text-transform: uppercase;
+            }}
+
+            .sb-feed-title h2 {{
+                color: var(--feed-text);
+                font-family: var(--feed-font-display);
+                font-size: 28px;
+                letter-spacing: 0;
+                line-height: 1.04;
+                margin: 0;
+                overflow-wrap: anywhere;
+            }}
+
+            .sb-feed-title p {{
+                color: var(--feed-soft);
+                font-size: 13px;
+                font-weight: 600;
+                margin: 8px 0 0;
+            }}
+
+            .sb-feed-counter {{
+                align-items: flex-end;
+                display: flex;
+                flex: 0 0 auto;
+                gap: 2px;
+                line-height: 1;
+            }}
+
+            .sb-feed-counter strong {{
+                color: var(--feed-green);
+                font-family: var(--feed-font-display);
+                font-size: 28px;
+            }}
+
+            .sb-feed-counter span {{
+                color: var(--feed-muted);
+                font-size: 12px;
+                font-weight: 800;
+                padding-bottom: 4px;
+            }}
+
+            .sb-feed-hero {{
+                margin: auto 0 18px;
+                position: relative;
+                z-index: 2;
+            }}
+
+            .sb-feed-hero strong {{
+                color: var(--feed-text);
+                display: block;
+                font-family: var(--feed-font-display);
+                font-size: 50px;
+                letter-spacing: 0;
+                line-height: 0.95;
+            }}
+
+            .sb-feed-hero span {{
+                color: var(--feed-soft);
+                display: block;
+                font-size: 14px;
+                font-weight: 700;
+                margin-top: 10px;
+            }}
+
+            .sb-feed-score-row {{
+                align-items: center;
+                display: flex;
+                gap: 10px;
+                margin-bottom: 12px;
+                position: relative;
+                z-index: 2;
+            }}
+
+            .sb-feed-score {{
+                align-items: center;
+                background: linear-gradient(135deg, var(--feed-green), var(--feed-blue));
+                border-radius: 8px;
+                box-shadow: 0 0 30px rgba(73, 255, 154, 0.20);
+                color: #06100B;
+                display: flex;
+                flex: 0 0 auto;
+                flex-direction: column;
+                justify-content: center;
+                min-height: 58px;
+                min-width: 68px;
+                padding: 7px 9px;
+            }}
+
+            .sb-feed-score strong {{
+                font-family: var(--feed-font-display);
+                font-size: 22px;
+                line-height: 1;
+            }}
+
+            .sb-feed-score span {{
+                font-size: 10px;
+                font-weight: 900;
+                opacity: 0.72;
+            }}
+
+            .sb-feed-status {{
+                background: rgba(255, 255, 255, 0.065);
+                border: 1px solid rgba(255, 255, 255, 0.075);
+                border-radius: 8px;
+                color: var(--feed-soft);
+                flex: 1 1 auto;
+                font-size: 12px;
+                font-weight: 750;
+                min-height: 58px;
+                padding: 13px 14px;
+            }}
+
+            .sb-feed-grid {{
+                display: grid;
+                gap: 8px;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                position: relative;
+                z-index: 2;
+            }}
+
+            .sb-feed-grid div {{
+                background: rgba(255, 255, 255, 0.055);
+                border: 1px solid rgba(255, 255, 255, 0.065);
+                border-radius: 8px;
+                min-height: 70px;
+                padding: 10px;
+            }}
+
+            .sb-feed-grid span {{
+                color: var(--feed-muted);
+                display: block;
+                font-size: 10px;
+                font-weight: 800;
+                text-transform: uppercase;
+            }}
+
+            .sb-feed-grid strong {{
+                color: var(--feed-text);
+                display: block;
+                font-size: 13px;
+                line-height: 1.18;
+                margin-top: 6px;
+                overflow-wrap: anywhere;
+            }}
+
+            .sb-feed-chips {{
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                margin-top: 12px;
+                position: relative;
+                z-index: 2;
+            }}
+
+            .sb-feed-chips span {{
+                background: rgba(73, 255, 154, 0.10);
+                border: 1px solid rgba(73, 255, 154, 0.22);
+                border-radius: 999px;
+                color: var(--feed-green);
+                font-size: 11px;
+                font-weight: 800;
+                min-height: 26px;
+                padding: 6px 9px;
+            }}
+
+            .sb-feed-comments {{
+                display: grid;
+                gap: 7px;
+                margin-top: 12px;
+                position: relative;
+                z-index: 2;
+            }}
+
+            .sb-feed-comments div {{
+                background: rgba(255, 255, 255, 0.052);
+                border: 1px solid rgba(255, 255, 255, 0.06);
+                border-radius: 8px;
+                min-height: 48px;
+                padding: 8px 10px;
+            }}
+
+            .sb-feed-comments strong,
+            .sb-feed-comments span {{
+                display: block;
+                font-size: 11px;
+                line-height: 1.25;
+            }}
+
+            .sb-feed-comments strong {{
+                color: var(--feed-green);
+                margin-bottom: 3px;
+            }}
+
+            .sb-feed-comments span {{
+                color: var(--feed-soft);
+            }}
+
+            .sb-feed-address {{
+                color: var(--feed-muted);
+                font-size: 12px;
+                line-height: 1.34;
+                margin-top: 13px;
+                min-height: 32px;
+                overflow-wrap: anywhere;
+                position: relative;
+                z-index: 2;
+            }}
+
+            .sb-feed-route {{
+                align-items: center;
+                background:
+                    linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent 30%, transparent 70%, rgba(255, 255, 255, 0.14)),
+                    linear-gradient(135deg, var(--feed-green), var(--feed-blue));
+                border-radius: 8px;
+                box-shadow: 0 18px 42px rgba(73, 255, 154, 0.22), 0 0 46px rgba(56, 189, 248, 0.16);
+                color: #06100B;
+                display: flex;
+                justify-content: space-between;
+                margin-top: 15px;
+                min-height: 58px;
+                padding: 13px 15px;
+                position: relative;
+                text-decoration: none;
+                z-index: 2;
+            }}
+
+            .sb-feed-route span {{
+                font-family: var(--feed-font-display);
+                font-size: 16px;
+                font-weight: 850;
+            }}
+
+            .sb-feed-route small {{
+                font-size: 11px;
+                font-weight: 800;
+                opacity: 0.66;
+            }}
+
+            .sb-feed-rail {{
+                bottom: 22px;
+                display: grid;
+                gap: 7px;
+                position: absolute;
+                right: 12px;
+                z-index: 3;
+            }}
+
+            .sb-feed-rail span {{
+                background: rgba(255, 255, 255, 0.22);
+                border-radius: 999px;
+                height: 22px;
+                width: 3px;
+            }}
+
+            .sb-feed-rail span.is-active {{
+                background: linear-gradient(180deg, var(--feed-green), var(--feed-blue));
+                box-shadow: 0 0 16px rgba(73, 255, 154, 0.48);
+                height: 34px;
+            }}
+
+            @keyframes feedInNext {{
+                from {{ opacity: 0; transform: translateY(48px) scale(0.982); }}
+                to {{ opacity: 1; transform: translateY(0) scale(1); }}
+            }}
+
+            @keyframes feedInPrev {{
+                from {{ opacity: 0; transform: translateY(-48px) scale(0.982); }}
+                to {{ opacity: 1; transform: translateY(0) scale(1); }}
+            }}
+
+            @media (max-width: 430px) {{
+                .sb-feed-shell {{
+                    height: 636px;
+                    padding: 8px 0 12px;
+                }}
+
+                .sb-feed-card {{
+                    min-height: 610px;
+                    padding: 21px 16px 16px;
+                }}
+
+                .sb-feed-title h2 {{
+                    font-size: 24px;
+                }}
+
+                .sb-feed-hero strong {{
+                    font-size: 42px;
+                }}
+
+                .sb-feed-grid {{
+                    grid-template-columns: 1fr;
+                }}
+
+                .sb-feed-grid div {{
+                    min-height: 54px;
+                }}
+            }}
+        </style>
         """,
-        unsafe_allow_html=True,
+        height=650,
+        scrolling=False,
     )
 
 
@@ -693,8 +1274,11 @@ if not st.session_state.get("sb_access_granted"):
     st.stop()
 
 ust_bilgi_ciz()
-hero_alani = st.empty()
-hero_ciz(hero_araci_getir(), hero_alani)
+rota_modu = st.session_state.get("rota_goster") is True
+hero_alani = None
+if not rota_modu:
+    hero_alani = st.empty()
+    hero_ciz(hero_araci_getir(), hero_alani)
 
 istasyonlar_verisi = istasyonlari_yukle()
 if not istasyonlar_verisi: st.stop()
@@ -722,28 +1306,45 @@ if user_lon is None: user_lon = st.session_state.get("last_valid_lon")
 konum_hazir = user_lat is not None and user_lon is not None
 
 # 3. Araç Kataloğu ve Katmanlı Arama
-(
-    secilen_arac,
-    batarya,
-    sarj_yuzdesi,
-    tuketim,
-    guvenlik_marji,
-    niyet,
-    ayar_yaricap,
-    sonuc_sayisi,
-    soket_filtreleri,
-    hiz_filtresi,
-    operator_filtreleri,
-    sadece_24_saat,
-    haritayi_goster,
-    menzil_filtresi,
-    arama_metni,
-) = arac_katalogu_ciz(konum_hazir, operator_secenekleri)
-
-hero_ciz(secilen_arac, hero_alani)
+if rota_modu:
+    (
+        secilen_arac,
+        batarya,
+        sarj_yuzdesi,
+        tuketim,
+        guvenlik_marji,
+        niyet,
+        ayar_yaricap,
+        soket_filtreleri,
+        hiz_filtresi,
+        operator_filtreleri,
+        sadece_24_saat,
+        haritayi_goster,
+        menzil_filtresi,
+        arama_metni,
+    ) = arac_ayarlarini_sessiondan_getir()
+else:
+    (
+        secilen_arac,
+        batarya,
+        sarj_yuzdesi,
+        tuketim,
+        guvenlik_marji,
+        niyet,
+        ayar_yaricap,
+        soket_filtreleri,
+        hiz_filtresi,
+        operator_filtreleri,
+        sadece_24_saat,
+        haritayi_goster,
+        menzil_filtresi,
+        arama_metni,
+    ) = arac_katalogu_ciz(konum_hazir, operator_secenekleri)
+    hero_ciz(secilen_arac, hero_alani)
 
 guvenli_menzil = ((batarya * (sarj_yuzdesi / 100.0) / tuketim) * 100.0) * (1 - guvenlik_marji / 100.0)
-surus_ozeti_ciz(secilen_arac, guvenli_menzil, sarj_yuzdesi)
+if not rota_modu:
+    surus_ozeti_ciz(secilen_arac, guvenli_menzil, sarj_yuzdesi)
 
 if not konum_hazir:
     st.markdown(
@@ -765,7 +1366,7 @@ if not st.session_state.get("rota_goster"):
         """
         <div class="sb-step-panel">
             <strong>Aracın hazır.</strong>
-            <span>Şarj Bul'a bastığında en iyi istasyon ve Rotayı Aç kartı burada gösterilir.</span>
+            <span>Şarj Bul'a bastığında rota kartları burada hazırlanır.</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -825,7 +1426,7 @@ def ist_siralama(i: Dict) -> Tuple:
         return (risk_sirasi, -float(i.get("_hiz_sayi", 0.0)), float(i["Mesafe"]))
     return (risk_sirasi, float(i["Mesafe"]))
 
-uygun_istasyonlar = sorted(uygun_istasyonlar, key=ist_siralama)[:min(sonuc_sayisi, MAX_EKRAN_KART_SAYISI)]
+uygun_istasyonlar = sorted(uygun_istasyonlar, key=ist_siralama)
 
 # 7. Favoriler
 if "favoriler" not in st.session_state: st.session_state["favoriler"] = set()
@@ -840,43 +1441,28 @@ if "auth_token" in st.session_state and oturum_gecerli_tut():
 
 # 8. Sonuç Kartları Çizimi
 if uygun_istasyonlar:
-    station_keys = tuple(str(i.get("_station_key") or clean_id_uret(istasyon_id_getir(i))) for i in uygun_istasyonlar)
-    gorunen_yorumlar = gorunen_yorumlari_getir(station_keys)
-    tahmin_yorumlari = tahmin_yorumlari_getir(station_keys)
     for ist in uygun_istasyonlar:
-        ist_key = str(ist.get("_station_key") or clean_id_uret(istasyon_id_getir(ist)))
-        yorum_kaynagi = tahmin_yorumlari.get(ist_key) or gorunen_yorumlar.get(ist_key) or ist.get("SonYorumlar", [])
-        istasyon_tahminini_guncelle(ist, yorum_kaynagi)
-    uygun_istasyonlar = sorted(uygun_istasyonlar, key=ist_siralama)
+        istasyon_tahminini_guncelle(ist, ist.get("SonYorumlar", []))
+    uygun_istasyonlar = sorted(
+        uygun_istasyonlar,
+        key=lambda i: (
+            1 if i.get("ArizaDurumu") == "riskli" else 0,
+            float(i.get("Mesafe", 9999.0) or 9999.0),
+            -int(i.get("Skor", 0) or 0),
+        ),
+    )
 
     en_iyi = uygun_istasyonlar[0]
     en_iyi_key = str(en_iyi.get("_station_key") or clean_id_uret(istasyon_id_getir(en_iyi)))
-    en_iyi_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={en_iyi['enlem']},{en_iyi['boylam']}&travelmode=driving"
-    en_iyi_secim_ciz(en_iyi, en_iyi_link)
+    diger_istasyonlar = [
+        istasyon
+        for istasyon in uygun_istasyonlar[1:]
+        if str(istasyon.get("_station_key") or clean_id_uret(istasyon_id_getir(istasyon))) != en_iyi_key
+    ]
+    istasyon_akis_ciz([en_iyi, *diger_istasyonlar], user_lat, user_lon)
 
     if haritayi_goster:
         harita_ciz(uygun_istasyonlar)
-
-    if en_iyi.get("SonYorumlar") or gorunen_yorumlar.get(en_iyi_key):
-        with st.expander("Son bildirimler", expanded=False):
-            for y in (en_iyi.get("SonYorumlar") or gorunen_yorumlar.get(en_iyi_key, []))[:MAX_SON_YORUM]:
-                st.write(f"{durum_metni_sadelestir(y.get('durum', ''))}: {str(y.get('yorum', ''))[:100]}")
-
-    alternatifler = uygun_istasyonlar[1:]
-    if alternatifler:
-        with st.expander("Diğer seçenekler", expanded=False):
-            for sira, ist in enumerate(alternatifler, start=1):
-                ist_id = istasyon_id_getir(ist)
-                ist_key = str(ist.get("_station_key") or clean_id_uret(ist_id))
-                g_link = f"https://www.google.com/maps/dir/?api=1&origin={user_lat},{user_lon}&destination={ist['enlem']},{ist['boylam']}&travelmode=driving"
-                istasyon_karti_ciz(ist, sira, g_link)
-
-                if ist.get("SonYorumlar") or gorunen_yorumlar.get(ist_key):
-                    with st.expander("Son bildirimler", expanded=False):
-                        for y in (ist.get("SonYorumlar") or gorunen_yorumlar.get(ist_key, []))[:MAX_SON_YORUM]:
-                            st.write(f"{durum_metni_sadelestir(y.get('durum', ''))}: {str(y.get('yorum', ''))[:100]}")
-
-                istasyon_aksiyonlari_ciz(ist, ist_id, ist_key, ayar_yaricap)
 
     if "auth_token" in st.session_state:
         with st.expander("Öneriyi kaydet veya bildir", expanded=False):

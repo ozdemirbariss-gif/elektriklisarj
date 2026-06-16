@@ -39,8 +39,6 @@ FIREBASE_ENABLED = bool(FIREBASE_DB_URL and FIREBASE_API_KEY)
 # ==========================================
 # 📐 UYGULAMA SABİTLERİ
 # ==========================================
-MAX_ISTASYON_SAYISI       = 2
-MAX_EKRAN_KART_SAYISI     = 2
 OVERPASS_TIMEOUT_S        = 12.0
 FIREBASE_TIMEOUT_S        = 4.0
 ISTASYON_CACHE_TTL        = 300
