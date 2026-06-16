@@ -2,17 +2,16 @@ import json
 import streamlit as st
 import folium
 from datetime import timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 import streamlit.components.v1 as components
 from streamlit_js_eval import get_geolocation
 from streamlit_folium import st_folium
 
 from config import (
     sentry_init, load_css, logger,
-    ARAC_GORSELLERI, ARAC_KATALOGU, HIZ_ESIK_MAP, KONUM_DOGRULAMA_ESIGI_KM,
+    ARAC_KATALOGU, HIZ_ESIK_MAP, KONUM_DOGRULAMA_ESIGI_KM,
     MAX_SON_YORUM, FIREBASE_ENABLED, YAKIN_CEVRE_MIN_M,
-    YAKIN_CEVRE_VARSAYILAN_M, YAKIN_CEVRE_MAX_M, YAKIN_CEVRE_ADIM_M,
-    VARSAYILAN_ARAC_GORSELI
+    YAKIN_CEVRE_VARSAYILAN_M, YAKIN_CEVRE_MAX_M, YAKIN_CEVRE_ADIM_M
 )
 from utils import (
     guvenli_metin, arama_metni_normalize_et, clean_id_uret, istasyon_id_getir,
@@ -44,57 +43,6 @@ def secili_arac_getir() -> str:
     varsayilan = list(ARAC_KATALOGU.keys())[0]
     secili = st.session_state.get("secilen_arac")
     return secili if secili in ARAC_KATALOGU else varsayilan
-
-
-def hero_araci_getir() -> Optional[str]:
-    secili = st.session_state.get("secilen_arac")
-    return secili if secili in ARAC_KATALOGU else None
-
-
-def arac_gorseli_getir(arac: Optional[str]) -> str:
-    gorsel = ARAC_GORSELLERI.get(arac or "", VARSAYILAN_ARAC_GORSELI)
-    temiz_url = str(gorsel or "").strip()
-    if temiz_url.startswith(("https://", "http://")):
-        return temiz_url
-    return VARSAYILAN_ARAC_GORSELI
-
-
-def css_url_olustur(url: str) -> str:
-    temiz_url = str(url or "").strip()
-    if not temiz_url.startswith(("https://", "http://")):
-        return "none"
-    temiz_url = temiz_url.replace("\\", "").replace('"', "%22").replace("'", "%27").replace(")", "%29")
-    return f"url('{temiz_url}')"
-
-
-def hero_html_olustur(arac: Optional[str]) -> str:
-    gorsel = arac_gorseli_getir(arac)
-    aria = "Elektrikli araç şarj görseli" if not arac or arac == "Özel Araç (Manuel)" else f"{arac} araç görseli"
-    arac_etiketi = arac or "Varsayılan"
-    return f"""
-        <section
-            class="sb-hero-card"
-            data-arac="{guvenli_metin(arac_etiketi, 90)}"
-            style="--sb-hero-image: {css_url_olustur(gorsel)}; --sb-hero-fallback-image: {css_url_olustur(VARSAYILAN_ARAC_GORSELI)};"
-        >
-            <div class="sb-hero-media">
-                <img class="sb-hero-img" src="{guvenli_metin(gorsel)}" alt="{guvenli_metin(aria, 90)}">
-                <div class="sb-neon-floor" aria-hidden="true"></div>
-            </div>
-            <div class="sb-hero-body">
-                <div class="sb-hero-meta">
-                    <span>Seçili araç</span>
-                    <strong>{guvenli_metin(arac_etiketi, 80)}</strong>
-                </div>
-                <a class="sb-hero-button" href="#sarj-katalogu" aria-label="Araç kataloğuna git">Şarj Bul</a>
-            </div>
-        </section>
-    """
-
-
-def hero_ciz(arac: Optional[str], hedef: Any = None) -> None:
-    hedef = hedef or st
-    hedef.markdown(hero_html_olustur(arac), unsafe_allow_html=True)
 
 
 def bildirim_goster(metin: str, basarili: bool = True) -> None:
@@ -1462,10 +1410,6 @@ if not st.session_state.get("sb_access_granted"):
 
 ust_bilgi_ciz()
 rota_modu = st.session_state.get("rota_goster") is True
-hero_alani = None
-if not rota_modu:
-    hero_alani = st.empty()
-    hero_ciz(hero_araci_getir(), hero_alani)
 
 istasyonlar_verisi = istasyonlari_yukle()
 if not istasyonlar_verisi: st.stop()
@@ -1527,7 +1471,6 @@ else:
         menzil_filtresi,
         arama_metni,
     ) = arac_katalogu_ciz(konum_hazir, operator_secenekleri)
-    hero_ciz(secilen_arac, hero_alani)
 
 guvenli_menzil = ((batarya * (sarj_yuzdesi / 100.0) / tuketim) * 100.0) * (1 - guvenlik_marji / 100.0)
 if not rota_modu:
