@@ -143,13 +143,17 @@ def giris_ekrani_ciz() -> None:
 def ust_bilgi_ciz() -> None:
     oturumlu = "auth_token" in st.session_state
     hesap_metni = st.session_state.get("auth_email") if oturumlu else "Misafir kullanım"
-    adim_metni = "3 / 3 · Rota" if st.session_state.get("rota_goster") else "2 / 3 · Araç ve rota"
-    ilerleme = 100 if st.session_state.get("rota_goster") else 66
-    geri_col, durum_col = st.columns([0.16, 0.84])
+    rota_aktif = st.session_state.get("rota_goster") is True
+    adim_metni = "3 / 3 · Rota" if rota_aktif else "2 / 3 · Araç ve rota"
+    ilerleme = 100 if rota_aktif else 66
+    geri_yardimi = "Araç ve rota ekranına dön" if rota_aktif else "Giriş ekranına dön"
+
+    st.markdown('<div class="sb-top-nav-anchor" aria-hidden="true"></div>', unsafe_allow_html=True)
+    geri_col, durum_col = st.columns([0.12, 0.88], gap="small")
 
     with geri_col:
-        if st.button("<", key="top_nav_back", help="Geri", use_container_width=True):
-            if st.session_state.get("rota_goster"):
+        if st.button("←", key="top_nav_back", help=geri_yardimi, use_container_width=True):
+            if rota_aktif:
                 st.session_state["rota_goster"] = False
                 st.rerun()
             if oturumlu:
@@ -610,7 +614,11 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
     feed_html = """
         <section class="sb-feed-shell" id="rotayi-ac" aria-label="İstasyon akışı">
             <div class="sb-feed-viewport" id="station-feed" tabindex="0" aria-live="polite">
-                <div class="sb-feed-track" id="station-track"></div>
+                <div class="sb-feed-track" id="station-track">
+                    <div class="sb-feed-spacer" id="station-top-spacer"></div>
+                    <div class="sb-feed-window" id="station-window"></div>
+                    <div class="sb-feed-spacer" id="station-bottom-spacer"></div>
+                </div>
             </div>
             <div class="sb-feed-dots" id="station-dots" aria-label="İstasyon konumu"></div>
         </section>
@@ -618,13 +626,18 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             const stations = __STATIONS_JSON__;
             const viewport = document.getElementById("station-feed");
             const track = document.getElementById("station-track");
+            const windowEl = document.getElementById("station-window");
+            const topSpacer = document.getElementById("station-top-spacer");
+            const bottomSpacer = document.getElementById("station-bottom-spacer");
             const dots = document.getElementById("station-dots");
-            const visibleWindowSize = Math.min(5, Math.max(1, stations.length));
+            const visibleWindowSize = Math.min(9, Math.max(1, stations.length));
+            const windowBuffer = Math.min(4, Math.floor(visibleWindowSize / 2));
             let activeIndex = 0;
             let visibleIndex = 0;
             let windowStart = 0;
             let observer = null;
             let scrollTimer = null;
+            let motionFrame = null;
 
             const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
                 "&": "&amp;",
@@ -635,13 +648,12 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             }[char]));
 
             const clampIndex = (value) => Math.max(0, Math.min(stations.length - 1, value));
-            const localIndex = (index) => index - windowStart;
             const windowEnd = () => Math.min(stations.length, windowStart + visibleWindowSize);
+            const frameHeight = () => Math.max(1, viewport.clientHeight);
 
             function nextWindowStart(index) {
                 if (stations.length <= visibleWindowSize) return 0;
-                const middleOffset = Math.floor(visibleWindowSize / 2);
-                return Math.max(0, Math.min(index - middleOffset, stations.length - visibleWindowSize));
+                return Math.max(0, Math.min(index - windowBuffer, stations.length - visibleWindowSize));
             }
 
             function chipHtml(chips) {
@@ -716,7 +728,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             }
 
             function paintActiveSlide() {
-                const slides = Array.from(track.querySelectorAll(".sb-feed-slide"));
+                const slides = Array.from(windowEl.querySelectorAll(".sb-feed-slide"));
                 slides.forEach((slide) => {
                     const index = Number(slide.dataset.index);
                     const isActive = index === visibleIndex;
@@ -732,15 +744,24 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             }
 
             function syncMotion() {
-                const height = Math.max(1, viewport.clientHeight);
+                const height = frameHeight();
                 const center = viewport.scrollTop / height;
-                Array.from(track.querySelectorAll(".sb-feed-slide")).forEach((slide, local) => {
-                    const distance = Math.min(2, Math.abs(local - center));
+                Array.from(windowEl.querySelectorAll(".sb-feed-slide")).forEach((slide) => {
+                    const index = Number(slide.dataset.index);
+                    const distance = Math.min(2, Math.abs(index - center));
                     const card = slide.querySelector(".sb-feed-card");
                     if (!card) return;
                     card.style.setProperty("--sb-card-scale", String(1 - Math.min(0.12, distance * 0.065)));
                     card.style.setProperty("--sb-card-opacity", String(1 - Math.min(0.62, distance * 0.46)));
                     card.style.setProperty("--sb-card-shift", `${Math.min(34, distance * 22)}px`);
+                });
+            }
+
+            function scheduleSyncMotion() {
+                if (motionFrame) return;
+                motionFrame = window.requestAnimationFrame(() => {
+                    motionFrame = null;
+                    syncMotion();
                 });
             }
 
@@ -757,67 +778,80 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                     root: viewport,
                     threshold: [0.28, 0.52, 0.72, 0.9]
                 });
-                Array.from(track.querySelectorAll(".sb-feed-slide")).forEach((slide) => observer.observe(slide));
+                Array.from(windowEl.querySelectorAll(".sb-feed-slide")).forEach((slide) => observer.observe(slide));
             }
 
-            function renderWindow(instant = true) {
-                windowStart = nextWindowStart(activeIndex);
+            function updateSpacers() {
+                const height = frameHeight();
                 const end = windowEnd();
-                track.innerHTML = Array.from({ length: end - windowStart }, (_, offset) => {
-                    const index = windowStart + offset;
-                    return `<div class="sb-feed-slide" data-index="${index}">${cardHtml(stations[index], index)}</div>`;
+                topSpacer.style.height = `${windowStart * height}px`;
+                bottomSpacer.style.height = `${Math.max(0, stations.length - end) * height}px`;
+            }
+
+            function renderWindowForIndex(index) {
+                const currentEnd = windowEnd();
+                if (windowEl.childElementCount && index >= windowStart && index < currentEnd) {
+                    updateSpacers();
+                    return;
+                }
+                const nextStart = nextWindowStart(index);
+                if (windowEl.childElementCount && nextStart === windowStart) {
+                    updateSpacers();
+                    return;
+                }
+                windowStart = nextStart;
+                const end = windowEnd();
+                windowEl.innerHTML = Array.from({ length: end - windowStart }, (_, offset) => {
+                    const stationIndex = windowStart + offset;
+                    return (
+                        `<div class="sb-feed-slide" data-index="${stationIndex}">${cardHtml(stations[stationIndex], stationIndex)}</div>`
+                    );
                 }).join("");
+                updateSpacers();
                 setupObserver();
-                visibleIndex = activeIndex;
                 paintActiveSlide();
+            }
+
+            function renderWindow() {
+                renderWindowForIndex(activeIndex);
                 window.requestAnimationFrame(() => {
-                    const targetTop = Math.max(0, localIndex(activeIndex)) * viewport.clientHeight;
-                    if (instant) {
-                        viewport.scrollTop = targetTop;
-                    } else {
-                        viewport.scrollTo({ top: targetTop, behavior: "smooth" });
-                    }
+                    viewport.scrollTop = Math.max(0, activeIndex) * frameHeight();
                     syncMotion();
-                    viewport.focus({ preventScroll: true });
                 });
             }
 
             function settleToSnap() {
-                const height = Math.max(1, viewport.clientHeight);
-                const next = clampIndex(windowStart + Math.round(viewport.scrollTop / height));
+                const height = frameHeight();
+                const next = clampIndex(Math.round(viewport.scrollTop / height));
                 activeIndex = next;
                 visibleIndex = next;
-                const local = localIndex(activeIndex);
-                const shouldRecenter = (
-                    (local <= 1 && windowStart > 0) ||
-                    (local >= visibleWindowSize - 2 && windowEnd() < stations.length)
-                );
-                if (shouldRecenter) {
-                    renderWindow(true);
-                    return;
-                }
-                viewport.scrollTo({ top: Math.max(0, local) * height, behavior: "smooth" });
+                renderWindowForIndex(next);
                 paintActiveSlide();
+                scheduleSyncMotion();
             }
 
             function scrollToIndex(index) {
                 const next = clampIndex(index);
-                if (next < windowStart || next >= windowEnd()) {
-                    activeIndex = next;
-                    visibleIndex = next;
-                    renderWindow(false);
-                    return;
-                }
-                viewport.scrollTo({ top: localIndex(next) * viewport.clientHeight, behavior: "smooth" });
+                activeIndex = next;
+                visibleIndex = next;
+                renderWindowForIndex(next);
+                paintActiveSlide();
+                viewport.scrollTo({ top: next * frameHeight(), behavior: "smooth" });
             }
 
             viewport.addEventListener("scroll", () => {
-                syncMotion();
+                const next = clampIndex(Math.round(viewport.scrollTop / frameHeight()));
+                renderWindowForIndex(next);
+                scheduleSyncMotion();
                 window.clearTimeout(scrollTimer);
                 scrollTimer = window.setTimeout(settleToSnap, 120);
             }, { passive: true });
 
-            viewport.addEventListener("keydown", (event) => {
+            viewport.addEventListener("pointerdown", () => {
+                viewport.focus({ preventScroll: true });
+            }, { passive: true });
+
+            document.addEventListener("keydown", (event) => {
                 if (event.key === "ArrowDown" || event.key === "PageDown" || event.key === " ") {
                     event.preventDefault();
                     scrollToIndex(visibleIndex + 1);
@@ -842,7 +876,13 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 scrollToIndex(Number(button.dataset.target));
             });
 
-            renderWindow(true);
+            window.addEventListener("resize", () => {
+                updateSpacers();
+                viewport.scrollTop = activeIndex * frameHeight();
+                scheduleSyncMotion();
+            }, { passive: true });
+
+            renderWindow();
         </script>
         <style>
             :root {
@@ -889,7 +929,8 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 outline: 0;
                 overflow-x: hidden;
                 overflow-y: auto;
-                scroll-behavior: smooth;
+                overscroll-behavior-y: contain;
+                scroll-behavior: auto;
                 scroll-padding: 0;
                 scroll-snap-type: y mandatory;
                 scrollbar-width: none;
@@ -903,10 +944,23 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
 
             .sb-feed-track {
                 min-height: 100%;
+                transform: translateZ(0);
+            }
+
+            .sb-feed-window {
+                min-height: var(--feed-frame-height);
+            }
+
+            .sb-feed-spacer {
+                flex: 0 0 auto;
+                height: 0;
+                pointer-events: none;
             }
 
             .sb-feed-slide {
                 align-items: stretch;
+                backface-visibility: hidden;
+                contain: layout paint;
                 display: flex;
                 height: var(--feed-frame-height);
                 justify-content: center;
@@ -934,13 +988,11 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 padding: 24px 20px 18px;
                 position: relative;
                 opacity: var(--sb-card-opacity);
-                transform: translateY(var(--sb-card-shift)) scale(var(--sb-card-scale));
+                transform: translate3d(0, var(--sb-card-shift), 0) scale(var(--sb-card-scale));
                 transform-origin: center center;
                 transition:
                     box-shadow 260ms ease,
-                    filter 260ms ease,
-                    opacity 180ms ease,
-                    transform 180ms ease;
+                    filter 260ms ease;
                 width: min(100%, 500px);
                 will-change: opacity, transform;
             }
