@@ -1445,3 +1445,340 @@ button[data-testid="stNumberInputStepUp"] svg {
         width: 100%;
     }
 }
+
+/* Light pastel product layer */
+:root {
+    --sb-bg: #F6FAF8;
+    --sb-surface: rgba(255, 255, 255, 0.78);
+    --sb-surface-soft: rgba(255, 255, 255, 0.58);
+    --sb-line: rgba(104, 132, 124, 0.16);
+    --sb-line-strong: rgba(112, 215, 176, 0.30);
+    --sb-text: #1F2D2B;
+    --sb-text-soft: rgba(31, 45, 43, 0.70);
+    --sb-text-muted: rgba(31, 45, 43, 0.48);
+    --sb-primary: #78DAB5;
+    --sb-primary-deep: #72CBE6;
+    --sb-electric-blue: #82CFF1;
+    --sb-danger: #D98484;
+    --sb-warning: #C7A866;
+    --sb-glass: rgba(255, 255, 255, 0.72);
+    --sb-glass-strong: rgba(255, 255, 255, 0.88);
+    --sb-shadow-soft: 0 22px 54px rgba(54, 77, 72, 0.10);
+    --sb-shadow-glow: 0 18px 46px rgba(120, 218, 181, 0.13), 0 8px 26px rgba(130, 207, 241, 0.10);
+}
+
+.stApp {
+    background:
+        radial-gradient(circle at 14% 0%, rgba(120, 218, 181, 0.18), transparent 30%),
+        radial-gradient(circle at 92% 18%, rgba(130, 207, 241, 0.20), transparent 34%),
+        linear-gradient(180deg, #FBFDF9 0%, #F4FAF7 48%, #EEF7F4 100%) !important;
+    color: var(--sb-text) !important;
+}
+
+h1, h2, h3,
+.sb-entry-hero h1,
+.sb-catalog-panel h2,
+.sb-summary-value,
+.sb-route-main,
+.sb-best-title,
+.sb-station-title {
+    color: var(--sb-text) !important;
+}
+
+p, span, label, .stMarkdown, .stCaption,
+.stTextInput label, .stNumberInput label, .stSelectbox label,
+.stSlider label, .stMultiSelect label {
+    color: var(--sb-text-soft) !important;
+}
+
+.stCaption, .caption, small,
+.sb-flow-meta span,
+.sb-flow-meta strong,
+.sb-drive-strip span,
+.sb-drive-strip strong,
+.sb-summary-sub,
+.sb-kicker {
+    color: var(--sb-text-muted) !important;
+}
+
+.sb-kicker,
+.sb-entry-mark,
+.sb-hero-kicker,
+.sb-panel-label,
+.sb-mini-label,
+.sb-action-caption {
+    color: #48B98F !important;
+}
+
+.sb-entry-hero {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding-top: 0.6rem;
+}
+
+.sb-entry-mark {
+    align-items: center;
+    color: var(--sb-text) !important;
+    display: inline-flex;
+    gap: 0.48rem;
+}
+
+.sb-entry-mark::before {
+    background:
+        linear-gradient(135deg, var(--sb-primary), var(--sb-electric-blue));
+    border-radius: 999px;
+    box-shadow: 0 10px 24px rgba(120, 218, 181, 0.24);
+    content: "";
+    height: 18px;
+    width: 18px;
+}
+
+.sb-entry-hero p {
+    color: var(--sb-text-soft) !important;
+}
+
+.sb-catalog-panel,
+.sb-step-panel {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+.sb-catalog-meta div,
+.sb-summary-item,
+.sb-best-card,
+.sb-station-card,
+.sb-empty-state,
+.sb-nearby-list,
+div[data-testid="stExpander"],
+div[data-testid="stVerticalBlockBorderWrapper"],
+div[data-testid="stAlert"] {
+    backdrop-filter: blur(22px);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.64)) !important;
+    border: 1px solid var(--sb-line) !important;
+    border-radius: 20px !important;
+    box-shadow: var(--sb-shadow-soft) !important;
+}
+
+.sb-catalog-meta div,
+.sb-summary-item,
+.sb-mini-stat {
+    background: rgba(255, 255, 255, 0.72) !important;
+}
+
+.sb-hero-card {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(238, 247, 244, 0.90)) !important;
+    border: 1px solid var(--sb-line) !important;
+    border-radius: 24px !important;
+    box-shadow: var(--sb-shadow-soft), var(--sb-shadow-glow) !important;
+}
+
+.sb-hero-card::before {
+    background: linear-gradient(90deg, transparent, rgba(120, 218, 181, 0.46), rgba(130, 207, 241, 0.38), transparent);
+}
+
+.sb-hero-media {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(238, 247, 244, 0.92)),
+        linear-gradient(135deg, rgba(120, 218, 181, 0.20), rgba(130, 207, 241, 0.16) 44%, rgba(255, 255, 255, 0.24)) !important;
+}
+
+.sb-hero-img {
+    filter: saturate(1.08) contrast(1.02) drop-shadow(0 24px 38px rgba(55, 77, 72, 0.22));
+}
+
+.sb-hero-media::after {
+    background:
+        linear-gradient(180deg, transparent 32%, rgba(255, 255, 255, 0.52) 76%, rgba(246, 250, 248, 0.96) 100%) !important;
+}
+
+.sb-neon-floor {
+    background: linear-gradient(90deg, transparent, rgba(120, 218, 181, 0.72), rgba(130, 207, 241, 0.58), transparent);
+    opacity: 0.62;
+}
+
+.sb-hero-body {
+    background: linear-gradient(180deg, transparent, rgba(246, 250, 248, 0.98)) !important;
+}
+
+.sb-hero-meta span,
+.sb-hero-meta strong {
+    color: var(--sb-text-soft) !important;
+}
+
+.sb-hero-button,
+.stButton>button[kind="primary"],
+button[data-testid="stBaseButton-primary"],
+div[data-testid="stLinkButton"] a {
+    background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.30), transparent 28%, transparent 72%, rgba(255, 255, 255, 0.24)),
+        linear-gradient(135deg, var(--sb-primary), var(--sb-electric-blue)) !important;
+    border: 0 !important;
+    border-radius: 18px !important;
+    box-shadow:
+        0 18px 36px rgba(120, 218, 181, 0.24),
+        0 8px 24px rgba(130, 207, 241, 0.18) !important;
+    color: #17302C !important;
+    font-weight: 850 !important;
+}
+
+.stButton>button,
+.stDownloadButton>button,
+button[data-testid="stBaseButton-secondary"],
+div[data-testid="stPopover"] button {
+    background: rgba(255, 255, 255, 0.68) !important;
+    border: 1px solid var(--sb-line) !important;
+    border-radius: 18px !important;
+    box-shadow: 0 12px 28px rgba(54, 77, 72, 0.08) !important;
+    color: var(--sb-text) !important;
+}
+
+.stButton>button:hover,
+.stDownloadButton>button:hover,
+button[data-testid="stBaseButton-secondary"]:hover,
+div[data-testid="stPopover"] button:hover {
+    border-color: var(--sb-line-strong) !important;
+    box-shadow: 0 16px 34px rgba(54, 77, 72, 0.11), 0 0 0 3px rgba(120, 218, 181, 0.10) !important;
+    filter: none !important;
+}
+
+div[data-testid="stElementContainer"]:has(.sb-social-icons) {
+    display: none !important;
+}
+
+div[data-testid="stElementContainer"]:has(.sb-social-icons) + div[data-testid="stLayoutWrapper"] div[data-testid="stHorizontalBlock"] {
+    align-items: center;
+    gap: 0.55rem !important;
+    justify-content: center;
+    margin-bottom: 0.2rem;
+}
+
+div[data-testid="stElementContainer"]:has(.sb-social-icons) + div[data-testid="stLayoutWrapper"] div[data-testid="stColumn"] {
+    flex: 0 0 48px !important;
+    min-width: 48px !important;
+    width: 48px !important;
+}
+
+div[data-testid="stElementContainer"]:has(.sb-social-icons) + div[data-testid="stLayoutWrapper"] div[data-testid="stButton"],
+div[data-testid="stElementContainer"]:has(.sb-social-icons) + div[data-testid="stLayoutWrapper"] span[data-testid="stTooltipHoverTarget"] {
+    display: flex !important;
+    justify-content: center !important;
+    width: 48px !important;
+}
+
+div[data-testid="stElementContainer"]:has(.sb-social-icons) + div[data-testid="stLayoutWrapper"] button {
+    aspect-ratio: 1;
+    background: rgba(255, 255, 255, 0.58) !important;
+    border: 1px solid rgba(104, 132, 124, 0.18) !important;
+    border-radius: 999px !important;
+    box-shadow: 0 12px 24px rgba(54, 77, 72, 0.08) !important;
+    color: var(--sb-text) !important;
+    font-family: var(--sb-font-display) !important;
+    font-size: 17px !important;
+    font-weight: 850 !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    padding: 0 !important;
+    width: 48px !important;
+}
+
+.sb-social-separator::before,
+.sb-social-separator::after {
+    background: linear-gradient(90deg, transparent, rgba(104, 132, 124, 0.18)) !important;
+}
+
+.sb-social-separator::after {
+    background: linear-gradient(90deg, rgba(104, 132, 124, 0.18), transparent) !important;
+}
+
+input,
+textarea,
+div[data-baseweb="input"] > div,
+[data-baseweb="select"] > div,
+div[data-testid="stNumberInputContainer"] {
+    background: rgba(255, 255, 255, 0.82) !important;
+    border: 1px solid rgba(104, 132, 124, 0.18) !important;
+    border-radius: 18px !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82), 0 8px 22px rgba(54, 77, 72, 0.05) !important;
+    color: var(--sb-text) !important;
+}
+
+input:focus,
+textarea:focus,
+div[data-baseweb="input"]:focus-within > div,
+[data-baseweb="select"] > div:focus-within {
+    border-color: rgba(120, 218, 181, 0.58) !important;
+    box-shadow:
+        0 0 0 3px rgba(120, 218, 181, 0.14),
+        inset 0 1px 0 rgba(255, 255, 255, 0.90) !important;
+}
+
+button[aria-label*="Show password"],
+button[aria-label*="Hide password"],
+div[data-baseweb="input"] button,
+div[data-baseweb="input"] button:hover {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    color: var(--sb-text-muted) !important;
+}
+
+div[data-testid="stSlider"] [role="slider"] {
+    background: linear-gradient(135deg, var(--sb-primary), var(--sb-electric-blue)) !important;
+    border-color: rgba(255, 255, 255, 0.94) !important;
+    box-shadow: 0 0 0 6px rgba(120, 218, 181, 0.15) !important;
+}
+
+div[data-testid="stSlider"] [data-baseweb="slider"] div {
+    border-color: rgba(120, 218, 181, 0.34) !important;
+}
+
+.sb-progress-track {
+    background: rgba(104, 132, 124, 0.15) !important;
+}
+
+.sb-progress-track span {
+    background: linear-gradient(90deg, var(--sb-primary), var(--sb-electric-blue)) !important;
+    box-shadow: none !important;
+}
+
+div[data-testid="stHorizontalBlock"]:has(.sb-flow-top) {
+    background: rgba(255, 255, 255, 0.72) !important;
+    border: 1px solid rgba(104, 132, 124, 0.14);
+    border-radius: 22px !important;
+    box-shadow: 0 14px 32px rgba(54, 77, 72, 0.10) !important;
+}
+
+.sb-drive-strip {
+    background: rgba(255, 255, 255, 0.58) !important;
+    border: 1px solid rgba(104, 132, 124, 0.13) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 12px 28px rgba(54, 77, 72, 0.07) !important;
+}
+
+.sb-score,
+.sb-route-button {
+    background: linear-gradient(135deg, var(--sb-primary), var(--sb-electric-blue)) !important;
+    color: #17302C !important;
+}
+
+.sb-chip {
+    background: rgba(255, 255, 255, 0.58) !important;
+    border-color: rgba(104, 132, 124, 0.16) !important;
+    color: var(--sb-text-soft) !important;
+}
+
+.sb-chip-good {
+    background: rgba(120, 218, 181, 0.18) !important;
+    border-color: rgba(120, 218, 181, 0.34) !important;
+    color: #2E8E70 !important;
+}
+
+.sb-chip-info {
+    background: rgba(130, 207, 241, 0.18) !important;
+    border-color: rgba(130, 207, 241, 0.32) !important;
+    color: #287C9E !important;
+}
