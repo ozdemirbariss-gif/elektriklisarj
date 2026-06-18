@@ -1,7 +1,7 @@
 import json
 import streamlit as st
 import folium
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple
 import streamlit.components.v1 as components
 from streamlit_js_eval import get_geolocation
@@ -17,7 +17,7 @@ from utils import (
     guvenli_metin, arama_metni_normalize_et, clean_id_uret, istasyon_id_getir,
     auth_uid_hash_getir, tahmini_sure_dk, varis_sarj_yuzdesi_hesapla, 
     mesafe_hesapla, tahmini_yol_mesafesi_km, konum_gecerli_mi,
-    durum_metni_sadelestir, durum_ozeti_fallback, utc_simdi
+    durum_metni_sadelestir, durum_ozeti_fallback, utc_simdi, utc_isoformat
 )
 from services import (
     firebase_login, firebase_register, firebase_sifre_sifirla, oturumu_temizle,
@@ -47,11 +47,89 @@ def secili_arac_getir() -> str:
 
 def bildirim_goster(metin: str, basarili: bool = True) -> None:
     onek = "Tamam" if basarili else "Hata"
+    st.markdown(
+        f'<div class="sb-live-region" role="status" aria-live="polite">{guvenli_metin(metin, 180)}</div>',
+        unsafe_allow_html=True,
+    )
     st.toast(f"{onek}: {metin}")
 
 
 def rota_sonucunu_sifirla() -> None:
     st.session_state["rota_goster"] = False
+
+
+FILTRE_SESSION_KEYS = (
+    "niyet",
+    "guvenlik_marji",
+    "menzil_filtresi",
+    "arama_metni",
+    "soket_filtreleri",
+    "hiz_filtresi",
+    "operator_filtreleri",
+    "sadece_24_saat",
+    "ayar_yaricap",
+    "haritayi_goster",
+)
+
+
+def filtreleri_sifirla() -> None:
+    for key in FILTRE_SESSION_KEYS:
+        st.session_state.pop(key, None)
+    st.session_state["rota_goster"] = False
+
+
+def aktif_filtre_sayisi_getir() -> int:
+    aktif = 0
+    aktif += str(st.session_state.get("niyet", "Dengeli")) != "Dengeli"
+    aktif += int(st.session_state.get("guvenlik_marji", 25)) != 25
+    aktif += bool(st.session_state.get("menzil_filtresi", True)) is False
+    aktif += bool(str(st.session_state.get("arama_metni", "")).strip())
+    aktif += bool(st.session_state.get("soket_filtreleri", []))
+    aktif += str(st.session_state.get("hiz_filtresi", "Tümü")) != "Tümü"
+    aktif += bool(st.session_state.get("operator_filtreleri", []))
+    aktif += bool(st.session_state.get("sadece_24_saat", False))
+    aktif += int(st.session_state.get("ayar_yaricap", YAKIN_CEVRE_VARSAYILAN_M)) != YAKIN_CEVRE_VARSAYILAN_M
+    aktif += bool(st.session_state.get("haritayi_goster", False))
+    return int(aktif)
+
+
+def veri_guncelleme_metni_ciz() -> None:
+    son_yukleme = st.session_state.get("istasyon_son_yukleme")
+    if not son_yukleme:
+        return
+    try:
+        yukleme_dt = datetime.fromisoformat(str(son_yukleme).replace("Z", "+00:00"))
+        gecen_dk = max(0, int((utc_simdi() - yukleme_dt).total_seconds() // 60))
+    except (TypeError, ValueError) as e:
+        logger.warning("Veri güncelleme zamanı okunamadı: %s", e)
+        return
+
+    gecen = "az önce" if gecen_dk < 1 else f"{gecen_dk} dk önce"
+    st.markdown(
+        f'<div class="sb-data-freshness">Veriler {guvenli_metin(gecen, 24)} güncellendi</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def istasyon_hata_state_ciz() -> None:
+    hata = st.session_state.get("istasyon_yukleme_hatasi")
+    detay = guvenli_metin(hata, 180) if hata else "İstasyon verisi şu anda boş veya erişilemiyor."
+    st.markdown(
+        f"""
+        <div class="sb-empty-state sb-empty-state-error">
+            <strong>Veriler alınamadı.</strong>
+            <span>{detay}</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("Verileri Yenile", key="refresh_station_data", type="primary", use_container_width=True):
+        try:
+            istasyonlari_yukle.clear()
+        except Exception as e:
+            logger.warning("İstasyon cache temizlenemedi: %s", e, exc_info=True)
+        st.session_state.pop("istasyon_yukleme_hatasi", None)
+        st.rerun()
 
 
 def uygulama_akisini_hazirla() -> None:
@@ -84,20 +162,52 @@ def sosyal_giris_butonlari_ciz() -> None:
                 bildirim_goster(mesaj, basarili=False)
 
 
+def auth_form_ciz(caller_context: str, entry_context: bool = False) -> None:
+    login_tab, register_tab, reset_tab = st.tabs(["Giriş Yap", "Kayıt Ol", "Şifre Sıfırla"])
+    prefix = caller_context.strip().replace(" ", "_") or "auth"
+
+    with login_tab:
+        if not FIREBASE_ENABLED:
+            st.info("Firebase bağlantısı yapılandırılınca giriş yapma aktif olur.")
+            st.button("Devam Et", use_container_width=True, key=f"{prefix}_login_disabled", disabled=True)
+        else:
+            email = st.text_input("E-posta", key=f"{prefix}_login_email", placeholder="sen@ornek.com")
+            password = st.text_input("Şifre", type="password", key=f"{prefix}_login_password", placeholder="Şifren")
+            if st.button("Devam Et", use_container_width=True, key=f"{prefix}_login_btn", type="primary"):
+                user_data = firebase_login(email, password)
+                if user_data and oturum_bilgilerini_kaydet(user_data):
+                    if entry_context:
+                        uygulama_girisini_ac(misafir=False)
+                    st.rerun()
+                bildirim_goster("Giriş başarısız.", basarili=False)
+
+    with register_tab:
+        if not FIREBASE_ENABLED:
+            st.info("Kayıt Firebase bağlantısından sonra kullanılabilir.")
+        else:
+            reg_email = st.text_input("Yeni hesap e-postası", key=f"{prefix}_register_email")
+            reg_password = st.text_input("Yeni hesap şifresi", type="password", key=f"{prefix}_register_password")
+            if st.button("Kaydol", use_container_width=True, key=f"{prefix}_register_btn"):
+                user_data = firebase_register(reg_email, reg_password)
+                if user_data and oturum_bilgilerini_kaydet(user_data):
+                    if entry_context:
+                        uygulama_girisini_ac(misafir=False)
+                    st.rerun()
+                bildirim_goster("Kayıt başarısız.", basarili=False)
+
+    with reset_tab:
+        if not FIREBASE_ENABLED:
+            st.info("Şifre sıfırlama Firebase bağlantısından sonra kullanılabilir.")
+        else:
+            reset_email = st.text_input("E-posta Adresiniz", key=f"{prefix}_reset_email")
+            if st.button("Sıfırlama Bağlantısı Gönder", use_container_width=True, key=f"{prefix}_reset_btn"):
+                ok, msg = firebase_sifre_sifirla(reset_email)
+                bildirim_goster(msg, ok)
+
+
 def giris_formlari_ciz() -> None:
     st.markdown('<section class="sb-entry-panel">', unsafe_allow_html=True)
-    if not FIREBASE_ENABLED:
-        st.info("Firebase bağlantısı yapılandırılınca giriş yapma aktif olur.")
-        st.button("Devam Et", use_container_width=True, key="entry_login_disabled", disabled=True)
-    else:
-        email = st.text_input("E-posta", key="login_email", placeholder="sen@ornek.com")
-        password = st.text_input("Şifre", type="password", key="login_password", placeholder="Şifren")
-        if st.button("Devam Et", use_container_width=True, key="entry_login_btn", type="primary"):
-            user_data = firebase_login(email, password)
-            if user_data and oturum_bilgilerini_kaydet(user_data):
-                uygulama_girisini_ac(misafir=False)
-                st.rerun()
-            bildirim_goster("Giriş başarısız.", basarili=False)
+    auth_form_ciz("entry", entry_context=True)
 
     if st.button("Veya hızlıca misafir olarak devam et", key="guest_continue", use_container_width=True):
         uygulama_girisini_ac(misafir=True)
@@ -105,23 +215,6 @@ def giris_formlari_ciz() -> None:
 
     st.markdown('<div class="sb-social-separator"><span>veya</span></div>', unsafe_allow_html=True)
     sosyal_giris_butonlari_ciz()
-
-    with st.expander("Hesap oluştur veya şifreni sıfırla", expanded=False):
-        if not FIREBASE_ENABLED:
-            st.info("Kayıt ve şifre sıfırlama Firebase bağlantısından sonra kullanılabilir.")
-        else:
-            reg_email = st.text_input("Yeni hesap e-postası", key="reg_email")
-            reg_password = st.text_input("Yeni hesap şifresi", type="password", key="reg_password")
-            if st.button("Kaydol", use_container_width=True, key="entry_register_btn"):
-                user_data = firebase_register(reg_email, reg_password)
-                if user_data and oturum_bilgilerini_kaydet(user_data):
-                    uygulama_girisini_ac(misafir=False)
-                    st.rerun()
-                bildirim_goster("Kayıt başarısız.", basarili=False)
-            reset_email = st.text_input("E-posta Adresiniz", key="reset_email")
-            if st.button("Sıfırlama Bağlantısı Gönder", use_container_width=True, key="entry_reset_btn"):
-                ok, msg = firebase_sifre_sifirla(reset_email)
-                bildirim_goster(msg, ok)
     st.markdown('</section>', unsafe_allow_html=True)
 
 
@@ -294,7 +387,13 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
     menzil_filtresi = True
     arama_metni = ""
 
-    with st.expander("Filtreler ve sürüş ayarları", expanded=False):
+    aktif_filtre_sayisi = aktif_filtre_sayisi_getir()
+    filtre_basligi = (
+        f"Filtreler ve sürüş ayarları ({aktif_filtre_sayisi} aktif)"
+        if aktif_filtre_sayisi
+        else "Filtreler ve sürüş ayarları"
+    )
+    with st.expander(filtre_basligi, expanded=False):
         niyet = st.radio(
             "Tercih",
             ["Dengeli", "Yakın", "Hızlı", "Ekonomik"],
@@ -352,6 +451,17 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
             on_change=rota_sonucunu_sifirla,
         )
         haritayi_goster = st.checkbox("Haritayı göster", key="haritayi_goster", on_change=rota_sonucunu_sifirla)
+
+    if not konum_hazir:
+        st.markdown(
+            """
+            <div class="sb-inline-hint">
+                <strong>Konum bekleniyor.</strong>
+                <span>Şarj Bul'u aktif etmek için aşağıdan şehir veya koordinat seç.</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     if st.button("Şarj Bul", key="find_route_btn", use_container_width=True, disabled=not konum_hazir, type="primary"):
         st.session_state["rota_goster"] = True
@@ -428,10 +538,48 @@ def konumu_sessiona_yaz(lat: float, lon: float) -> Tuple[float, float]:
 
 
 def manuel_konum_ciz() -> None:
-    manuel = st.selectbox("Lütfen mevcut konumunuzu seçin:", ["Seçiniz...", *SABIT_KONUMLAR.keys()])
+    manuel = st.selectbox(
+        "Lütfen mevcut konumunuzu seçin:",
+        ["Seçiniz...", *SABIT_KONUMLAR.keys()],
+        key="manuel_konum_secimi",
+    )
     if manuel in SABIT_KONUMLAR:
-        konumu_sessiona_yaz(*SABIT_KONUMLAR[manuel])
-        st.rerun()
+        secili_lat, secili_lon = SABIT_KONUMLAR[manuel]
+        st.markdown(
+            f"""
+            <div class="sb-location-confirm">
+                <strong>{guvenli_metin(manuel, 80)}</strong>
+                <span>{secili_lat:.4f}°K, {secili_lon:.4f}°D</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        mini_harita = folium.Map(
+            location=[secili_lat, secili_lon],
+            zoom_start=12,
+            tiles="CartoDB dark_matter",
+            control_scale=False,
+            zoom_control=False,
+        )
+        folium.CircleMarker(
+            location=[secili_lat, secili_lon],
+            radius=9,
+            color="#49FF9A",
+            fill=True,
+            fill_color="#49FF9A",
+            fill_opacity=0.8,
+            tooltip=manuel,
+        ).add_to(mini_harita)
+        st_folium(
+            mini_harita,
+            height=220,
+            use_container_width=True,
+            returned_objects=[],
+            key=f"manual_location_map_{clean_id_uret(manuel)}",
+        )
+        if st.button("Bu konumu kullan", key=f"use_manual_location_{clean_id_uret(manuel)}", type="primary", use_container_width=True):
+            konumu_sessiona_yaz(secili_lat, secili_lon)
+            st.rerun()
 
     with st.expander("Koordinat gir", expanded=False):
         lat = st.number_input("Enlem", min_value=-90.0, max_value=90.0, value=39.0000, step=0.0001, format="%.6f")
@@ -461,16 +609,16 @@ def harita_popup_html_olustur(istasyon: Dict[str, Any]) -> str:
     durum = kisa_deger(istasyon.get("ArizaEtiketi"), "Canlı veri yok", 60)
     renk = harita_rengi_getir(skor)
     return f"""
-        <div style="min-width:190px;font-family:Inter,Arial,sans-serif;color:#101211;">
+        <div style="min-width:190px;background:#111827;border:1px solid rgba(73,255,154,0.22);border-radius:12px;box-shadow:0 18px 40px rgba(0,0,0,0.34);color:#F7FAF7;font-family:Inter,Arial,sans-serif;padding:12px;">
             <div style="font-size:14px;font-weight:800;line-height:1.2;margin-bottom:4px;">{isim}</div>
-            <div style="font-size:12px;color:#596158;margin-bottom:8px;">{operator}</div>
+            <div style="font-size:12px;color:rgba(247,250,247,0.62);margin-bottom:8px;">{operator}</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-                <div style="border:1px solid #E1E7DD;border-radius:6px;padding:6px;">
-                    <div style="font-size:10px;color:#6B7468;font-weight:700;">Skor</div>
+                <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:6px;">
+                    <div style="font-size:10px;color:rgba(247,250,247,0.52);font-weight:700;">Skor</div>
                     <div style="font-size:16px;font-weight:850;color:{renk};">{skor}</div>
                 </div>
-                <div style="border:1px solid #E1E7DD;border-radius:6px;padding:6px;">
-                    <div style="font-size:10px;color:#6B7468;font-weight:700;">Mesafe</div>
+                <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:6px;">
+                    <div style="font-size:10px;color:rgba(247,250,247,0.52);font-weight:700;">Mesafe</div>
                     <div style="font-size:16px;font-weight:850;">{mesafe:.1f} km</div>
                 </div>
             </div>
@@ -496,7 +644,7 @@ def harita_ciz(istasyonlar: List[Dict[str, Any]]) -> None:
     harita = folium.Map(
         location=[merkez_lat, merkez_lon],
         zoom_start=11,
-        tiles="CartoDB positron",
+        tiles="CartoDB dark_matter",
         control_scale=True,
     )
 
@@ -626,7 +774,10 @@ def istasyon_akis_verisi_hazirla(
                 "status": kisa_duz_metin(istasyon.get("ArizaEtiketi"), "Canlı veri yok", 48),
                 "score": int(istasyon.get("Skor", 0) or 0),
                 "routeUrl": rota_linki_olustur(istasyon, user_lat, user_lon),
-                "chips": [kisa_duz_metin(metin, "", 38) for metin, _ in istasyon.get("Rozetler", [])],
+                "chips": [
+                    {"text": kisa_duz_metin(metin, "", 38), "className": kisa_duz_metin(css_class, "", 32)}
+                    for metin, css_class in istasyon.get("Rozetler", [])
+                ],
                 "comments": son_yorumlar,
             }
         )
@@ -649,6 +800,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 </div>
             </div>
             <div class="sb-feed-dots" id="station-dots" aria-label="İstasyon konumu"></div>
+            <div class="sb-feed-hint" aria-hidden="true">Kaydır ve sıradaki istasyonu gör</div>
         </section>
         <script>
             const stations = __STATIONS_JSON__;
@@ -685,9 +837,23 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             }
 
             function chipHtml(chips) {
-                return chips.length
-                    ? `<div class="sb-feed-chips">${chips.map((chip) => `<span>${esc(chip)}</span>`).join("")}</div>`
-                    : "";
+                if (!chips.length) return "";
+                const chipMarkup = chips.map((chip) => {
+                    const item = typeof chip === "string" ? { text: chip, className: "" } : chip;
+                    const classes = ["sb-feed-chip", item.className || ""].filter(Boolean).join(" ");
+                    return `<span class="${esc(classes)}">${esc(item.text)}</span>`;
+                }).join("");
+                return `
+                    <div class="sb-feed-chip-row">
+                        <div class="sb-feed-chips">${chipMarkup}</div>
+                        <button
+                            class="sb-feed-chip-help"
+                            type="button"
+                            title="Rozetler; canlı durum, menzil, hız ve veri güveni sinyallerini özetler."
+                            aria-label="Rozet açıklaması"
+                        >?</button>
+                    </div>
+                `;
             }
 
             function commentHtml(comments) {
@@ -713,9 +879,16 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                                 <h2>${esc(station.name)}</h2>
                                 <p>${esc(station.operator)}</p>
                             </div>
-                            <div class="sb-feed-counter">
-                                <strong>${rank}</strong>
-                                <span>/ ${station.total}</span>
+                            <div class="sb-feed-head-actions">
+                                <div class="sb-feed-head-score">
+                                    <strong>${station.score}</strong>
+                                    <span>SKOR</span>
+                                </div>
+                                <div class="sb-feed-bookmark" aria-hidden="true">♡</div>
+                                <div class="sb-feed-counter">
+                                    <strong>${rank}</strong>
+                                    <span>/ ${station.total}</span>
+                                </div>
                             </div>
                         </div>
                         <div class="sb-feed-hero">
@@ -1062,6 +1235,57 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 z-index: 2;
             }
 
+            .sb-feed-head-actions {
+                align-items: flex-end;
+                display: flex;
+                flex: 0 0 auto;
+                flex-direction: column;
+                gap: 8px;
+                min-width: 72px;
+            }
+
+            .sb-feed-head-score {
+                align-items: center;
+                background: linear-gradient(135deg, rgba(120, 218, 181, 0.24), rgba(130, 207, 241, 0.20));
+                border: 1px solid rgba(120, 218, 181, 0.32);
+                border-radius: 16px;
+                box-shadow: 0 10px 24px rgba(120, 218, 181, 0.14);
+                color: var(--feed-text);
+                display: flex;
+                gap: 6px;
+                justify-content: center;
+                min-height: 36px;
+                padding: 7px 9px;
+            }
+
+            .sb-feed-head-score strong {
+                color: var(--feed-green);
+                font-family: var(--feed-font-display);
+                font-size: 19px;
+                line-height: 1;
+            }
+
+            .sb-feed-head-score span {
+                color: var(--feed-muted);
+                font-size: 10px;
+                font-weight: 900;
+            }
+
+            .sb-feed-bookmark {
+                align-items: center;
+                background: rgba(255, 255, 255, 0.62);
+                border: 1px solid rgba(104, 132, 124, 0.13);
+                border-radius: 999px;
+                color: var(--feed-green);
+                display: flex;
+                font-size: 18px;
+                font-weight: 900;
+                height: 34px;
+                justify-content: center;
+                line-height: 1;
+                width: 34px;
+            }
+
             .sb-feed-eyebrow {
                 color: var(--feed-green);
                 font-size: 10px;
@@ -1217,12 +1441,22 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 display: flex;
                 flex-wrap: wrap;
                 gap: 6px;
+                min-width: 0;
+                position: relative;
+                z-index: 2;
+            }
+
+            .sb-feed-chip-row {
+                align-items: flex-start;
+                display: flex;
+                gap: 8px;
+                justify-content: space-between;
                 margin-top: 12px;
                 position: relative;
                 z-index: 2;
             }
 
-            .sb-feed-chips span {
+            .sb-feed-chip {
                 background: rgba(120, 218, 181, 0.18);
                 border: 1px solid rgba(120, 218, 181, 0.34);
                 border-radius: 999px;
@@ -1231,6 +1465,39 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 font-weight: 800;
                 min-height: 26px;
                 padding: 6px 9px;
+            }
+
+            .sb-feed-chip.sb-chip-risk {
+                background: rgba(230, 120, 120, 0.16);
+                border-color: rgba(230, 120, 120, 0.34);
+                color: #E67878;
+            }
+
+            .sb-feed-chip.sb-chip-warn {
+                background: rgba(245, 205, 95, 0.16);
+                border-color: rgba(245, 205, 95, 0.34);
+                color: #DFAF3D;
+            }
+
+            .sb-feed-chip.sb-chip-info {
+                background: rgba(130, 207, 241, 0.16);
+                border-color: rgba(130, 207, 241, 0.34);
+                color: #62BDE8;
+            }
+
+            .sb-feed-chip-help {
+                appearance: none;
+                background: rgba(255, 255, 255, 0.68);
+                border: 1px solid rgba(104, 132, 124, 0.15);
+                border-radius: 999px;
+                color: var(--feed-soft);
+                cursor: help;
+                flex: 0 0 auto;
+                font-size: 12px;
+                font-weight: 900;
+                height: 28px;
+                padding: 0;
+                width: 28px;
             }
 
             .sb-feed-comments {
@@ -1308,9 +1575,9 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
 
             .sb-feed-dots {
                 align-items: center;
-                bottom: 18px;
+                bottom: 38px;
                 display: flex;
-                gap: 7px;
+                gap: 8px;
                 justify-content: center;
                 left: 50%;
                 pointer-events: auto;
@@ -1321,15 +1588,16 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
 
             .sb-feed-dot {
                 appearance: none;
-                background: rgba(31, 45, 43, 0.18);
-                border: 0;
+                background: rgba(31, 45, 43, 0.32);
+                border: 1px solid rgba(255, 255, 255, 0.38);
                 border-radius: 999px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
                 cursor: pointer;
-                height: 6px;
-                opacity: 0.82;
+                height: 8px;
+                opacity: 0.92;
                 padding: 0;
                 transition: background 180ms ease, box-shadow 180ms ease, transform 180ms ease, width 180ms ease;
-                width: 6px;
+                width: 8px;
             }
 
             .sb-feed-dot.is-edge {
@@ -1342,7 +1610,33 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 box-shadow: 0 0 18px rgba(120, 218, 181, 0.45);
                 opacity: 1;
                 transform: scale(1);
-                width: 26px;
+                width: 30px;
+            }
+
+            .sb-feed-hint {
+                background: rgba(255, 255, 255, 0.68);
+                border: 1px solid rgba(104, 132, 124, 0.12);
+                border-radius: 999px;
+                bottom: 10px;
+                color: var(--feed-soft);
+                font-size: 11px;
+                font-weight: 850;
+                left: 50%;
+                padding: 7px 12px;
+                pointer-events: none;
+                position: absolute;
+                transform: translateX(-50%);
+                white-space: nowrap;
+                z-index: 6;
+            }
+
+            @keyframes sbHintFloat {
+                0%, 100% { transform: translate(-50%, 0); }
+                50% { transform: translate(-50%, -4px); }
+            }
+
+            .sb-feed-hint {
+                animation: sbHintFloat 2.2s ease-in-out infinite;
             }
 
             @media (prefers-reduced-motion: reduce) {
@@ -1351,7 +1645,9 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 }
 
                 .sb-feed-card,
-                .sb-feed-dot {
+                .sb-feed-dot,
+                .sb-feed-hint {
+                    animation: none;
                     transition: none;
                 }
             }
@@ -1442,26 +1738,7 @@ def hesap_paneli_ciz() -> None:
             return
 
         if "auth_token" not in st.session_state:
-            email = st.text_input("E-posta", key="account_login_email")
-            password = st.text_input("Şifre", type="password", key="account_login_password")
-            if st.button("Hesabı Bağla", use_container_width=True, key="account_login_btn", type="primary"):
-                user_data = firebase_login(email, password)
-                if user_data and oturum_bilgilerini_kaydet(user_data):
-                    st.rerun()
-                bildirim_goster("Giriş başarısız.", basarili=False)
-
-            with st.expander("Kaydol veya şifre sıfırla", expanded=False):
-                reg_email = st.text_input("E-posta", key="reg_email")
-                reg_password = st.text_input("Şifre", type="password", key="reg_password")
-                if st.button("Kayıt Ol", use_container_width=True, key="account_register_btn"):
-                    user_data = firebase_register(reg_email, reg_password)
-                    if user_data and oturum_bilgilerini_kaydet(user_data):
-                        st.rerun()
-                    bildirim_goster("Kayıt başarısız.", basarili=False)
-                reset_email = st.text_input("E-posta Adresiniz", key="reset_email")
-                if st.button("Sıfırlama Bağlantısı Gönder", key="account_reset_btn"):
-                    ok, msg = firebase_sifre_sifirla(reset_email)
-                    bildirim_goster(msg, ok)
+            auth_form_ciz("account", entry_context=False)
         else:
             if not oturum_gecerli_tut():
                 st.warning("Oturum yenilenemedi. Lütfen tekrar giriş yapın.")
@@ -1492,7 +1769,12 @@ ust_bilgi_ciz()
 rota_modu = st.session_state.get("rota_goster") is True
 
 istasyonlar_verisi = istasyonlari_yukle()
-if not istasyonlar_verisi: st.stop()
+if not istasyonlar_verisi:
+    istasyon_hata_state_ciz()
+    st.stop()
+
+st.session_state.setdefault("istasyon_son_yukleme", utc_isoformat())
+veri_guncelleme_metni_ciz()
 
 operator_secenekleri = sorted({
     str(ist.get("operator", "Bilinmiyor"))
@@ -1675,9 +1957,8 @@ if uygun_istasyonlar:
         harita_ciz(uygun_istasyonlar)
 
     if "auth_token" in st.session_state:
-        with st.expander("Öneriyi kaydet veya bildir", expanded=False):
-            ist_id = istasyon_id_getir(en_iyi)
-            istasyon_aksiyonlari_ciz(en_iyi, ist_id, en_iyi_key, ayar_yaricap)
+        ist_id = istasyon_id_getir(en_iyi)
+        istasyon_aksiyonlari_ciz(en_iyi, ist_id, en_iyi_key, ayar_yaricap)
     else:
         st.markdown(
             """
@@ -1699,3 +1980,8 @@ else:
         """,
         unsafe_allow_html=True,
     )
+    st.markdown('<div class="sb-filter-reset-action">', unsafe_allow_html=True)
+    if st.button("Filtreleri Sıfırla", key="reset_filters_empty", type="primary", use_container_width=True):
+        filtreleri_sifirla()
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)

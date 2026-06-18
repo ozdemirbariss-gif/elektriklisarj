@@ -2266,3 +2266,71 @@ div.st-key-social_twitter button::before {
         margin: 0 auto;
     }
 }
+
+.sb-live-region {
+    border: 0 !important;
+    clip: rect(0 0 0 0) !important;
+    height: 1px !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    position: absolute !important;
+    white-space: nowrap !important;
+    width: 1px !important;
+}
+
+.sb-data-freshness,
+.sb-inline-hint,
+.sb-location-confirm {
+    backdrop-filter: blur(18px);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.038));
+    border: 1px solid rgba(255, 255, 255, 0.075);
+    border-radius: 16px;
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.22);
+}
+
+.sb-data-freshness {
+    color: var(--sb-text-muted) !important;
+    font-size: 12px;
+    font-weight: 720;
+    margin: 0.1rem 0 0.75rem;
+    padding: 0.58rem 0.72rem;
+}
+
+.sb-inline-hint {
+    margin: 0.95rem 0 0.75rem;
+    padding: 0.78rem 0.86rem;
+}
+
+.sb-inline-hint strong,
+.sb-location-confirm strong {
+    color: var(--sb-text) !important;
+    display: block;
+    font-size: 14px;
+    font-weight: 820;
+    line-height: 1.18;
+}
+
+.sb-inline-hint span,
+.sb-location-confirm span {
+    color: var(--sb-text-soft) !important;
+    display: block;
+    font-size: 12px;
+    font-weight: 540;
+    line-height: 1.38;
+    margin-top: 0.28rem;
+}
+
+.sb-location-confirm {
+    margin: 0.85rem 0 0.65rem;
+    padding: 0.82rem 0.88rem;
+}
+
+.sb-filter-reset-action {
+    margin-top: 0.85rem;
+}
+
+.sb-empty-state-error {
+    border-color: rgba(230, 132, 132, 0.20) !important;
+}
