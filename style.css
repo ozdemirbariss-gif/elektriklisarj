@@ -2334,3 +2334,98 @@ div.st-key-social_twitter button::before {
 .sb-empty-state-error {
     border-color: rgba(230, 132, 132, 0.20) !important;
 }
+
+/* iPhone safe-area and mobile interaction fixes */
+div.st-key-social_google button,
+div.st-key-social_apple button,
+div.st-key-social_twitter button {
+    position: relative !important;
+}
+
+div.st-key-social_google button p,
+div.st-key-social_apple button p,
+div.st-key-social_twitter button p {
+    clip: rect(0 0 0 0) !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    position: absolute !important;
+    white-space: nowrap !important;
+    width: 1px !important;
+}
+
+div.st-key-social_google button::before,
+div.st-key-social_apple button::before,
+div.st-key-social_twitter button::before {
+    left: 50% !important;
+    margin: 0 !important;
+    position: absolute !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) !important;
+}
+
+div[data-testid="stElementContainer"]:has(.sb-top-nav-anchor) + div[data-testid="stLayoutWrapper"] {
+    margin-bottom: 1rem !important;
+    top: calc(env(safe-area-inset-top, 0px) + 0.5rem) !important;
+}
+
+div[data-testid="stHorizontalBlock"]:has(.sb-flow-top) {
+    left: auto !important;
+    position: static !important;
+    top: auto !important;
+    transform: none !important;
+    width: 100% !important;
+}
+
+div.st-key-top_nav_back button {
+    background: linear-gradient(145deg, #263B36, #162520) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    box-shadow: 0 12px 26px rgba(31, 45, 43, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+    color: #FFFFFF !important;
+    font-size: 26px !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    padding: 0 0 3px !important;
+    width: 48px !important;
+}
+
+div.st-key-top_nav_back button p {
+    color: #FFFFFF !important;
+    font-size: 26px !important;
+    line-height: 1 !important;
+}
+
+div[data-testid="stElementContainer"]:has(iframe[srcdoc*="sb-feed-shell"]) {
+    margin-top: 0.75rem !important;
+}
+
+@media (max-width: 560px) {
+    .block-container:has(.sb-entry-hero) {
+        padding-top: calc(env(safe-area-inset-top, 0px) + 3rem) !important;
+    }
+
+    .block-container:has(.sb-route-feed-mode) {
+        padding-top: calc(env(safe-area-inset-top, 0px) + 1rem) !important;
+    }
+
+    .sb-entry-hero {
+        padding-top: 0.9rem !important;
+    }
+
+    .sb-entry-hero h1 {
+        margin-top: 0.5rem !important;
+    }
+
+    div[data-testid="stElementContainer"]:has(.sb-top-nav-anchor) + div[data-testid="stLayoutWrapper"] div[data-testid="stHorizontalBlock"] {
+        grid-template-columns: 52px minmax(0, 1fr) !important;
+        padding: 0.45rem !important;
+    }
+
+    div[data-testid="stElementContainer"]:has(.sb-top-nav-anchor) + div[data-testid="stLayoutWrapper"] div[data-testid="stColumn"]:first-child,
+    div.st-key-top_nav_back,
+    div.st-key-top_nav_back div[data-testid="stButton"],
+    div.st-key-top_nav_back span[data-testid="stTooltipHoverTarget"] {
+        max-width: 52px !important;
+        min-width: 52px !important;
+        width: 52px !important;
+    }
+}
