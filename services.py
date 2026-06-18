@@ -4,6 +4,7 @@ from requests.packages.urllib3.util.retry import Retry
 import json
 import sentry_sdk
 from datetime import timedelta
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import streamlit as st
 
@@ -22,6 +23,7 @@ from utils import (
 RETRY_STATUS_CODES = (429, 500, 502, 503, 504)
 SAFE_RETRY_METHODS = frozenset(("GET", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"))
 OVERPASS_RETRY_METHODS = frozenset(("POST",))
+LOCAL_STATIONS_PATH = Path(__file__).resolve().with_name("stations.json")
 
 
 def _retry_adapter(allowed_methods: frozenset[str]) -> HTTPAdapter:
@@ -196,7 +198,7 @@ def istasyonlari_yukle() -> List[Dict[str, Any]]:
             _hata_bildir("İstasyonlar Firebase'den yüklenemedi", e)
 
     try:
-        with open("stations.json", "r", encoding="utf-8") as f:
+        with LOCAL_STATIONS_PATH.open("r", encoding="utf-8") as f:
             ham_veri = json.load(f)
 
         ham_liste = list(ham_veri.values()) if isinstance(ham_veri, dict) else ham_veri
