@@ -3,6 +3,8 @@ import unicodedata
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+from i18n import t
+
 
 TAHMIN_VARSAYILAN_OLASILIK = 0.58
 
@@ -182,9 +184,9 @@ def tahmin_rozetleri_getir(tahmin: Optional[Dict[str, Any]]) -> List[Tuple[str, 
 
     seviye = str(tahmin.get("seviye", "belirsiz"))
     if seviye == "yuksek":
-        return [("Boşluk ihtimali yüksek", "sb-chip-good")]
+        return [(t("badge.availability_high"), "sb-chip-good")]
     if seviye == "orta":
-        return [("Boşluk ihtimali orta", "sb-chip-info")]
+        return [(t("badge.availability_medium"), "sb-chip-info")]
     if seviye == "dusuk":
-        return [("Yoğun olabilir", "sb-chip-warn")]
+        return [(t("badge.may_be_busy"), "sb-chip-warn")]
     return []

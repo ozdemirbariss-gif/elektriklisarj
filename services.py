@@ -13,6 +13,7 @@ from config import (
     YORUM_CACHE_TTL, CEVRE_CACHE_TTL, FIREBASE_TIMEOUT_S, OVERPASS_TIMEOUT_S,
     OVERPASS_URLS, OVERPASS_HEADERS, KATEGORI_EMOJILER, MAX_YAKIN_YER, MAX_YORUM_KARAKTER, YORUM_BEKLEME_SURESI
 )
+from i18n import t
 from utils import (
     istasyon_normalize_et, yorum_tarihi_parse, clean_id_uret,
     auth_uid_hash_getir, cache_temizle_guvenli, guvenli_metin, mesafe_hesapla,
@@ -87,15 +88,15 @@ def firebase_register(email: str, password: str) -> Optional[Dict[str, Any]]:
 
 def firebase_sifre_sifirla(email: str) -> Tuple[bool, str]:
     if not FIREBASE_ENABLED:
-        return False, "Firebase bağlantısı yapılandırılmamış."
+        return False, t("service.firebase_missing")
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key={FIREBASE_API_KEY}"
     try:
         r = get_session().post(url, json={"requestType": "PASSWORD_RESET", "email": email}, timeout=5)
-        if r.status_code == 200: return True, "Şifre sıfırlama bağlantısı gönderildi."
-        return False, f"Gönderilemedi: {r.json().get('error', {}).get('message', 'Hata')}"
+        if r.status_code == 200: return True, t("service.reset_sent")
+        return False, t("service.send_failed", error=r.json().get("error", {}).get("message", t("status.error")))
     except Exception as e:
         _hata_bildir("Firebase şifre sıfırlama isteği başarısız", e)
-        return False, "Bağlantı hatası."
+        return False, t("service.connection_error")
 
 def oturum_bilgilerini_kaydet(user_data: Dict[str, Any]) -> bool:
     token = user_data.get("idToken") or user_data.get("id_token")
@@ -322,11 +323,11 @@ def favori_guncelle(ist_key: str, favori_mi: bool) -> Tuple[bool, str]:
 
     if not FIREBASE_ENABLED or not token or not uid_hash:
         favoriler.add(ist_key) if favori_mi else favoriler.discard(ist_key)
-        return True, "Oturum için güncellendi."
+        return True, t("service.session_only")
 
     if token_yenileme_gerekli_mi() and not oturum_token_yenile():
         oturumu_temizle()
-        return False, "Oturum yenilenemedi. Lütfen tekrar giriş yapın."
+        return False, t("service.session_refresh_failed")
 
     token, uid_hash = st.session_state.get("auth_token"), auth_uid_hash_getir()
     try:
@@ -337,24 +338,24 @@ def favori_guncelle(ist_key: str, favori_mi: bool) -> Tuple[bool, str]:
             favoriler.add(ist_key) if favori_mi else favoriler.discard(ist_key)
             st.session_state["favoriler_uid_hash"] = uid_hash
             st.session_state["favoriler_yuklendi"] = True
-            return True, "Favoriler güncellendi."
+            return True, t("service.favorites_updated")
         logger.warning("Favori güncelleme başarısız: %s %s", res.status_code, res.text[:180])
     except Exception as e:
         _hata_bildir("Favori güncellenemedi", e)
-    return False, "Favori güncellenemedi."
+    return False, t("service.favorite_failed")
 
 def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str, ek_bilgi: Optional[Dict[str, Any]] = None) -> Tuple[bool, str]:
     if not FIREBASE_ENABLED:
-        return False, "Bildirim için Firebase bağlantısı gerekli."
+        return False, t("service.firebase_report_required")
     if not oturum_gecerli_tut():
-        return False, "Oturum yenilenemedi. Lütfen tekrar giriş yapın."
+        return False, t("service.session_refresh_failed")
     gonderilebilir, kalan = yorum_gonderilebilir_mi()
-    if not gonderilebilir: return False, f"{kalan} saniye bekleyin."
+    if not gonderilebilir: return False, t("service.wait_seconds", seconds=kalan)
     token, uid_hash = st.session_state.get("auth_token"), auth_uid_hash_getir()
-    if not token: return False, "Giriş yapmalısınız."
+    if not token: return False, t("service.login_required")
 
     sunucu_ok, sunucu_kalan = sunucu_tarafli_hizli_cooldown_kontrol(uid_hash, token)
-    if not sunucu_ok: return False, f"{sunucu_kalan} saniye bekleyin."
+    if not sunucu_ok: return False, t("service.wait_seconds", seconds=sunucu_kalan)
 
     clean_id, tarih = clean_id_uret(istasyon_id), utc_isoformat()
     yeni_yorum = {"kullanici": "Doğrulanmış Sürücü", "yorum": guvenli_metin(yorum_metni or durum, MAX_YORUM_KARAKTER), "durum": guvenli_metin(durum, 60), "tarih": tarih, "uid_hash": uid_hash}
@@ -366,11 +367,11 @@ def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str, ek_bilgi: Optio
             st.session_state["son_yorum_zamani"] = utc_simdi()
             kullanici_yorum_meta_guncelle(uid_hash, token, tarih)
             istasyon_durum_ozetini_guncelle(clean_id, token)
-            return True, "Bildirim kaydedildi."
+            return True, t("service.report_saved")
         logger.warning("Yorum gönderme başarısız: %s %s", r.status_code, r.text[:180])
     except Exception as e:
         _hata_bildir("Yorum gönderilemedi", e)
-    return False, "Gönderilemedi."
+    return False, t("service.send_short_failed")
 
 def yakin_cevre_getir(enlem: float, boylam: float, yaricap_m: int) -> Optional[List[Dict[str, Any]]]:
     try:

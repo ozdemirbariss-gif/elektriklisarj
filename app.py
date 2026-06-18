@@ -13,6 +13,7 @@ from config import (
     MAX_SON_YORUM, FIREBASE_ENABLED, YAKIN_CEVRE_MIN_M,
     YAKIN_CEVRE_VARSAYILAN_M, YAKIN_CEVRE_MAX_M, YAKIN_CEVRE_ADIM_M
 )
+from i18n import get_language, localize_text, set_language, t
 from utils import (
     guvenli_metin, arama_metni_normalize_et, clean_id_uret, istasyon_id_getir,
     auth_uid_hash_getir, tahmini_sure_dk, varis_sarj_yuzdesi_hesapla, 
@@ -30,12 +31,12 @@ from scoring import istasyon_rozetleri_getir, istasyon_skoru_hesapla
 
 
 def kisa_deger(deger: Any, varsayilan: str = "Bilinmiyor", max_len: int = 80) -> str:
-    text = str(deger or "").strip() or varsayilan
+    text = str(deger or "").strip() or localize_text(varsayilan)
     return guvenli_metin(text, max_len)
 
 
 def kisa_duz_metin(deger: Any, varsayilan: str = "Bilinmiyor", max_len: int = 120) -> str:
-    text = str(deger or "").strip() or varsayilan
+    text = str(deger or "").strip() or localize_text(varsayilan)
     return text[:max_len]
 
 
@@ -46,12 +47,31 @@ def secili_arac_getir() -> str:
 
 
 def bildirim_goster(metin: str, basarili: bool = True) -> None:
-    onek = "Tamam" if basarili else "Hata"
+    onek = t("status.ok") if basarili else t("status.error")
     st.markdown(
         f'<div class="sb-live-region" role="status" aria-live="polite">{guvenli_metin(metin, 180)}</div>',
         unsafe_allow_html=True,
     )
     st.toast(f"{onek}: {metin}")
+
+
+def dil_secimi_degisti(widget_key: str) -> None:
+    set_language(str(st.session_state.get(widget_key, "TR")).lower())
+
+
+def dil_secici_ciz(widget_key: str) -> None:
+    secili = get_language().upper()
+    if st.session_state.get(widget_key) != secili:
+        st.session_state[widget_key] = secili
+    st.segmented_control(
+        t("language.label"),
+        ["TR", "EN"],
+        key=widget_key,
+        on_change=dil_secimi_degisti,
+        args=(widget_key,),
+        label_visibility="collapsed",
+        width="stretch",
+    )
 
 
 def rota_sonucunu_sifirla() -> None:
@@ -104,26 +124,25 @@ def veri_guncelleme_metni_ciz() -> None:
         logger.warning("Veri güncelleme zamanı okunamadı: %s", e)
         return
 
-    gecen = "az önce" if gecen_dk < 1 else f"{gecen_dk} dk önce"
+    gecen = t("data.just_now") if gecen_dk < 1 else t("data.minutes_ago", minutes=gecen_dk)
     st.markdown(
-        f'<div class="sb-data-freshness">Veriler {guvenli_metin(gecen, 24)} güncellendi</div>',
+        f'<div class="sb-data-freshness">{guvenli_metin(t("data.updated", time=gecen), 80)}</div>',
         unsafe_allow_html=True,
     )
 
 
 def istasyon_hata_state_ciz() -> None:
-    hata = st.session_state.get("istasyon_yukleme_hatasi")
-    detay = guvenli_metin(hata, 180) if hata else "İstasyon verisi şu anda boş veya erişilemiyor."
+    detay = guvenli_metin(t("data.unavailable_detail"), 180)
     st.markdown(
         f"""
         <div class="sb-empty-state sb-empty-state-error">
-            <strong>Veriler alınamadı.</strong>
+            <strong>{t("data.unavailable")}</strong>
             <span>{detay}</span>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    if st.button("Verileri Yenile", key="refresh_station_data", type="primary", use_container_width=True):
+    if st.button(t("data.refresh"), key="refresh_station_data", type="primary", use_container_width=True):
         try:
             istasyonlari_yukle.clear()
         except Exception as e:
@@ -133,6 +152,7 @@ def istasyon_hata_state_ciz() -> None:
 
 
 def uygulama_akisini_hazirla() -> None:
+    st.session_state.setdefault("language", "tr")
     st.session_state.setdefault("sb_access_granted", False)
     st.session_state.setdefault("sb_guest_mode", False)
     st.session_state.setdefault("rota_goster", False)
@@ -152,55 +172,55 @@ def sosyal_giris_butonlari_ciz() -> None:
     st.markdown('<div class="sb-social-icons" aria-hidden="true"></div>', unsafe_allow_html=True)
     sosyal1, sosyal2, sosyal3 = st.columns(3)
     sosyal_butonlar = (
-        (sosyal1, "Google", "social_google", "Google ile devam et", "Google girişi yakında aktif olacak."),
-        (sosyal2, "Apple", "social_apple", "Apple ile devam et", "Apple girişi yakında aktif olacak."),
-        (sosyal3, "Twitter", "social_twitter", "Twitter ile devam et", "Twitter girişi yakında aktif olacak."),
+        (sosyal1, "Google", "social_google"),
+        (sosyal2, "Apple", "social_apple"),
+        (sosyal3, "Twitter", "social_twitter"),
     )
-    for kolon, metin, anahtar, yardim, mesaj in sosyal_butonlar:
+    for kolon, metin, anahtar in sosyal_butonlar:
         with kolon:
-            if st.button(metin, key=anahtar, help=yardim, use_container_width=True):
-                bildirim_goster(mesaj, basarili=False)
+            if st.button(metin, key=anahtar, help=t("auth.social_help", provider=metin), use_container_width=True):
+                bildirim_goster(t("auth.social_soon", provider=metin), basarili=False)
 
 
 def auth_form_ciz(caller_context: str, entry_context: bool = False) -> None:
-    login_tab, register_tab, reset_tab = st.tabs(["Giriş Yap", "Kayıt Ol", "Şifre Sıfırla"])
+    login_tab, register_tab, reset_tab = st.tabs([t("auth.login"), t("auth.register"), t("auth.reset")])
     prefix = caller_context.strip().replace(" ", "_") or "auth"
 
     with login_tab:
         if not FIREBASE_ENABLED:
-            st.info("Firebase bağlantısı yapılandırılınca giriş yapma aktif olur.")
-            st.button("Devam Et", use_container_width=True, key=f"{prefix}_login_disabled", disabled=True)
+            st.info(t("auth.firebase_login_disabled"))
+            st.button(t("auth.continue"), use_container_width=True, key=f"{prefix}_login_disabled", disabled=True)
         else:
-            email = st.text_input("E-posta", key=f"{prefix}_login_email", placeholder="sen@ornek.com")
-            password = st.text_input("Şifre", type="password", key=f"{prefix}_login_password", placeholder="Şifren")
-            if st.button("Devam Et", use_container_width=True, key=f"{prefix}_login_btn", type="primary"):
+            email = st.text_input(t("auth.email"), key=f"{prefix}_login_email", placeholder=t("auth.email_placeholder"))
+            password = st.text_input(t("auth.password"), type="password", key=f"{prefix}_login_password", placeholder=t("auth.password_placeholder"))
+            if st.button(t("auth.continue"), use_container_width=True, key=f"{prefix}_login_btn", type="primary"):
                 user_data = firebase_login(email, password)
                 if user_data and oturum_bilgilerini_kaydet(user_data):
                     if entry_context:
                         uygulama_girisini_ac(misafir=False)
                     st.rerun()
-                bildirim_goster("Giriş başarısız.", basarili=False)
+                bildirim_goster(t("auth.login_failed"), basarili=False)
 
     with register_tab:
         if not FIREBASE_ENABLED:
-            st.info("Kayıt Firebase bağlantısından sonra kullanılabilir.")
+            st.info(t("auth.firebase_register_disabled"))
         else:
-            reg_email = st.text_input("Yeni hesap e-postası", key=f"{prefix}_register_email")
-            reg_password = st.text_input("Yeni hesap şifresi", type="password", key=f"{prefix}_register_password")
-            if st.button("Kaydol", use_container_width=True, key=f"{prefix}_register_btn"):
+            reg_email = st.text_input(t("auth.new_email"), key=f"{prefix}_register_email")
+            reg_password = st.text_input(t("auth.new_password"), type="password", key=f"{prefix}_register_password")
+            if st.button(t("auth.register_action"), use_container_width=True, key=f"{prefix}_register_btn"):
                 user_data = firebase_register(reg_email, reg_password)
                 if user_data and oturum_bilgilerini_kaydet(user_data):
                     if entry_context:
                         uygulama_girisini_ac(misafir=False)
                     st.rerun()
-                bildirim_goster("Kayıt başarısız.", basarili=False)
+                bildirim_goster(t("auth.register_failed"), basarili=False)
 
     with reset_tab:
         if not FIREBASE_ENABLED:
-            st.info("Şifre sıfırlama Firebase bağlantısından sonra kullanılabilir.")
+            st.info(t("auth.firebase_reset_disabled"))
         else:
-            reset_email = st.text_input("E-posta Adresiniz", key=f"{prefix}_reset_email")
-            if st.button("Sıfırlama Bağlantısı Gönder", use_container_width=True, key=f"{prefix}_reset_btn"):
+            reset_email = st.text_input(t("auth.reset_email"), key=f"{prefix}_reset_email")
+            if st.button(t("auth.reset_action"), use_container_width=True, key=f"{prefix}_reset_btn"):
                 ok, msg = firebase_sifre_sifirla(reset_email)
                 bildirim_goster(msg, ok)
 
@@ -209,22 +229,25 @@ def giris_formlari_ciz() -> None:
     st.markdown('<section class="sb-entry-panel">', unsafe_allow_html=True)
     auth_form_ciz("entry", entry_context=True)
 
-    if st.button("Veya hızlıca misafir olarak devam et", key="guest_continue", use_container_width=True):
+    if st.button(t("auth.guest_continue"), key="guest_continue", use_container_width=True):
         uygulama_girisini_ac(misafir=True)
         st.rerun()
 
-    st.markdown('<div class="sb-social-separator"><span>veya</span></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="sb-social-separator"><span>{t("auth.or")}</span></div>', unsafe_allow_html=True)
     sosyal_giris_butonlari_ciz()
     st.markdown('</section>', unsafe_allow_html=True)
 
 
 def giris_ekrani_ciz() -> None:
+    st.markdown('<div class="sb-entry-language">', unsafe_allow_html=True)
+    dil_secici_ciz("language_entry")
+    st.markdown('</div>', unsafe_allow_html=True)
     st.markdown(
-        """
+        f"""
         <section class="sb-entry-hero">
             <div class="sb-entry-mark">SarjBul</div>
-            <h1>Elektrikli rotanı premium bir kokpit hissiyle başlat.</h1>
-            <p>Şarj, menzil ve rota kararını tek ekranda netleştir.</p>
+            <h1>{t("auth.hero_title")}</h1>
+            <p>{t("auth.hero_subtitle")}</p>
         </section>
         """,
         unsafe_allow_html=True,
@@ -235,14 +258,14 @@ def giris_ekrani_ciz() -> None:
 
 def ust_bilgi_ciz() -> None:
     oturumlu = "auth_token" in st.session_state
-    hesap_metni = st.session_state.get("auth_email") if oturumlu else "Misafir kullanım"
+    hesap_metni = st.session_state.get("auth_email") if oturumlu else t("nav.guest")
     rota_aktif = st.session_state.get("rota_goster") is True
-    adim_metni = "3 / 3 · Rota" if rota_aktif else "2 / 3 · Araç ve rota"
+    adim_metni = t("nav.route_step") if rota_aktif else t("nav.vehicle_step")
     ilerleme = 100 if rota_aktif else 66
-    geri_yardimi = "Araç ve rota ekranına dön" if rota_aktif else "Giriş ekranına dön"
+    geri_yardimi = t("nav.back_vehicle") if rota_aktif else t("nav.back_entry")
 
     st.markdown('<div class="sb-top-nav-anchor" aria-hidden="true"></div>', unsafe_allow_html=True)
-    geri_col, durum_col = st.columns([0.12, 0.88], gap="small")
+    geri_col, durum_col, dil_col = st.columns([0.13, 0.64, 0.23], gap="small")
 
     with geri_col:
         if st.button("←", key="top_nav_back", help=geri_yardimi, use_container_width=True):
@@ -270,6 +293,9 @@ def ust_bilgi_ciz() -> None:
             unsafe_allow_html=True,
         )
 
+    with dil_col:
+        dil_secici_ciz("language_top")
+
 
 def arac_secimi_degisti() -> None:
     secilen = st.session_state.get("secilen_arac")
@@ -282,18 +308,18 @@ def arac_secimi_degisti() -> None:
 def sarj_gostergesi_ciz(sarj_yuzdesi: int) -> None:
     yuzde = max(1, min(100, int(sarj_yuzdesi)))
     aci = yuzde * 3.6
-    durum = "Düşük" if yuzde < 25 else "Yola hazır" if yuzde < 75 else "Uzun menzil"
+    durum = t("charge.low") if yuzde < 25 else t("charge.ready") if yuzde < 75 else t("charge.long_range")
     st.markdown(
         f"""
         <div class="sb-charge-visual" style="--charge-angle: {aci:.1f}deg; --charge-width: {yuzde}%;">
-            <div class="sb-charge-ring" role="img" aria-label="Şarj yüzde {yuzde}">
+            <div class="sb-charge-ring" role="img" aria-label="{t("charge.aria", percent=yuzde)}">
                 <div class="sb-charge-ring-core">
                     <strong>%{yuzde}</strong>
-                    <span>Şarj</span>
+                    <span>{t("charge.label")}</span>
                 </div>
             </div>
             <div class="sb-charge-copy">
-                <span>Seçili batarya seviyesi</span>
+                <span>{t("charge.selected_level")}</span>
                 <strong>{durum}</strong>
                 <div class="sb-battery-shell" aria-hidden="true">
                     <div class="sb-battery-fill"></div>
@@ -313,25 +339,26 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
     st.session_state.setdefault("secilen_arac", secilen_baslangic)
 
     st.markdown(
-        """
+        f"""
         <section class="sb-catalog-panel" id="sarj-katalogu">
-            <div class="sb-kicker">SarjBul kataloğu</div>
-            <h2>Aracını seç, şarj rotanı tek adımda hazırla.</h2>
+            <div class="sb-kicker">{t("catalog.kicker")}</div>
+            <h2>{t("catalog.title")}</h2>
         </section>
         """,
         unsafe_allow_html=True,
     )
 
     secilen_arac = st.selectbox(
-        "Araç kataloğu",
+        t("catalog.vehicle"),
         list(ARAC_KATALOGU.keys()),
         key="secilen_arac",
         on_change=arac_secimi_degisti,
+        format_func=lambda value: t("vehicle.manual") if value == "Özel Araç (Manuel)" else value,
     )
     v = ARAC_KATALOGU[secilen_arac]
 
     sarj_kwargs = {
-        "label": "Şarj %",
+        "label": t("catalog.charge_percent"),
         "min_value": 1,
         "max_value": 100,
         "key": "sarj_yuzdesi",
@@ -343,7 +370,7 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
     sarj_gostergesi_ciz(sarj_yuzdesi)
 
     batarya_kwargs = {
-        "label": "Kapasite",
+        "label": t("catalog.capacity"),
         "min_value": 1.0,
         "max_value": 250.0,
         "key": "batarya_kwh",
@@ -353,7 +380,7 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
         batarya_kwargs["value"] = float(v["batarya"])
 
     tuketim_kwargs = {
-        "label": "Tüketim",
+        "label": t("catalog.consumption"),
         "min_value": 5.0,
         "max_value": 40.0,
         "key": "tuketim_kwh",
@@ -362,7 +389,7 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
     if "tuketim_kwh" not in st.session_state:
         tuketim_kwargs["value"] = float(v["tuketim"])
 
-    with st.expander("Gelişmiş araç değerleri", expanded=False):
+    with st.expander(t("catalog.advanced"), expanded=False):
         c1, c2 = st.columns(2)
         batarya = c1.number_input(**batarya_kwargs)
         tuketim = c2.number_input(**tuketim_kwargs)
@@ -370,8 +397,8 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
     st.markdown(
         f"""
         <div class="sb-catalog-meta">
-            <div class="sb-catalog-stat"><span>Varsayılan batarya</span><strong>{float(v["batarya"]):.1f} kWh</strong></div>
-            <div class="sb-catalog-stat"><span>Ortalama tüketim</span><strong>{float(v["tuketim"]):.1f} kWh</strong></div>
+            <div class="sb-catalog-stat"><span>{t("catalog.default_battery")}</span><strong>{float(v["batarya"]):.1f} kWh</strong></div>
+            <div class="sb-catalog-stat"><span>{t("catalog.average_consumption")}</span><strong>{float(v["tuketim"]):.1f} kWh</strong></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -389,20 +416,26 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
 
     aktif_filtre_sayisi = aktif_filtre_sayisi_getir()
     filtre_basligi = (
-        f"Filtreler ve sürüş ayarları ({aktif_filtre_sayisi} aktif)"
+        t("filters.title_active", count=aktif_filtre_sayisi)
         if aktif_filtre_sayisi
-        else "Filtreler ve sürüş ayarları"
+        else t("filters.title")
     )
     with st.expander(filtre_basligi, expanded=False):
         niyet = st.radio(
-            "Tercih",
+            t("filters.preference"),
             ["Dengeli", "Yakın", "Hızlı", "Ekonomik"],
             horizontal=True,
             key="niyet",
             on_change=rota_sonucunu_sifirla,
+            format_func=lambda value: t({
+                "Dengeli": "intent.balanced",
+                "Yakın": "intent.near",
+                "Hızlı": "intent.fast",
+                "Ekonomik": "intent.economic",
+            }[value]),
         )
         guvenlik_kwargs = {
-            "label": "Güvenlik payı (%)",
+            "label": t("filters.safety_margin"),
             "min_value": 10,
             "max_value": 50,
             "key": "guvenlik_marji",
@@ -412,37 +445,42 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
             guvenlik_kwargs["value"] = 25
         guvenlik_marji = st.slider(**guvenlik_kwargs)
         menzil_filtresi = st.checkbox(
-            "Menzile göre filtrele",
+            t("filters.range"),
             True,
             key="menzil_filtresi",
             on_change=rota_sonucunu_sifirla,
         )
-        arama_metni = st.text_input("İstasyon ara", key="arama_metni", on_change=rota_sonucunu_sifirla)
+        arama_metni = st.text_input(t("filters.search"), key="arama_metni", on_change=rota_sonucunu_sifirla)
         soket_filtreleri = st.multiselect(
-            "Soket",
+            t("filters.socket"),
             ["CCS", "CHAdeMO", "Type 2", "Schuko", "GB/T"],
             key="soket_filtreleri",
             on_change=rota_sonucunu_sifirla,
         )
         hiz_filtresi = st.selectbox(
-            "Minimum güç",
+            t("filters.minimum_power"),
             ["Tümü", "AC (≥7 kW)", "DC (≥50 kW)", "Hızlı DC (≥150 kW)"],
             key="hiz_filtresi",
             on_change=rota_sonucunu_sifirla,
+            format_func=lambda value: (
+                t("filters.all") if value == "Tümü"
+                else t("filters.fast_dc") if value == "Hızlı DC (≥150 kW)"
+                else value
+            ),
         )
         operator_filtreleri = st.multiselect(
-            "Operatör",
+            t("filters.operator"),
             operator_secenekleri,
             key="operator_filtreleri",
             on_change=rota_sonucunu_sifirla,
         )
         sadece_24_saat = st.checkbox(
-            "Sadece 24 saat açık",
+            t("filters.open_24h"),
             key="sadece_24_saat",
             on_change=rota_sonucunu_sifirla,
         )
         ayar_yaricap = st.slider(
-            "Yakın yer mesafesi (m)",
+            t("filters.nearby_radius"),
             YAKIN_CEVRE_MIN_M,
             YAKIN_CEVRE_MAX_M,
             YAKIN_CEVRE_VARSAYILAN_M,
@@ -450,20 +488,20 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
             key="ayar_yaricap",
             on_change=rota_sonucunu_sifirla,
         )
-        haritayi_goster = st.checkbox("Haritayı göster", key="haritayi_goster", on_change=rota_sonucunu_sifirla)
+        haritayi_goster = st.checkbox(t("filters.show_map"), key="haritayi_goster", on_change=rota_sonucunu_sifirla)
 
     if not konum_hazir:
         st.markdown(
-            """
+            f"""
             <div class="sb-inline-hint">
-                <strong>Konum bekleniyor.</strong>
-                <span>Şarj Bul'u aktif etmek için aşağıdan şehir veya koordinat seç.</span>
+                <strong>{t("location.waiting")}</strong>
+                <span>{t("location.enable_hint")}</span>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    if st.button("Şarj Bul", key="find_route_btn", use_container_width=True, disabled=not konum_hazir, type="primary"):
+    if st.button(t("location.find_charger"), key="find_route_btn", use_container_width=True, disabled=not konum_hazir, type="primary"):
         st.session_state["rota_goster"] = True
         st.rerun()
 
@@ -538,10 +576,13 @@ def konumu_sessiona_yaz(lat: float, lon: float) -> Tuple[float, float]:
 
 
 def manuel_konum_ciz() -> None:
+    if st.session_state.get("manuel_konum_secimi") == "Seçiniz...":
+        st.session_state["manuel_konum_secimi"] = ""
     manuel = st.selectbox(
-        "Lütfen mevcut konumunuzu seçin:",
-        ["Seçiniz...", *SABIT_KONUMLAR.keys()],
+        t("location.prompt"),
+        ["", *SABIT_KONUMLAR.keys()],
         key="manuel_konum_secimi",
+        format_func=lambda value: t("location.select") if not value else value,
     )
     if manuel in SABIT_KONUMLAR:
         secili_lat, secili_lon = SABIT_KONUMLAR[manuel]
@@ -549,7 +590,7 @@ def manuel_konum_ciz() -> None:
             f"""
             <div class="sb-location-confirm">
                 <strong>{guvenli_metin(manuel, 80)}</strong>
-                <span>{secili_lat:.4f}°K, {secili_lon:.4f}°D</span>
+                <span>{secili_lat:.4f}°{t("location.north")}, {secili_lon:.4f}°{t("location.east")}</span>
             </div>
             """,
             unsafe_allow_html=True,
@@ -577,19 +618,19 @@ def manuel_konum_ciz() -> None:
             returned_objects=[],
             key=f"manual_location_map_{clean_id_uret(manuel)}",
         )
-        if st.button("Bu konumu kullan", key=f"use_manual_location_{clean_id_uret(manuel)}", type="primary", use_container_width=True):
+        if st.button(t("location.use_this"), key=f"use_manual_location_{clean_id_uret(manuel)}", type="primary", use_container_width=True):
             konumu_sessiona_yaz(secili_lat, secili_lon)
             st.rerun()
 
-    with st.expander("Koordinat gir", expanded=False):
-        lat = st.number_input("Enlem", min_value=-90.0, max_value=90.0, value=39.0000, step=0.0001, format="%.6f")
-        lon = st.number_input("Boylam", min_value=-180.0, max_value=180.0, value=35.0000, step=0.0001, format="%.6f")
-        if st.button("Konumu kullan", use_container_width=True):
+    with st.expander(t("location.coordinates"), expanded=False):
+        lat = st.number_input(t("location.latitude"), min_value=-90.0, max_value=90.0, value=39.0000, step=0.0001, format="%.6f")
+        lon = st.number_input(t("location.longitude"), min_value=-180.0, max_value=180.0, value=35.0000, step=0.0001, format="%.6f")
+        if st.button(t("location.use"), use_container_width=True):
             if konum_gecerli_mi(lat, lon):
                 konumu_sessiona_yaz(float(lat), float(lon))
                 st.rerun()
             else:
-                bildirim_goster("Geçerli bir enlem/boylam girin.", basarili=False)
+                bildirim_goster(t("location.invalid"), basarili=False)
 
 
 def harita_rengi_getir(skor: int) -> str:
@@ -601,12 +642,12 @@ def harita_rengi_getir(skor: int) -> str:
 
 
 def harita_popup_html_olustur(istasyon: Dict[str, Any]) -> str:
-    isim = kisa_deger(istasyon.get("isim"), "İstasyon", 90)
-    operator = kisa_deger(istasyon.get("operator"), "Operatör bilinmiyor", 70)
+    isim = kisa_deger(istasyon.get("isim"), t("common.station"), 90)
+    operator = kisa_deger(istasyon.get("operator"), t("common.operator_unknown"), 70)
     skor = int(istasyon.get("Skor", 0) or 0)
     mesafe = float(istasyon.get("Mesafe", 0.0) or 0.0)
-    guc = kisa_deger(istasyon.get("hiz"), "Güç bilinmiyor", 42)
-    durum = kisa_deger(istasyon.get("ArizaEtiketi"), "Canlı veri yok", 60)
+    guc = localize_text(kisa_duz_metin(istasyon.get("hiz"), t("common.power_unknown"), 42))
+    durum = localize_text(kisa_duz_metin(istasyon.get("ArizaEtiketi"), t("common.live_data_none"), 60))
     renk = harita_rengi_getir(skor)
     return f"""
         <div style="min-width:190px;background:#111827;border:1px solid rgba(73,255,154,0.22);border-radius:12px;box-shadow:0 18px 40px rgba(0,0,0,0.34);color:#F7FAF7;font-family:Inter,Arial,sans-serif;padding:12px;">
@@ -614,16 +655,16 @@ def harita_popup_html_olustur(istasyon: Dict[str, Any]) -> str:
             <div style="font-size:12px;color:rgba(247,250,247,0.62);margin-bottom:8px;">{operator}</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
                 <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:6px;">
-                    <div style="font-size:10px;color:rgba(247,250,247,0.52);font-weight:700;">Skor</div>
+                    <div style="font-size:10px;color:rgba(247,250,247,0.52);font-weight:700;">{t("map.score")}</div>
                     <div style="font-size:16px;font-weight:850;color:{renk};">{skor}</div>
                 </div>
                 <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:6px;">
-                    <div style="font-size:10px;color:rgba(247,250,247,0.52);font-weight:700;">Mesafe</div>
+                    <div style="font-size:10px;color:rgba(247,250,247,0.52);font-weight:700;">{t("map.distance")}</div>
                     <div style="font-size:16px;font-weight:850;">{mesafe:.1f} km</div>
                 </div>
             </div>
-            <div style="font-size:12px;margin-top:8px;"><strong>Güç:</strong> {guc}</div>
-            <div style="font-size:12px;margin-top:3px;"><strong>Durum:</strong> {durum}</div>
+            <div style="font-size:12px;margin-top:8px;"><strong>{t("map.power")}:</strong> {guc}</div>
+            <div style="font-size:12px;margin-top:3px;"><strong>{t("map.status")}:</strong> {durum}</div>
         </div>
     """
 
@@ -651,7 +692,7 @@ def harita_ciz(istasyonlar: List[Dict[str, Any]]) -> None:
     bounds = []
     for istasyon in harita_verisi:
         skor = int(istasyon.get("Skor", 0) or 0)
-        isim = kisa_deger(istasyon.get("isim"), "İstasyon", 70)
+        isim = kisa_deger(istasyon.get("isim"), t("common.station"), 70)
         konum = [istasyon["lat"], istasyon["lon"]]
         bounds.append(konum)
         folium.CircleMarker(
@@ -663,7 +704,7 @@ def harita_ciz(istasyonlar: List[Dict[str, Any]]) -> None:
             fill_color=harita_rengi_getir(skor),
             fill_opacity=0.84,
             popup=folium.Popup(harita_popup_html_olustur(istasyon), max_width=280),
-            tooltip=f"{isim} - {skor} puan",
+            tooltip=f"{isim} - {skor} {t('map.points')}",
         ).add_to(harita)
 
     if len(bounds) > 1:
@@ -698,19 +739,19 @@ def ozet_paneli_ciz(guvenli_menzil: float, sarj_yuzdesi: int, istasyon_sayisi: i
         f"""
         <div class="sb-summary-grid">
             <div class="sb-summary-item">
-                <div class="sb-kicker">Güvenli menzil</div>
+                <div class="sb-kicker">{t("summary.safe_range")}</div>
                 <div class="sb-summary-value">{guvenli_menzil:.0f} km</div>
-                <div class="sb-summary-sub">Filtre hesabı</div>
+                <div class="sb-summary-sub">{t("summary.filter_calculation")}</div>
             </div>
             <div class="sb-summary-item">
-                <div class="sb-kicker">Şarj durumu</div>
+                <div class="sb-kicker">{t("summary.charge_status")}</div>
                 <div class="sb-summary-value">%{sarj_yuzdesi}</div>
-                <div class="sb-summary-sub">Mevcut batarya</div>
+                <div class="sb-summary-sub">{t("summary.current_battery")}</div>
             </div>
             <div class="sb-summary-item">
-                <div class="sb-kicker">Veri havuzu</div>
+                <div class="sb-kicker">{t("summary.data_pool")}</div>
                 <div class="sb-summary-value">{istasyon_sayisi}</div>
-                <div class="sb-summary-sub">Normalize kayıt</div>
+                <div class="sb-summary-sub">{t("summary.normalized_records")}</div>
             </div>
         </div>
         """,
@@ -723,7 +764,7 @@ def surus_ozeti_ciz(arac: str, guvenli_menzil: float, sarj_yuzdesi: int) -> None
         f"""
         <div class="sb-drive-strip">
             <span>{kisa_deger(arac, max_len=36)}</span>
-            <strong>%{sarj_yuzdesi} · {guvenli_menzil:.0f} km güvenli menzil</strong>
+            <strong>{t("summary.safe_range_value", percent=sarj_yuzdesi, range=guvenli_menzil)}</strong>
         </div>
         """,
         unsafe_allow_html=True,
@@ -751,7 +792,7 @@ def istasyon_akis_verisi_hazirla(
         for yorum in istasyon.get("SonYorumlar", [])[:MAX_SON_YORUM]:
             son_yorumlar.append(
                 {
-                    "durum": kisa_duz_metin(durum_metni_sadelestir(yorum.get("durum", "")), "", 32),
+                    "durum": localize_text(kisa_duz_metin(durum_metni_sadelestir(yorum.get("durum", "")), "", 32)),
                     "yorum": kisa_duz_metin(yorum.get("yorum", ""), "", 86),
                 }
             )
@@ -761,21 +802,21 @@ def istasyon_akis_verisi_hazirla(
                 "rank": sira,
                 "total": toplam,
                 "featured": sira == 1,
-                "eyebrow": "En yakın uygun durak" if sira == 1 else "Yakın seçenek",
-                "name": kisa_duz_metin(istasyon.get("isim"), "İstasyon", 118),
-                "operator": kisa_duz_metin(istasyon.get("operator"), "Operatör bilinmiyor", 64),
-                "address": kisa_duz_metin(istasyon.get("adres"), "Adres bilgisi yok", 160),
+                "eyebrow": t("feed.nearest") if sira == 1 else t("feed.nearby_option"),
+                "name": kisa_duz_metin(istasyon.get("isim"), t("common.station"), 118),
+                "operator": kisa_duz_metin(istasyon.get("operator"), t("common.operator_unknown"), 64),
+                "address": localize_text(kisa_duz_metin(istasyon.get("adres"), t("common.address_missing"), 160)),
                 "distance": f"{float(istasyon.get('Mesafe', 0.0) or 0.0):.1f} km",
-                "duration": f"{int(istasyon.get('TahminiSureDk', 0) or 0)} dk",
+                "duration": f"{int(istasyon.get('TahminiSureDk', 0) or 0)} {t('feed.minute')}",
                 "arrival": f"%{float(istasyon.get('VarisSarjYuzdesi', 0.0) or 0.0):.0f}",
-                "power": kisa_duz_metin(istasyon.get("hiz"), "Güç bilinmiyor", 42),
-                "socket": kisa_duz_metin(istasyon.get("soket"), "Soket bilinmiyor", 42),
-                "price": kisa_duz_metin(istasyon.get("fiyat"), "Fiyat yok", 42),
-                "status": kisa_duz_metin(istasyon.get("ArizaEtiketi"), "Canlı veri yok", 48),
+                "power": localize_text(kisa_duz_metin(istasyon.get("hiz"), t("common.power_unknown"), 42)),
+                "socket": localize_text(kisa_duz_metin(istasyon.get("soket"), t("common.socket_unknown"), 42)),
+                "price": localize_text(kisa_duz_metin(istasyon.get("fiyat"), t("common.price_missing"), 42)),
+                "status": localize_text(kisa_duz_metin(istasyon.get("ArizaEtiketi"), t("common.live_data_none"), 48)),
                 "score": int(istasyon.get("Skor", 0) or 0),
                 "routeUrl": rota_linki_olustur(istasyon, user_lat, user_lon),
                 "chips": [
-                    {"text": kisa_duz_metin(metin, "", 38), "className": kisa_duz_metin(css_class, "", 32)}
+                    {"text": localize_text(kisa_duz_metin(metin, "", 38)), "className": kisa_duz_metin(css_class, "", 32)}
                     for metin, css_class in istasyon.get("Rozetler", [])
                 ],
                 "comments": son_yorumlar,
@@ -789,9 +830,25 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
         istasyon_akis_verisi_hazirla(istasyonlar, user_lat, user_lon),
         ensure_ascii=False,
     ).replace("</", "<\\/")
+    labels_json = json.dumps(
+        {
+            "arrival": t("feed.arrival"),
+            "badgeHelp": t("feed.badge_help"),
+            "badgeAria": t("feed.badge_aria"),
+            "notification": t("feed.notification"),
+            "score": t("feed.score"),
+            "power": t("feed.power"),
+            "socket": t("feed.socket"),
+            "price": t("feed.price"),
+            "openRoute": t("feed.open_route"),
+            "googleMaps": t("feed.google_maps"),
+            "goToStation": t("feed.go_to_station", index="{index}"),
+        },
+        ensure_ascii=False,
+    ).replace("</", "<\\/")
 
     feed_html = """
-        <section class="sb-feed-shell" id="rotayi-ac" aria-label="İstasyon akışı">
+        <section class="sb-feed-shell" id="rotayi-ac" aria-label="__FEED_ARIA__">
             <div class="sb-feed-viewport" id="station-feed" tabindex="0" aria-live="polite">
                 <div class="sb-feed-track" id="station-track">
                     <div class="sb-feed-spacer" id="station-top-spacer"></div>
@@ -799,13 +856,14 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                     <div class="sb-feed-spacer" id="station-bottom-spacer"></div>
                 </div>
             </div>
-            <div class="sb-feed-controls" aria-label="İstasyon akışı kontrolleri">
-                <div class="sb-feed-dots" id="station-dots" aria-label="İstasyon konumu"></div>
-                <div class="sb-feed-hint" aria-hidden="true">Yukarı kaydır</div>
+            <div class="sb-feed-controls" aria-label="__FEED_CONTROLS__">
+                <div class="sb-feed-dots" id="station-dots" aria-label="__FEED_POSITION__"></div>
+                <div class="sb-feed-hint" aria-hidden="true">__FEED_HINT__</div>
             </div>
         </section>
         <script>
             const stations = __STATIONS_JSON__;
+            const labels = __LABELS_JSON__;
             const viewport = document.getElementById("station-feed");
             const track = document.getElementById("station-track");
             const windowEl = document.getElementById("station-window");
@@ -851,8 +909,8 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                         <button
                             class="sb-feed-chip-help"
                             type="button"
-                            title="Rozetler; canlı durum, menzil, hız ve veri güveni sinyallerini özetler."
-                            aria-label="Rozet açıklaması"
+                            title="${esc(labels.badgeHelp)}"
+                            aria-label="${esc(labels.badgeAria)}"
                         >?</button>
                     </div>
                 `;
@@ -861,7 +919,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             function commentHtml(comments) {
                 return comments.length
                     ? `<div class="sb-feed-comments">${comments.map((item) => `
-                        <div><strong>${esc(item.durum || "Bildirim")}</strong><span>${esc(item.yorum)}</span></div>
+                        <div><strong>${esc(item.durum || labels.notification)}</strong><span>${esc(item.yorum)}</span></div>
                     `).join("")}</div>`
                     : "";
             }
@@ -884,7 +942,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                             <div class="sb-feed-head-actions">
                                 <div class="sb-feed-head-score">
                                     <strong>${station.score}</strong>
-                                    <span>SKOR</span>
+                                    <span>${esc(labels.score)}</span>
                                 </div>
                                 <div class="sb-feed-bookmark" aria-hidden="true">♡</div>
                                 <div class="sb-feed-counter">
@@ -895,21 +953,21 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                         </div>
                         <div class="sb-feed-hero">
                             <strong>${esc(station.distance)}</strong>
-                            <span>${esc(station.duration)} · varış ${esc(station.arrival)}</span>
+                            <span>${esc(station.duration)} · ${esc(labels.arrival)} ${esc(station.arrival)}</span>
                         </div>
                         <div class="sb-feed-score-row">
                             <div class="sb-feed-status">${esc(station.status)}</div>
                         </div>
                         <div class="sb-feed-grid">
-                            <div><span>Güç</span><strong>${esc(station.power)}</strong></div>
-                            <div><span>Soket</span><strong>${esc(station.socket)}</strong></div>
-                            <div><span>Fiyat</span><strong>${esc(station.price)}</strong></div>
+                            <div><span>${esc(labels.power)}</span><strong>${esc(station.power)}</strong></div>
+                            <div><span>${esc(labels.socket)}</span><strong>${esc(station.socket)}</strong></div>
+                            <div><span>${esc(labels.price)}</span><strong>${esc(station.price)}</strong></div>
                         </div>
                         ${chipHtml(station.chips)}
                         ${commentHtml(station.comments)}
                         <div class="sb-feed-address">${esc(station.address)}</div>
                         <a class="sb-feed-route" href="${esc(station.routeUrl)}" target="_blank" rel="noopener noreferrer">
-                            <span>Rotayı Aç</span><small>Google Maps</small>
+                            <span>${esc(labels.openRoute)}</span><small>${esc(labels.googleMaps)}</small>
                         </a>
                     </article>
                 `;
@@ -925,7 +983,8 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                         index === visibleIndex ? "is-active" : "",
                         index === 0 || index === stations.length - 1 ? "is-edge" : ""
                     ].filter(Boolean).join(" ");
-                    return `<button class="${classes}" type="button" data-target="${index}" aria-label="${index + 1}. istasyona git"></button>`;
+                    const dotLabel = labels.goToStation.replace("{index}", String(index + 1));
+                    return `<button class="${classes}" type="button" data-target="${index}" aria-label="${esc(dotLabel)}"></button>`;
                 }).join("");
             }
 
@@ -1719,6 +1778,14 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             }
         </style>
     """.replace("__STATIONS_JSON__", payload_json)
+    feed_html = (
+        feed_html
+        .replace("__LABELS_JSON__", labels_json)
+        .replace("__FEED_ARIA__", guvenli_metin(t("feed.aria"), 80))
+        .replace("__FEED_CONTROLS__", guvenli_metin(t("feed.controls"), 80))
+        .replace("__FEED_POSITION__", guvenli_metin(t("feed.position"), 80))
+        .replace("__FEED_HINT__", guvenli_metin(t("feed.swipe_hint"), 50))
+    )
 
     st.markdown('<div class="sb-route-feed-mode" aria-hidden="true"></div>', unsafe_allow_html=True)
     components.html(
@@ -1729,57 +1796,57 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
 
 
 def istasyon_aksiyonlari_ciz(ist: Dict[str, Any], ist_id: str, ist_key: str, ayar_yaricap: int) -> None:
-    st.markdown('<div class="sb-action-caption">Hızlı işlemler</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="sb-action-caption">{t("actions.quick")}</div>', unsafe_allow_html=True)
     a1, a2, a3 = st.columns([1.45, 1.0, 1.15])
     with a1:
-        with st.popover("Durum bildir"):
+        with st.popover(t("actions.report")):
             if "auth_token" not in st.session_state:
-                st.warning("Giriş yapın.")
+                st.warning(t("actions.login"))
             else:
                 b1, b2, b3 = st.columns(3)
-                if b1.button("Uygun", key=f"btn_ok_{ist_key}"):
+                if b1.button(t("actions.available"), key=f"btn_ok_{ist_key}"):
                     ok, msg = yorum_gonder(ist_id, "Uygun", "Uygun", {})
                     bildirim_goster(msg, ok)
-                if b2.button("Sorun", key=f"btn_fail_{ist_key}"):
+                if b2.button(t("actions.issue"), key=f"btn_fail_{ist_key}"):
                     ok, msg = yorum_gonder(ist_id, "Sorun var", "Sorun var", {})
                     bildirim_goster(msg, ok)
-                if b3.button("Sıra", key=f"btn_queue_{ist_key}"):
+                if b3.button(t("actions.queue"), key=f"btn_queue_{ist_key}"):
                     ok, msg = yorum_gonder(ist_id, "Sıra var", "Sıra var", {})
                     bildirim_goster(msg, ok)
     with a2:
         is_fav = ist_key in st.session_state["favoriler"]
-        if st.button("Kayıtlı" if is_fav else "Kaydet", key=f"fav_{ist_key}"):
+        if st.button(t("actions.saved") if is_fav else t("actions.save"), key=f"fav_{ist_key}"):
             favori_guncelle(ist_key, not is_fav)
             st.rerun()
     with a3:
-        yakin_yerler_acik = st.button("Yakın yerler", key=f"btn_cevre_{ist_key}")
+        yakin_yerler_acik = st.button(t("actions.nearby"), key=f"btn_cevre_{ist_key}")
 
     if yakin_yerler_acik:
         yerler = yakin_cevre_getir(ist["enlem"], ist["boylam"], ayar_yaricap)
         if yerler:
             yer_html = "".join(
-                f'<div class="sb-nearby-item"><span>{guvenli_metin(y.get("isim"), 80)}</span><strong>{int(y.get("metre", 0))}m</strong></div>'
+                f'<div class="sb-nearby-item"><span>{guvenli_metin(localize_text(y.get("isim")), 80)}</span><strong>{int(y.get("metre", 0))}m</strong></div>'
                 for y in yerler
             )
             st.markdown(f'<div class="sb-nearby-list">{yer_html}</div>', unsafe_allow_html=True)
         else:
-            st.info("Yakında gösterilecek yer bulunamadı.")
+            st.info(t("actions.no_nearby"))
 
 
 def hesap_paneli_ciz() -> None:
-    with st.expander("Hesap", expanded=False):
+    with st.expander(t("account.title"), expanded=False):
         if not FIREBASE_ENABLED:
-            st.info("Hesap, favori ve bildirim özellikleri için Firebase bağlantısı yapılandırılmalı.")
+            st.info(t("account.firebase_required"))
             return
 
         if "auth_token" not in st.session_state:
             auth_form_ciz("account", entry_context=False)
         else:
             if not oturum_gecerli_tut():
-                st.warning("Oturum yenilenemedi. Lütfen tekrar giriş yapın.")
+                st.warning(t("account.session_failed"))
                 st.rerun()
-            st.caption("Hesap aktif.")
-            if st.button("Çıkış Yap", use_container_width=True):
+            st.caption(t("account.active"))
+            if st.button(t("account.logout"), use_container_width=True):
                 oturumu_temizle()
                 st.rerun()
 
@@ -1875,10 +1942,10 @@ if not rota_modu:
 
 if not konum_hazir:
     st.markdown(
-        """
+        f"""
         <div class="sb-step-panel">
-            <strong>Rotayı hazırlamak için konum seç.</strong>
-            <span>Konum seçildikten sonra Şarj Bul butonu aktif olur.</span>
+            <strong>{t("location.choose_for_route")}</strong>
+            <span>{t("location.ready_hint")}</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1890,10 +1957,10 @@ user_lat, user_lon = float(user_lat), float(user_lon)
 
 if not st.session_state.get("rota_goster"):
     st.markdown(
-        """
+        f"""
         <div class="sb-step-panel">
-            <strong>Aracın hazır.</strong>
-            <span>Şarj Bul'a bastığında rota kartları burada hazırlanır.</span>
+            <strong>{t("route.ready")}</strong>
+            <span>{t("route.ready_hint")}</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1996,10 +2063,10 @@ if uygun_istasyonlar:
         istasyon_aksiyonlari_ciz(en_iyi, ist_id, en_iyi_key, ayar_yaricap)
     else:
         st.markdown(
-            """
+            f"""
             <div class="sb-step-panel">
-                <strong>Kaydetmek ve durum bildirmek için giriş yapabilirsin.</strong>
-                <span>Misafir olarak rota oluşturma devam eder.</span>
+                <strong>{t("route.guest_action")}</strong>
+                <span>{t("route.guest_hint")}</span>
             </div>
             """,
             unsafe_allow_html=True,
@@ -2007,16 +2074,16 @@ if uygun_istasyonlar:
 
 else:
     st.markdown(
-        """
+        f"""
         <div class="sb-empty-state">
-            <strong>Menzil içinde uygun istasyon bulamadık.</strong>
-            <span>Gelişmiş ayarlardan menzil filtresini gevşetmeyi veya arama metnini temizlemeyi deneyin.</span>
+            <strong>{t("empty.title")}</strong>
+            <span>{t("empty.hint")}</span>
         </div>
         """,
         unsafe_allow_html=True,
     )
     st.markdown('<div class="sb-filter-reset-action">', unsafe_allow_html=True)
-    if st.button("Filtreleri Sıfırla", key="reset_filters_empty", type="primary", use_container_width=True):
+    if st.button(t("empty.reset_filters"), key="reset_filters_empty", type="primary", use_container_width=True):
         filtreleri_sifirla()
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
