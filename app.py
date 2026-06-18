@@ -74,9 +74,9 @@ def sosyal_giris_butonlari_ciz() -> None:
     st.markdown('<div class="sb-social-icons" aria-hidden="true"></div>', unsafe_allow_html=True)
     sosyal1, sosyal2, sosyal3 = st.columns(3)
     sosyal_butonlar = (
-        (sosyal1, "G", "social_google", "Google ile devam et", "Google girişi yakında aktif olacak."),
-        (sosyal2, "A", "social_apple", "Apple ile devam et", "Apple girişi yakında aktif olacak."),
-        (sosyal3, "T", "social_tesla", "Tesla hesabı ile bağlan", "Tesla hesabı bağlantısı yakında aktif olacak."),
+        (sosyal1, "Google", "social_google", "Google ile devam et", "Google girişi yakında aktif olacak."),
+        (sosyal2, "Apple", "social_apple", "Apple ile devam et", "Apple girişi yakında aktif olacak."),
+        (sosyal3, "Twitter", "social_twitter", "Twitter ile devam et", "Twitter girişi yakında aktif olacak."),
     )
     for kolon, metin, anahtar, yardim, mesaj in sosyal_butonlar:
         with kolon:
@@ -186,6 +186,33 @@ def arac_secimi_degisti() -> None:
     rota_sonucunu_sifirla()
 
 
+def sarj_gostergesi_ciz(sarj_yuzdesi: int) -> None:
+    yuzde = max(1, min(100, int(sarj_yuzdesi)))
+    aci = yuzde * 3.6
+    durum = "Düşük" if yuzde < 25 else "Yola hazır" if yuzde < 75 else "Uzun menzil"
+    st.markdown(
+        f"""
+        <div class="sb-charge-visual" style="--charge-angle: {aci:.1f}deg; --charge-width: {yuzde}%;">
+            <div class="sb-charge-ring" role="img" aria-label="Şarj yüzde {yuzde}">
+                <div class="sb-charge-ring-core">
+                    <strong>%{yuzde}</strong>
+                    <span>Şarj</span>
+                </div>
+            </div>
+            <div class="sb-charge-copy">
+                <span>Seçili batarya seviyesi</span>
+                <strong>{durum}</strong>
+                <div class="sb-battery-shell" aria-hidden="true">
+                    <div class="sb-battery-fill"></div>
+                    <i></i>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tuple[
     str, float, int, float, int, str, int, List[str], str, List[str], bool, bool, bool, str
 ]:
@@ -220,6 +247,7 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
     if "sarj_yuzdesi" not in st.session_state:
         sarj_kwargs["value"] = 30
     sarj_yuzdesi = st.slider(**sarj_kwargs)
+    sarj_gostergesi_ciz(sarj_yuzdesi)
 
     batarya_kwargs = {
         "label": "Kapasite",
@@ -249,8 +277,8 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
     st.markdown(
         f"""
         <div class="sb-catalog-meta">
-            <div><span>Varsayılan batarya</span><strong>{float(v["batarya"]):.1f} kWh</strong></div>
-            <div><span>Ortalama tüketim</span><strong>{float(v["tuketim"]):.1f} kWh</strong></div>
+            <div class="sb-catalog-stat"><span>Varsayılan batarya</span><strong>{float(v["batarya"]):.1f} kWh</strong></div>
+            <div class="sb-catalog-stat"><span>Ortalama tüketim</span><strong>{float(v["tuketim"]):.1f} kWh</strong></div>
         </div>
         """,
         unsafe_allow_html=True,
