@@ -10,7 +10,7 @@ from scrapers.operator_api import ekstra_operator_istasyonlarini_getir
 from scrapers.osm import osm_istasyonlarini_getir
 
 
-DEFAULT_OUTPUT = "istasyonlar.json"
+DEFAULT_OUTPUT = "stations.json"
 
 
 SourceFn = Callable[[], List[Istasyon]]
