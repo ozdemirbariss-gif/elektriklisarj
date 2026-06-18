@@ -165,6 +165,17 @@ def oturumu_temizle() -> None:
         st.session_state.pop(key, None)
     st.session_state["favoriler"] = set()
 
+
+def _istasyon_yukleme_basarili(kaynak: str, adet: int) -> None:
+    st.session_state["istasyon_son_yukleme"] = utc_isoformat()
+    st.session_state.pop("istasyon_yukleme_hatasi", None)
+    logger.info("İstasyon verisi yüklendi (%s): %s kayıt", kaynak, adet)
+
+
+def _istasyon_yukleme_hatasi_yaz(mesaj: str) -> None:
+    st.session_state["istasyon_yukleme_hatasi"] = mesaj
+
+
 @st.cache_data(ttl=ISTASYON_CACHE_TTL, show_spinner=False)
 def istasyonlari_yukle() -> List[Dict[str, Any]]:
     if FIREBASE_ENABLED:
@@ -173,8 +184,15 @@ def istasyonlari_yukle() -> List[Dict[str, Any]]:
             if res.status_code == 200 and res.json():
                 ham_veri = res.json()
                 ham_liste = list(ham_veri.values()) if isinstance(ham_veri, dict) else ham_veri
-                return [x for item in ham_liste if (x := istasyon_normalize_et(item))]
+                istasyonlar = [x for item in ham_liste if (x := istasyon_normalize_et(item))]
+                if istasyonlar:
+                    _istasyon_yukleme_basarili("firebase", len(istasyonlar))
+                    return istasyonlar
+                _istasyon_yukleme_hatasi_yaz("Firebase istasyon verisi normalize edilebilir kayıt içermiyor.")
+            elif res.status_code != 200:
+                _istasyon_yukleme_hatasi_yaz(f"Firebase istasyon isteği başarısız: HTTP {res.status_code}.")
         except Exception as e:
+            _istasyon_yukleme_hatasi_yaz("Firebase istasyon verisine ulaşılamadı; yerel dosya denenecek.")
             _hata_bildir("İstasyonlar Firebase'den yüklenemedi", e)
 
     try:
@@ -183,10 +201,17 @@ def istasyonlari_yukle() -> List[Dict[str, Any]]:
 
         ham_liste = list(ham_veri.values()) if isinstance(ham_veri, dict) else ham_veri
         if not isinstance(ham_liste, list):
+            _istasyon_yukleme_hatasi_yaz("Yerel istasyon dosyası beklenen liste formatında değil.")
             return []
 
-        return [x for item in ham_liste if (x := istasyon_normalize_et(item))]
+        istasyonlar = [x for item in ham_liste if (x := istasyon_normalize_et(item))]
+        if istasyonlar:
+            _istasyon_yukleme_basarili("yerel dosya", len(istasyonlar))
+            return istasyonlar
+        _istasyon_yukleme_hatasi_yaz("Yerel istasyon dosyasında kullanılabilir kayıt bulunamadı.")
+        return []
     except Exception as e:
+        _istasyon_yukleme_hatasi_yaz("Yerel istasyon dosyası yüklenemedi.")
         _hata_bildir("Yerel istasyon dosyası yüklenemedi", e)
         return []
 
