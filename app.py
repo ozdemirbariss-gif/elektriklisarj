@@ -799,8 +799,10 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                     <div class="sb-feed-spacer" id="station-bottom-spacer"></div>
                 </div>
             </div>
-            <div class="sb-feed-dots" id="station-dots" aria-label="İstasyon konumu"></div>
-            <div class="sb-feed-hint" aria-hidden="true">Kaydır ve sıradaki istasyonu gör</div>
+            <div class="sb-feed-controls" aria-label="İstasyon akışı kontrolleri">
+                <div class="sb-feed-dots" id="station-dots" aria-label="İstasyon konumu"></div>
+                <div class="sb-feed-hint" aria-hidden="true">Yukarı kaydır</div>
+            </div>
         </section>
         <script>
             const stations = __STATIONS_JSON__;
@@ -896,7 +898,6 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                             <span>${esc(station.duration)} · varış ${esc(station.arrival)}</span>
                         </div>
                         <div class="sb-feed-score-row">
-                            <div class="sb-feed-score"><strong>${station.score}</strong><span>PUAN</span></div>
                             <div class="sb-feed-status">${esc(station.status)}</div>
                         </div>
                         <div class="sb-feed-grid">
@@ -1095,6 +1096,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 --feed-green: #78DAB5;
                 --feed-blue: #82CFF1;
                 --feed-frame-height: 640px;
+                --feed-controls-height: 44px;
                 --feed-font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
                 --feed-font-body: "Inter", system-ui, sans-serif;
             }
@@ -1119,14 +1121,17 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                     radial-gradient(circle at 50% 8%, rgba(120, 218, 181, 0.20), transparent 34%),
                     radial-gradient(circle at 90% 70%, rgba(130, 207, 241, 0.20), transparent 30%),
                     linear-gradient(180deg, rgba(255, 255, 255, 0.50), rgba(238, 247, 244, 0.92));
-                height: var(--feed-frame-height);
+                display: grid;
+                grid-template-rows: var(--feed-frame-height) var(--feed-controls-height);
+                height: calc(var(--feed-frame-height) + var(--feed-controls-height));
                 overflow: hidden;
                 position: relative;
                 width: 100%;
             }
 
             .sb-feed-viewport {
-                height: 100%;
+                grid-row: 1;
+                height: var(--feed-frame-height);
                 outline: 0;
                 overflow-x: hidden;
                 overflow-y: auto;
@@ -1400,8 +1405,8 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 flex: 1 1 auto;
                 font-size: 12px;
                 font-weight: 750;
-                min-height: 58px;
-                padding: 13px 14px;
+                min-height: 48px;
+                padding: 11px 14px;
             }
 
             .sb-feed-grid {
@@ -1573,17 +1578,26 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 opacity: 0.66;
             }
 
+            .sb-feed-controls {
+                align-items: center;
+                background: rgba(246, 250, 248, 0.88);
+                border-top: 1px solid rgba(104, 132, 124, 0.10);
+                display: flex;
+                gap: 12px;
+                grid-row: 2;
+                justify-content: space-between;
+                min-width: 0;
+                padding: 7px 14px;
+                position: relative;
+                z-index: 6;
+            }
+
             .sb-feed-dots {
                 align-items: center;
-                bottom: 38px;
                 display: flex;
                 gap: 8px;
-                justify-content: center;
-                left: 50%;
+                justify-content: flex-start;
                 pointer-events: auto;
-                position: absolute;
-                transform: translateX(-50%);
-                z-index: 6;
             }
 
             .sb-feed-dot {
@@ -1617,22 +1631,17 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 background: rgba(255, 255, 255, 0.68);
                 border: 1px solid rgba(104, 132, 124, 0.12);
                 border-radius: 999px;
-                bottom: 10px;
                 color: var(--feed-soft);
                 font-size: 11px;
                 font-weight: 850;
-                left: 50%;
                 padding: 7px 12px;
                 pointer-events: none;
-                position: absolute;
-                transform: translateX(-50%);
                 white-space: nowrap;
-                z-index: 6;
             }
 
             @keyframes sbHintFloat {
-                0%, 100% { transform: translate(-50%, 0); }
-                50% { transform: translate(-50%, -4px); }
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-2px); }
             }
 
             .sb-feed-hint {
@@ -1663,7 +1672,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
 
                 .sb-feed-card {
                     height: calc(var(--feed-frame-height) - 20px);
-                    padding: 21px 16px 16px;
+                    padding: 18px 14px 14px;
                 }
 
                 .sb-feed-title h2 {
@@ -1675,10 +1684,36 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 }
 
                 .sb-feed-grid {
-                    grid-template-columns: 1fr;
+                    gap: 6px;
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
                 }
 
                 .sb-feed-grid div {
+                    border-radius: 14px;
+                    min-height: 62px;
+                    padding: 9px 7px;
+                }
+
+                .sb-feed-grid strong {
+                    font-size: 11px;
+                    margin-top: 5px;
+                }
+
+                .sb-feed-comments {
+                    display: none;
+                }
+
+                .sb-feed-address {
+                    margin-top: 9px;
+                    min-height: 20px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+
+                .sb-feed-route {
+                    flex: 0 0 auto;
+                    margin-top: auto;
                     min-height: 54px;
                 }
             }
@@ -1688,7 +1723,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
     st.markdown('<div class="sb-route-feed-mode" aria-hidden="true"></div>', unsafe_allow_html=True)
     components.html(
         feed_html,
-        height=650,
+        height=692,
         scrolling=False,
     )
 
