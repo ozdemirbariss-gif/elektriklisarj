@@ -2416,7 +2416,7 @@ div[data-testid="stElementContainer"]:has(iframe[srcdoc*="sb-feed-shell"]) {
     }
 
     div[data-testid="stElementContainer"]:has(.sb-top-nav-anchor) + div[data-testid="stLayoutWrapper"] div[data-testid="stHorizontalBlock"] {
-        grid-template-columns: 52px minmax(0, 1fr) !important;
+        grid-template-columns: 52px minmax(0, 1fr) 92px !important;
         padding: 0.45rem !important;
     }
 
@@ -2427,5 +2427,64 @@ div[data-testid="stElementContainer"]:has(iframe[srcdoc*="sb-feed-shell"]) {
         max-width: 52px !important;
         min-width: 52px !important;
         width: 52px !important;
+    }
+}
+
+/* Language selector */
+div[data-testid="stElementContainer"]:has(.sb-entry-language) {
+    display: none !important;
+}
+
+div.st-key-language_entry {
+    margin: 0 0 0.35rem auto !important;
+    width: 108px !important;
+}
+
+div[data-testid="stElementContainer"]:has(.sb-top-nav-anchor) + div[data-testid="stLayoutWrapper"] div[data-testid="stHorizontalBlock"] {
+    grid-template-columns: 52px minmax(0, 1fr) 100px !important;
+}
+
+div[data-testid="stElementContainer"]:has(.sb-top-nav-anchor) + div[data-testid="stLayoutWrapper"] div[data-testid="stColumn"]:last-child {
+    flex: 0 0 100px !important;
+    max-width: 100px !important;
+    min-width: 100px !important;
+}
+
+div.st-key-language_top,
+div.st-key-language_entry {
+    min-width: 0 !important;
+}
+
+div.st-key-language_top [data-testid="stSegmentedControl"],
+div.st-key-language_entry [data-testid="stSegmentedControl"] {
+    background: rgba(255, 255, 255, 0.56) !important;
+    border: 1px solid rgba(104, 132, 124, 0.14) !important;
+    border-radius: 14px !important;
+    box-shadow: none !important;
+    gap: 2px !important;
+    padding: 3px !important;
+    width: 100% !important;
+}
+
+div.st-key-language_top [data-testid="stSegmentedControl"] button,
+div.st-key-language_entry [data-testid="stSegmentedControl"] button {
+    border: 0 !important;
+    border-radius: 10px !important;
+    box-shadow: none !important;
+    font-size: 11px !important;
+    font-weight: 820 !important;
+    min-height: 32px !important;
+    padding: 0.25rem 0.42rem !important;
+}
+
+@media (max-width: 560px) {
+    div[data-testid="stElementContainer"]:has(.sb-top-nav-anchor) + div[data-testid="stLayoutWrapper"] div[data-testid="stHorizontalBlock"] {
+        grid-template-columns: 52px minmax(0, 1fr) 92px !important;
+    }
+
+    div[data-testid="stElementContainer"]:has(.sb-top-nav-anchor) + div[data-testid="stLayoutWrapper"] div[data-testid="stColumn"]:last-child {
+        flex-basis: 92px !important;
+        max-width: 92px !important;
+        min-width: 92px !important;
     }
 }

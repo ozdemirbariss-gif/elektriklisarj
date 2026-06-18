@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Tuple
 
+from i18n import t
 from predictor import tahmin_rozetleri_getir
 
 
@@ -96,27 +97,27 @@ def istasyon_rozetleri_getir(istasyon: Dict[str, Any]) -> List[Tuple[str, str]]:
     guven = float(istasyon.get("guven_skoru", 0.0) or 0.0)
 
     if durum == "riskli":
-        rozetler.append(("Risk bildirildi", "sb-chip-risk"))
+        rozetler.append((t("badge.risk"), "sb-chip-risk"))
     elif durum == "aktif":
-        rozetler.append(("Son bildirim olumlu", "sb-chip-good"))
+        rozetler.append((t("badge.last_positive"), "sb-chip-good"))
     else:
-        rozetler.append(("Canlı veri yok", "sb-chip-warn"))
+        rozetler.append((t("badge.no_live"), "sb-chip-warn"))
 
     rozetler.extend(tahmin_rozetleri_getir(istasyon.get("BoslukTahmini")))
 
     if float(istasyon.get("VarisSarjYuzdesi", 0.0)) >= 15:
-        rozetler.append(("Varış güvenli", "sb-chip-good"))
+        rozetler.append((t("badge.arrival_safe"), "sb-chip-good"))
     else:
-        rozetler.append(("Varış düşük", "sb-chip-warn"))
+        rozetler.append((t("badge.arrival_low"), "sb-chip-warn"))
 
     if hiz >= 150:
-        rozetler.append(("Hızlı DC", "sb-chip-info"))
+        rozetler.append((t("badge.fast_dc"), "sb-chip-info"))
     elif hiz >= 50:
         rozetler.append(("DC", "sb-chip-info"))
 
     if kaynak_sayisi > 1:
-        rozetler.append((f"{kaynak_sayisi} kaynak doğruladı", "sb-chip-good"))
+        rozetler.append((t("badge.sources", count=kaynak_sayisi), "sb-chip-good"))
     elif guven >= 0.8:
-        rozetler.append(("Yüksek veri güveni", "sb-chip-good"))
+        rozetler.append((t("badge.high_confidence"), "sb-chip-good"))
 
     return rozetler[:5]

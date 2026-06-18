@@ -11,6 +11,7 @@ SarjBul, elektrikli araclar icin yakin ve mantikli sarj duragini onerir. Streaml
 - Firebase Auth refresh token yenileme ile daha uzun oturum deneyimi
 - Pydeck haritasinda skor rengine gore istasyon noktalarini gosterme
 - Konum izni yoksa genis sehir listesi veya manuel koordinat girisi
+- Arayuz genelinde aninda degisen Turkce ve Ingilizce dil destegi
 - ChargeIQ, OSM, OpenChargeMap ve opsiyonel operator API kaynakli veri toplama
 
 ## Kurulum
