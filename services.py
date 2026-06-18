@@ -196,7 +196,7 @@ def istasyonlari_yukle() -> List[Dict[str, Any]]:
             _hata_bildir("İstasyonlar Firebase'den yüklenemedi", e)
 
     try:
-        with open("istasyonlar.json", "r", encoding="utf-8") as f:
+        with open("stations.json", "r", encoding="utf-8") as f:
             ham_veri = json.load(f)
 
         ham_liste = list(ham_veri.values()) if isinstance(ham_veri, dict) else ham_veri

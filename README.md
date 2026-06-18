@@ -22,7 +22,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Firebase secrets yoksa uygulama lokal `istasyonlar.json` dosyasi ile okunabilir demo modunda acilir. Bu modda hesap, favori ve bildirim ozellikleri kapali kalir.
+Firebase secrets yoksa uygulama lokal `stations.json` dosyasi ile okunabilir demo modunda acilir. Bu modda hesap, favori ve bildirim ozellikleri kapali kalir.
 
 ## Bagimliliklar
 
@@ -62,7 +62,7 @@ traces_sample_rate = 0.10
 
 ## Veri Guncelleme
 
-`scraper.py` komut satiri entrypoint'idir; GitHub Actions ve manuel calistirma bu dosya uzerinden yapilir. `scrapers/` klasoru kaynak bazli scraper modullerini icerir. `scraper.py`, bu modulleri cagirarak veriyi toplar, duplicate temizligi yapar ve `istasyonlar.json` dosyasini gunceller.
+`scraper.py` komut satiri entrypoint'idir; GitHub Actions ve manuel calistirma bu dosya uzerinden yapilir. `scrapers/` klasoru kaynak bazli scraper modullerini icerir. `scraper.py`, bu modulleri cagirarak veriyi toplar, duplicate temizligi yapar ve `stations.json` dosyasini gunceller.
 
 ```bash
 python scraper.py
@@ -80,7 +80,7 @@ Kalite kapilari ortam degiskenleriyle ayarlanabilir:
 - `MIN_SCRAPER_RECORD_COUNT`: Cikti yazmak icin gereken minimum kayit sayisi.
 - `FAIL_ON_SOURCE_ERROR`: `1` ise herhangi bir kaynak hatasi scrape'i basarisiz yapar.
 
-GitHub Actions her gun 08:00 Istanbul saatinde scrape calistirir ve yalnizca `istasyonlar.json` degistiyse commit eder.
+GitHub Actions her gun 08:00 Istanbul saatinde scrape calistirir ve yalnizca `stations.json` degistiyse commit eder.
 
 ## Akilli Tahmin Motoru
 
