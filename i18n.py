@@ -6,6 +6,7 @@ import streamlit as st
 
 DEFAULT_LANGUAGE = "tr"
 SUPPORTED_LANGUAGES = ("tr", "en")
+TRANSLATION_SCHEMA_VERSION = 2
 
 
 TRANSLATIONS: Dict[str, Dict[str, str]] = {
