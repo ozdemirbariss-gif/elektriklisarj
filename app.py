@@ -1,3 +1,4 @@
+import importlib
 import json
 import streamlit as st
 import folium
@@ -6,6 +7,12 @@ from typing import Any, Dict, List, Tuple
 import streamlit.components.v1 as components
 from streamlit_js_eval import get_geolocation
 from streamlit_folium import st_folium
+
+import i18n as i18n_module
+
+EXPECTED_TRANSLATION_SCHEMA_VERSION = 2
+if getattr(i18n_module, "TRANSLATION_SCHEMA_VERSION", 0) < EXPECTED_TRANSLATION_SCHEMA_VERSION:
+    importlib.reload(i18n_module)
 
 from config import (
     sentry_init, load_css, logger,
