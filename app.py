@@ -297,6 +297,99 @@ def ust_bilgi_ciz() -> None:
         dil_secici_ciz("language_top")
 
 
+def ana_mod_degisti() -> None:
+    rota_sonucunu_sifirla()
+    st.session_state["haritayi_goster"] = st.session_state.get("home_mode") == "route"
+
+
+def ana_mod_secici_ciz() -> None:
+    st.session_state.setdefault("home_mode", "charger")
+    st.markdown(
+        f"""
+        <section class="sb-home-intro">
+            <div class="sb-kicker">{t("home.kicker")}</div>
+            <h1>{t("home.title")}</h1>
+            <p>{t("home.subtitle")}</p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.segmented_control(
+        t("home.mode_label"),
+        ["charger", "route"],
+        key="home_mode",
+        format_func=lambda value: t(f"home.mode_{value}"),
+        on_change=ana_mod_degisti,
+        label_visibility="collapsed",
+        width="stretch",
+    )
+
+
+def hizli_tercih_uygula(niyet: str, hiz: str = "Tümü", harita: bool = False) -> None:
+    st.session_state["niyet"] = niyet
+    st.session_state["hiz_filtresi"] = hiz
+    st.session_state["haritayi_goster"] = harita
+    st.session_state["rota_goster"] = False
+
+
+def hizli_islemler_ciz(konum_hazir: bool) -> None:
+    st.markdown(
+        f'<div class="sb-quick-heading"><strong>{t("home.quick_title")}</strong><span>{t("home.quick_hint")}</span></div>',
+        unsafe_allow_html=True,
+    )
+    yakin_col, hizli_col, uygun_col, harita_col = st.columns(4, gap="small")
+    niyet = str(st.session_state.get("niyet", "Dengeli"))
+    hiz = str(st.session_state.get("hiz_filtresi", "Tümü"))
+
+    with yakin_col:
+        if st.button(
+            t("home.quick_near"),
+            key="quick_near",
+            icon=":material/near_me:",
+            type="primary" if niyet == "Yakın" else "secondary",
+            use_container_width=True,
+        ):
+            hizli_tercih_uygula("Yakın")
+            st.rerun()
+
+    with hizli_col:
+        if st.button(
+            t("home.quick_fast"),
+            key="quick_fast",
+            icon=":material/bolt:",
+            type="primary" if niyet == "Hızlı" and hiz == "Hızlı DC (≥150 kW)" else "secondary",
+            use_container_width=True,
+        ):
+            hizli_tercih_uygula("Hızlı", "Hızlı DC (≥150 kW)")
+            st.rerun()
+
+    with uygun_col:
+        if st.button(
+            t("home.quick_value"),
+            key="quick_value",
+            icon=":material/savings:",
+            type="primary" if niyet == "Ekonomik" else "secondary",
+            use_container_width=True,
+        ):
+            hizli_tercih_uygula("Ekonomik")
+            st.rerun()
+
+    with harita_col:
+        if st.button(
+            t("home.quick_map"),
+            key="quick_map",
+            icon=":material/map:",
+            use_container_width=True,
+        ):
+            if not konum_hazir:
+                bildirim_goster(t("home.location_required"), basarili=False)
+            else:
+                st.session_state["home_mode"] = "route"
+                st.session_state["haritayi_goster"] = True
+                st.session_state["rota_goster"] = True
+                st.rerun()
+
+
 def arac_secimi_degisti() -> None:
     secilen = st.session_state.get("secilen_arac")
     if secilen in ARAC_KATALOGU:
@@ -502,7 +595,10 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
             unsafe_allow_html=True,
         )
 
-    if st.button(t("location.find_charger"), key="find_route_btn", use_container_width=True, disabled=not konum_hazir, type="primary"):
+    cta_metni = t("home.plan_route") if st.session_state.get("home_mode") == "route" else t("location.find_charger")
+    if st.button(cta_metni, key="find_route_btn", use_container_width=True, disabled=not konum_hazir, type="primary"):
+        if st.session_state.get("home_mode") == "route":
+            st.session_state["haritayi_goster"] = True
         st.session_state["rota_goster"] = True
         st.rerun()
 
@@ -576,62 +672,81 @@ def konumu_sessiona_yaz(lat: float, lon: float) -> Tuple[float, float]:
     return lat, lon
 
 
-def manuel_konum_ciz() -> None:
+def manuel_konum_degisti() -> None:
+    manuel = str(st.session_state.get("manuel_konum_secimi", ""))
+    if manuel not in SABIT_KONUMLAR:
+        return
+    secili_lat, secili_lon = SABIT_KONUMLAR[manuel]
+    konumu_sessiona_yaz(secili_lat, secili_lon)
+    rota_sonucunu_sifirla()
+
+
+def koordinat_girdisi_ciz() -> None:
+    with st.expander(t("location.coordinates"), expanded=False):
+        lat = st.number_input(
+            t("location.latitude"),
+            min_value=-90.0,
+            max_value=90.0,
+            value=39.0000,
+            step=0.0001,
+            format="%.6f",
+            key="manual_latitude",
+        )
+        lon = st.number_input(
+            t("location.longitude"),
+            min_value=-180.0,
+            max_value=180.0,
+            value=35.0000,
+            step=0.0001,
+            format="%.6f",
+            key="manual_longitude",
+        )
+        if st.button(t("location.use"), key="use_coordinates", use_container_width=True):
+            if konum_gecerli_mi(lat, lon):
+                konumu_sessiona_yaz(float(lat), float(lon))
+                rota_sonucunu_sifirla()
+                st.rerun()
+            else:
+                bildirim_goster(t("location.invalid"), basarili=False)
+
+
+def ana_konum_arama_ciz(konum_hazir: bool, user_lat: Any, user_lon: Any) -> None:
     if st.session_state.get("manuel_konum_secimi") == "Seçiniz...":
         st.session_state["manuel_konum_secimi"] = ""
-    manuel = st.selectbox(
-        t("location.prompt"),
-        ["", *SABIT_KONUMLAR.keys()],
-        key="manuel_konum_secimi",
-        format_func=lambda value: t("location.select") if not value else value,
-    )
-    if manuel in SABIT_KONUMLAR:
-        secili_lat, secili_lon = SABIT_KONUMLAR[manuel]
+
+    with st.container(key="home_location_search"):
         st.markdown(
             f"""
-            <div class="sb-location-confirm">
-                <strong>{guvenli_metin(manuel, 80)}</strong>
-                <span>{secili_lat:.4f}°{t("location.north")}, {secili_lon:.4f}°{t("location.east")}</span>
+            <div class="sb-location-search-head">
+                <span aria-hidden="true">⌖</span>
+                <div><strong>{t("home.search_title")}</strong><small>{t("home.search_hint")}</small></div>
+                <b>{t("home.now")}</b>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        mini_harita = folium.Map(
-            location=[secili_lat, secili_lon],
-            zoom_start=12,
-            tiles="CartoDB dark_matter",
-            control_scale=False,
-            zoom_control=False,
+        st.selectbox(
+            t("home.search_label"),
+            ["", *SABIT_KONUMLAR.keys()],
+            key="manuel_konum_secimi",
+            format_func=lambda value: t("home.search_placeholder") if not value else value,
+            on_change=manuel_konum_degisti,
+            label_visibility="collapsed",
         )
-        folium.CircleMarker(
-            location=[secili_lat, secili_lon],
-            radius=9,
-            color="#49FF9A",
-            fill=True,
-            fill_color="#49FF9A",
-            fill_opacity=0.8,
-            tooltip=manuel,
-        ).add_to(mini_harita)
-        st_folium(
-            mini_harita,
-            height=220,
-            use_container_width=True,
-            returned_objects=[],
-            key=f"manual_location_map_{clean_id_uret(manuel)}",
-        )
-        if st.button(t("location.use_this"), key=f"use_manual_location_{clean_id_uret(manuel)}", type="primary", use_container_width=True):
-            konumu_sessiona_yaz(secili_lat, secili_lon)
-            st.rerun()
 
-    with st.expander(t("location.coordinates"), expanded=False):
-        lat = st.number_input(t("location.latitude"), min_value=-90.0, max_value=90.0, value=39.0000, step=0.0001, format="%.6f")
-        lon = st.number_input(t("location.longitude"), min_value=-180.0, max_value=180.0, value=35.0000, step=0.0001, format="%.6f")
-        if st.button(t("location.use"), use_container_width=True):
-            if konum_gecerli_mi(lat, lon):
-                konumu_sessiona_yaz(float(lat), float(lon))
-                st.rerun()
-            else:
-                bildirim_goster(t("location.invalid"), basarili=False)
+        if konum_hazir and konum_gecerli_mi(user_lat, user_lon):
+            secili_yer = st.session_state.get("manuel_konum_secimi") or t("home.current_location")
+            st.markdown(
+                f"""
+                <div class="sb-location-ready">
+                    <span></span><strong>{guvenli_metin(secili_yer, 80)}</strong>
+                    <small>{float(user_lat):.4f}, {float(user_lon):.4f}</small>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        koordinat_girdisi_ciz()
 
 
 def harita_rengi_getir(skor: int) -> str:
@@ -763,10 +878,15 @@ def ozet_paneli_ciz(guvenli_menzil: float, sarj_yuzdesi: int, istasyon_sayisi: i
 def surus_ozeti_ciz(arac: str, guvenli_menzil: float, sarj_yuzdesi: int) -> None:
     st.markdown(
         f"""
-        <div class="sb-drive-strip">
-            <span>{kisa_deger(arac, max_len=36)}</span>
-            <strong>{t("summary.safe_range_value", percent=sarj_yuzdesi, range=guvenli_menzil)}</strong>
-        </div>
+        <section class="sb-smart-insight">
+            <div class="sb-smart-icon" aria-hidden="true">↯</div>
+            <div class="sb-smart-copy">
+                <span>{t("home.insight_kicker")}</span>
+                <strong>{t("home.insight_title", range=guvenli_menzil)}</strong>
+                <p>{kisa_deger(arac, max_len=36)} · {t("summary.safe_range_value", percent=sarj_yuzdesi, range=guvenli_menzil)}</p>
+            </div>
+            <b aria-hidden="true">→</b>
+        </section>
         """,
         unsafe_allow_html=True,
     )
@@ -1852,6 +1972,68 @@ def hesap_paneli_ciz() -> None:
                 st.rerun()
 
 
+def alt_navigasyon_ciz(konum_hazir: bool) -> None:
+    rota_aktif = st.session_state.get("rota_goster") is True
+    hesap_aktif = st.session_state.get("account_panel_open") is True
+    st.markdown('<div class="sb-bottom-nav-anchor" aria-hidden="true"></div>', unsafe_allow_html=True)
+    ana_col, harita_col, rota_col, hesap_col = st.columns(4, gap="small")
+
+    with ana_col:
+        if st.button(
+            t("bottom.home"),
+            key="bottom_home",
+            icon=":material/home:",
+            type="primary" if not rota_aktif and not hesap_aktif else "secondary",
+            use_container_width=True,
+        ):
+            st.session_state["rota_goster"] = False
+            st.session_state["account_panel_open"] = False
+            st.rerun()
+
+    with harita_col:
+        if st.button(
+            t("bottom.map"),
+            key="bottom_map",
+            icon=":material/map:",
+            type="primary" if rota_aktif and bool(st.session_state.get("haritayi_goster")) else "secondary",
+            use_container_width=True,
+        ):
+            if not konum_hazir:
+                bildirim_goster(t("home.location_required"), basarili=False)
+            else:
+                st.session_state["home_mode"] = "route"
+                st.session_state["haritayi_goster"] = True
+                st.session_state["rota_goster"] = True
+                st.session_state["account_panel_open"] = False
+                st.rerun()
+
+    with rota_col:
+        if st.button(
+            t("bottom.routes"),
+            key="bottom_routes",
+            icon=":material/route:",
+            type="primary" if rota_aktif and not bool(st.session_state.get("haritayi_goster")) else "secondary",
+            use_container_width=True,
+        ):
+            if not konum_hazir:
+                bildirim_goster(t("home.location_required"), basarili=False)
+            else:
+                st.session_state["rota_goster"] = True
+                st.session_state["account_panel_open"] = False
+                st.rerun()
+
+    with hesap_col:
+        if st.button(
+            t("bottom.account"),
+            key="bottom_account",
+            icon=":material/person:",
+            type="primary" if hesap_aktif else "secondary",
+            use_container_width=True,
+        ):
+            st.session_state["account_panel_open"] = not hesap_aktif
+            st.rerun()
+
+
 def oturum_suresini_global_kontrol_et() -> None:
     if "auth_token" in st.session_state:
         oturum_gecerli_tut()
@@ -1901,6 +2083,17 @@ if user_lon is None: user_lon = st.session_state.get("last_valid_lon")
 
 konum_hazir = user_lat is not None and user_lon is not None
 
+alt_navigasyon_ciz(konum_hazir)
+if st.session_state.get("account_panel_open"):
+    st.markdown('<div id="hesap"></div>', unsafe_allow_html=True)
+    hesap_paneli_ciz()
+    st.stop()
+
+if not rota_modu:
+    ana_mod_secici_ciz()
+    ana_konum_arama_ciz(konum_hazir, user_lat, user_lon)
+    hizli_islemler_ciz(konum_hazir)
+
 # 3. Araç Kataloğu ve Katmanlı Arama
 if rota_modu:
     (
@@ -1946,12 +2139,11 @@ if not konum_hazir:
         f"""
         <div class="sb-step-panel">
             <strong>{t("location.choose_for_route")}</strong>
-            <span>{t("location.ready_hint")}</span>
+            <span>{t("home.location_required_hint")}</span>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    manuel_konum_ciz()
     st.stop()
 
 user_lat, user_lon = float(user_lat), float(user_lon)
