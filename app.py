@@ -366,8 +366,9 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
     }
     if "sarj_yuzdesi" not in st.session_state:
         sarj_kwargs["value"] = 30
-    sarj_yuzdesi = st.slider(**sarj_kwargs)
-    sarj_gostergesi_ciz(sarj_yuzdesi)
+    with st.container(key="charge_level_panel"):
+        sarj_yuzdesi = st.slider(**sarj_kwargs)
+        sarj_gostergesi_ciz(sarj_yuzdesi)
 
     batarya_kwargs = {
         "label": t("catalog.capacity"),
