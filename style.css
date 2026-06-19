@@ -2290,6 +2290,8 @@ div.st-key-social_twitter button::before {
 
     .sb-charge-visual {
         justify-items: center;
+        padding-bottom: 0.75rem;
+        row-gap: 0.25rem;
         text-align: center;
     }
 
