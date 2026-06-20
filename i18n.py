@@ -6,7 +6,7 @@ import streamlit as st
 
 DEFAULT_LANGUAGE = "tr"
 SUPPORTED_LANGUAGES = ("tr", "en")
-TRANSLATION_SCHEMA_VERSION = 2
+TRANSLATION_SCHEMA_VERSION = 3
 
 
 TRANSLATIONS: Dict[str, Dict[str, str]] = {
@@ -119,7 +119,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "filters.nearby_radius": "Yakın yer mesafesi (m)",
         "filters.show_map": "Haritayı göster",
         "location.waiting": "Konum bekleniyor.",
-        "location.enable_hint": "Şarj Bul'u aktif etmek için aşağıdan şehir veya koordinat seç.",
+        "location.enable_hint": "Şarj Bul'u aktif etmek için yukarıdan şehir seç veya koordinat gir.",
         "location.find_charger": "Şarj Bul",
         "location.choose_for_route": "Rotayı hazırlamak için konum seç.",
         "location.ready_hint": "Konum seçildikten sonra Şarj Bul butonu aktif olur.",
@@ -340,7 +340,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "filters.nearby_radius": "Nearby place radius (m)",
         "filters.show_map": "Show map",
         "location.waiting": "Waiting for location.",
-        "location.enable_hint": "Choose a city or coordinates below to enable Find Chargers.",
+        "location.enable_hint": "Choose a city above or enter coordinates to enable Find Chargers.",
         "location.find_charger": "Find Chargers",
         "location.choose_for_route": "Choose a location to build your route.",
         "location.ready_hint": "Find Chargers becomes available after you choose a location.",
