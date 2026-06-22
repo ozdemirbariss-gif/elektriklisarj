@@ -17,7 +17,7 @@ if getattr(i18n_module, "TRANSLATION_SCHEMA_VERSION", 0) < EXPECTED_TRANSLATION_
 from config import (
     sentry_init, load_css, logger,
     ARAC_KATALOGU, HIZ_ESIK_MAP, KONUM_DOGRULAMA_ESIGI_KM,
-    MAX_SON_YORUM, FIREBASE_ENABLED, YAKIN_CEVRE_MIN_M,
+    FIREBASE_ENABLED, YAKIN_CEVRE_MIN_M,
     YAKIN_CEVRE_VARSAYILAN_M, YAKIN_CEVRE_MAX_M, YAKIN_CEVRE_ADIM_M
 )
 from i18n import get_language, localize_text, set_language, t
@@ -909,6 +909,15 @@ def rota_linki_olustur(istasyon: Dict[str, Any], user_lat: float, user_lon: floa
     )
 
 
+def apple_maps_linki_olustur(istasyon: Dict[str, Any], user_lat: float, user_lon: float) -> str:
+    return (
+        "https://maps.apple.com/"
+        f"?saddr={user_lat},{user_lon}"
+        f"&daddr={istasyon['enlem']},{istasyon['boylam']}"
+        "&dirflg=d"
+    )
+
+
 def istasyon_akis_verisi_hazirla(
     istasyonlar: List[Dict[str, Any]],
     user_lat: float,
@@ -917,21 +926,11 @@ def istasyon_akis_verisi_hazirla(
     toplam = len(istasyonlar)
     payload = []
     for sira, istasyon in enumerate(istasyonlar, start=1):
-        son_yorumlar = []
-        for yorum in istasyon.get("SonYorumlar", [])[:MAX_SON_YORUM]:
-            son_yorumlar.append(
-                {
-                    "durum": localize_text(kisa_duz_metin(durum_metni_sadelestir(yorum.get("durum", "")), "", 32)),
-                    "yorum": kisa_duz_metin(yorum.get("yorum", ""), "", 86),
-                }
-            )
-
         payload.append(
             {
                 "rank": sira,
                 "total": toplam,
                 "featured": sira == 1,
-                "eyebrow": t("feed.nearest") if sira == 1 else t("feed.nearby_option"),
                 "name": kisa_duz_metin(istasyon.get("isim"), t("common.station"), 118),
                 "operator": kisa_duz_metin(istasyon.get("operator"), t("common.operator_unknown"), 64),
                 "address": localize_text(kisa_duz_metin(istasyon.get("adres"), t("common.address_missing"), 160)),
@@ -941,14 +940,17 @@ def istasyon_akis_verisi_hazirla(
                 "power": localize_text(kisa_duz_metin(istasyon.get("hiz"), t("common.power_unknown"), 42)),
                 "socket": localize_text(kisa_duz_metin(istasyon.get("soket"), t("common.socket_unknown"), 42)),
                 "price": localize_text(kisa_duz_metin(istasyon.get("fiyat"), t("common.price_missing"), 42)),
-                "status": localize_text(kisa_duz_metin(istasyon.get("ArizaEtiketi"), t("common.live_data_none"), 48)),
                 "score": int(istasyon.get("Skor", 0) or 0),
+                "originLat": float(user_lat),
+                "originLon": float(user_lon),
+                "latitude": float(istasyon["enlem"]),
+                "longitude": float(istasyon["boylam"]),
                 "routeUrl": rota_linki_olustur(istasyon, user_lat, user_lon),
+                "appleRouteUrl": apple_maps_linki_olustur(istasyon, user_lat, user_lon),
                 "chips": [
                     {"text": localize_text(kisa_duz_metin(metin, "", 38)), "className": kisa_duz_metin(css_class, "", 32)}
                     for metin, css_class in istasyon.get("Rozetler", [])
                 ],
-                "comments": son_yorumlar,
             }
         )
     return payload
@@ -964,18 +966,31 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             "arrival": t("feed.arrival"),
             "badgeHelp": t("feed.badge_help"),
             "badgeAria": t("feed.badge_aria"),
-            "notification": t("feed.notification"),
             "score": t("feed.score"),
             "power": t("feed.power"),
             "socket": t("feed.socket"),
             "price": t("feed.price"),
+            "detailCard": t("feed.detail_card"),
+            "address": t("feed.address"),
             "openRoute": t("feed.open_route"),
+            "appleMaps": t("feed.apple_maps"),
             "googleMaps": t("feed.google_maps"),
         },
         ensure_ascii=False,
     ).replace("</", "<\\/")
 
     feed_html = """
+        <link
+            rel="stylesheet"
+            href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+            integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+            crossorigin=""
+        />
+        <script
+            src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""
+        ></script>
         <section class="sb-feed-shell" id="rotayi-ac" aria-label="__FEED_ARIA__">
             <div class="sb-feed-viewport" id="station-feed" tabindex="0" aria-live="polite">
                 <div class="sb-feed-track" id="station-track">
@@ -1039,14 +1054,6 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 `;
             }
 
-            function commentHtml(comments) {
-                return comments.length
-                    ? `<div class="sb-feed-comments">${comments.map((item) => `
-                        <div><strong>${esc(item.durum || labels.notification)}</strong><span>${esc(item.yorum)}</span></div>
-                    `).join("")}</div>`
-                    : "";
-            }
-
             function cardHtml(station, index) {
                 const rank = String(station.rank).padStart(2, "0");
                 return `
@@ -1055,45 +1062,136 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                         data-card-index="${index}"
                         aria-label="${esc(station.name)}"
                     >
-                        <div class="sb-feed-glow"></div>
-                        <div class="sb-feed-top">
-                            <div class="sb-feed-title">
-                                <div class="sb-feed-eyebrow">${esc(station.eyebrow)}</div>
-                                <h2>${esc(station.name)}</h2>
-                                <p>${esc(station.operator)}</p>
+                        <div class="sb-route-map-stage" aria-hidden="true">
+                            <div class="sb-route-map" data-map-index="${index}"></div>
+                            <div class="sb-route-map-fade"></div>
+                            <div class="sb-route-map-score">
+                                <strong>${station.score}</strong><span>${esc(labels.score)}</span>
                             </div>
-                            <div class="sb-feed-head-actions">
-                                <div class="sb-feed-head-score">
-                                    <strong>${station.score}</strong>
-                                    <span>${esc(labels.score)}</span>
-                                </div>
-                                <div class="sb-feed-bookmark" aria-hidden="true">♡</div>
-                                <div class="sb-feed-counter">
-                                    <strong>${rank}</strong>
-                                    <span>/ ${station.total}</span>
-                                </div>
+                            <div class="sb-route-map-rank">
+                                <strong>${rank}</strong><span>/ ${station.total}</span>
                             </div>
                         </div>
-                        <div class="sb-feed-hero">
-                            <strong>${esc(station.distance)}</strong>
-                            <span>${esc(station.duration)} · ${esc(labels.arrival)} ${esc(station.arrival)}</span>
+                        <div class="sb-route-detail">
+                            <div class="sb-route-journey">
+                                <strong>${esc(station.distance)}</strong>
+                                <span>${esc(station.duration)} · ${esc(labels.arrival)} ${esc(station.arrival)}</span>
+                            </div>
+                            <div class="sb-route-station">
+                                <span>${esc(labels.detailCard)}</span>
+                                <strong>${esc(station.name)}</strong>
+                                <small>${esc(station.operator)}</small>
+                            </div>
+                            <div class="sb-route-metrics">
+                                <div><span>${esc(labels.power)}</span><strong>${esc(station.power)}</strong></div>
+                                <div><span>${esc(labels.socket)}</span><strong>${esc(station.socket)}</strong></div>
+                                <div><span>${esc(labels.price)}</span><strong>${esc(station.price)}</strong></div>
+                            </div>
+                            ${chipHtml(station.chips)}
+                            <div class="sb-route-actions">
+                                <strong>${esc(labels.openRoute)}</strong>
+                                <div>
+                                    <a href="${esc(station.appleRouteUrl)}" target="_blank" rel="noopener noreferrer">${esc(labels.appleMaps)}</a>
+                                    <a href="${esc(station.routeUrl)}" target="_blank" rel="noopener noreferrer">${esc(labels.googleMaps)}</a>
+                                </div>
+                            </div>
+                            <div class="sb-route-address">
+                                <span>${esc(labels.address)}</span>
+                                <strong>${esc(station.address)}</strong>
+                            </div>
                         </div>
-                        <div class="sb-feed-score-row">
-                            <div class="sb-feed-status">${esc(station.status)}</div>
-                        </div>
-                        <div class="sb-feed-grid">
-                            <div><span>${esc(labels.power)}</span><strong>${esc(station.power)}</strong></div>
-                            <div><span>${esc(labels.socket)}</span><strong>${esc(station.socket)}</strong></div>
-                            <div><span>${esc(labels.price)}</span><strong>${esc(station.price)}</strong></div>
-                        </div>
-                        ${chipHtml(station.chips)}
-                        ${commentHtml(station.comments)}
-                        <div class="sb-feed-address">${esc(station.address)}</div>
-                        <a class="sb-feed-route" href="${esc(station.routeUrl)}" target="_blank" rel="noopener noreferrer">
-                            <span>${esc(labels.openRoute)}</span><small>${esc(labels.googleMaps)}</small>
-                        </a>
                     </article>
                 `;
+            }
+
+            const stationMaps = new WeakMap();
+
+            function fitRoute(map, bounds) {
+                if (!bounds || !bounds.isValid()) return;
+                map.fitBounds(bounds, {
+                    animate: false,
+                    maxZoom: 15,
+                    paddingTopLeft: [28, 28],
+                    paddingBottomRight: [28, 82]
+                });
+            }
+
+            function ensureMapForSlide(slide) {
+                if (!slide) return;
+                const canvas = slide.querySelector(".sb-route-map");
+                if (!canvas || stationMaps.has(canvas)) return;
+                if (!window.L) {
+                    canvas.classList.add("is-fallback");
+                    return;
+                }
+
+                const index = Number(slide.dataset.index);
+                const station = stations[index];
+                const origin = [Number(station.originLat), Number(station.originLon)];
+                const destination = [Number(station.latitude), Number(station.longitude)];
+                const map = L.map(canvas, {
+                    attributionControl: false,
+                    boxZoom: false,
+                    doubleClickZoom: false,
+                    dragging: false,
+                    keyboard: false,
+                    preferCanvas: true,
+                    scrollWheelZoom: false,
+                    touchZoom: false,
+                    zoomControl: false
+                });
+
+                L.control.attribution({ position: "topleft", prefix: false }).addTo(map);
+                L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+                    maxZoom: 19
+                }).addTo(map);
+
+                const originMarker = L.circleMarker(origin, {
+                    color: "#FFFFFF",
+                    fillColor: "#9DDF8E",
+                    fillOpacity: 1,
+                    interactive: false,
+                    radius: 8,
+                    weight: 3
+                }).addTo(map);
+                const destinationMarker = L.circleMarker(destination, {
+                    color: "#FFFFFF",
+                    fillColor: "#244E80",
+                    fillOpacity: 1,
+                    interactive: false,
+                    radius: 9,
+                    weight: 3
+                }).addTo(map);
+                const routeLine = L.polyline([origin, destination], {
+                    color: "#244E80",
+                    dashArray: "7 7",
+                    interactive: false,
+                    lineCap: "round",
+                    opacity: 0.88,
+                    weight: 5
+                }).addTo(map);
+                const initialBounds = L.featureGroup([originMarker, destinationMarker, routeLine]).getBounds();
+                fitRoute(map, initialBounds);
+                stationMaps.set(canvas, { map, routeLine });
+                window.requestAnimationFrame(() => map.invalidateSize(false));
+
+                const routeEndpoint = (
+                    `https://router.project-osrm.org/route/v1/driving/`
+                    + `${station.originLon},${station.originLat};${station.longitude},${station.latitude}`
+                    + `?overview=full&geometries=geojson&steps=false`
+                );
+                window.fetch(routeEndpoint)
+                    .then((response) => response.ok ? response.json() : Promise.reject(new Error("route")))
+                    .then((data) => {
+                        const coordinates = data?.routes?.[0]?.geometry?.coordinates;
+                        if (!Array.isArray(coordinates) || coordinates.length < 2) return;
+                        const routePoints = coordinates.map(([lon, lat]) => [lat, lon]);
+                        routeLine.setLatLngs(routePoints);
+                        routeLine.setStyle({ dashArray: null, opacity: 0.96 });
+                        fitRoute(map, routeLine.getBounds());
+                    })
+                    .catch(() => {});
             }
 
             function paintActiveSlide() {
@@ -1109,6 +1207,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                         card.toggleAttribute("aria-current", isActive);
                     }
                 });
+                ensureMapForSlide(windowEl.querySelector(`.sb-feed-slide[data-index="${visibleIndex}"]`));
             }
 
             function syncMotion() {
@@ -1241,6 +1340,13 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             window.addEventListener("resize", () => {
                 updateSpacers();
                 viewport.scrollTop = activeIndex * frameHeight();
+                const activeCanvas = windowEl.querySelector(
+                    `.sb-feed-slide[data-index="${visibleIndex}"] .sb-route-map`
+                );
+                const mapState = activeCanvas ? stationMaps.get(activeCanvas) : null;
+                if (mapState) {
+                    mapState.map.invalidateSize(false);
+                }
                 scheduleSyncMotion();
             }, { passive: true });
 
@@ -1809,6 +1915,362 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                     flex: 0 0 auto;
                     margin-top: auto;
                     min-height: 54px;
+                }
+            }
+
+            .sb-feed-card {
+                background: rgba(247, 252, 248, 0.96);
+                padding: 0;
+            }
+
+            .sb-route-map-stage {
+                background: #E5F7E3;
+                flex: 0 0 238px;
+                min-height: 238px;
+                overflow: hidden;
+                position: relative;
+            }
+
+            .sb-route-map {
+                background:
+                    linear-gradient(135deg, rgba(157, 223, 142, 0.34), rgba(36, 78, 128, 0.22)),
+                    #E5F7E3;
+                height: 100%;
+                pointer-events: none;
+                width: 100%;
+                z-index: 1;
+            }
+
+            .sb-route-map.is-fallback {
+                background:
+                    linear-gradient(36deg, transparent 47%, rgba(255, 255, 255, 0.78) 48% 52%, transparent 53%),
+                    linear-gradient(144deg, transparent 46%, rgba(36, 78, 128, 0.10) 47% 50%, transparent 51%),
+                    linear-gradient(135deg, rgba(157, 223, 142, 0.42), rgba(36, 78, 128, 0.18)),
+                    #E5F7E3;
+                background-size: 90px 90px, 118px 118px, auto, auto;
+            }
+
+            .sb-route-map-fade {
+                background: linear-gradient(180deg, transparent 46%, rgba(229, 247, 227, 0.94) 100%);
+                inset: 0;
+                pointer-events: none;
+                position: absolute;
+                z-index: 2;
+            }
+
+            .sb-route-map-score,
+            .sb-route-map-rank {
+                align-items: baseline;
+                backdrop-filter: blur(14px);
+                background: rgba(255, 255, 255, 0.82);
+                border: 1px solid rgba(36, 78, 128, 0.14);
+                border-radius: 999px;
+                box-shadow: 0 10px 24px rgba(5, 15, 4, 0.12);
+                display: flex;
+                gap: 4px;
+                padding: 7px 10px;
+                position: absolute;
+                top: 12px;
+                z-index: 5;
+            }
+
+            .sb-route-map-score {
+                left: 12px;
+            }
+
+            .sb-route-map-rank {
+                right: 12px;
+            }
+
+            .sb-route-map-score strong,
+            .sb-route-map-rank strong {
+                color: var(--feed-blue);
+                font-family: var(--feed-font-display);
+                font-size: 15px;
+                line-height: 1;
+            }
+
+            .sb-route-map-score span,
+            .sb-route-map-rank span {
+                color: var(--feed-soft);
+                font-size: 9px;
+                font-weight: 850;
+                text-transform: uppercase;
+            }
+
+            .sb-route-detail {
+                backdrop-filter: blur(22px);
+                background: rgba(247, 252, 248, 0.95);
+                border: 1px solid rgba(36, 78, 128, 0.13);
+                border-bottom: 0;
+                border-radius: 24px 24px 0 0;
+                box-shadow: 0 -18px 44px rgba(5, 15, 4, 0.14);
+                display: flex;
+                flex: 1 1 auto;
+                flex-direction: column;
+                margin-top: -66px;
+                min-height: 0;
+                padding: 16px;
+                position: relative;
+                z-index: 6;
+            }
+
+            .sb-route-journey {
+                display: flex;
+                flex-direction: column;
+                margin-bottom: 9px;
+            }
+
+            .sb-route-journey strong {
+                color: var(--feed-text);
+                font-family: var(--feed-font-display);
+                font-size: 40px;
+                font-weight: 900;
+                letter-spacing: 0;
+                line-height: 0.95;
+            }
+
+            .sb-route-journey span {
+                color: var(--feed-soft);
+                font-size: 12px;
+                font-weight: 760;
+                margin-top: 6px;
+            }
+
+            .sb-route-station {
+                background: rgba(255, 255, 255, 0.68);
+                border: 1px solid rgba(36, 78, 128, 0.13);
+                border-radius: 13px;
+                min-height: 56px;
+                padding: 8px 10px;
+            }
+
+            .sb-route-station span,
+            .sb-route-station strong,
+            .sb-route-station small {
+                display: block;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .sb-route-station span,
+            .sb-route-address span {
+                color: var(--feed-muted);
+                font-size: 9px;
+                font-weight: 850;
+                text-transform: uppercase;
+            }
+
+            .sb-route-station strong {
+                color: var(--feed-text);
+                font-family: var(--feed-font-display);
+                font-size: 14px;
+                line-height: 1.15;
+                margin-top: 2px;
+            }
+
+            .sb-route-station small {
+                color: var(--feed-soft);
+                font-size: 10px;
+                font-weight: 650;
+                margin-top: 2px;
+            }
+
+            .sb-route-metrics {
+                display: grid;
+                gap: 7px;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                margin-top: 8px;
+            }
+
+            .sb-route-metrics > div {
+                background: rgba(255, 255, 255, 0.64);
+                border: 1px solid rgba(36, 78, 128, 0.13);
+                border-radius: 13px;
+                min-height: 58px;
+                padding: 8px;
+            }
+
+            .sb-route-metrics span,
+            .sb-route-metrics strong {
+                display: block;
+                overflow-wrap: anywhere;
+            }
+
+            .sb-route-metrics span {
+                color: var(--feed-muted);
+                font-size: 9px;
+                font-weight: 850;
+                text-transform: uppercase;
+            }
+
+            .sb-route-metrics strong {
+                color: var(--feed-text);
+                font-size: 11px;
+                line-height: 1.15;
+                margin-top: 5px;
+            }
+
+            .sb-route-detail .sb-feed-chip-row {
+                margin-top: 7px;
+            }
+
+            .sb-route-detail .sb-feed-chip {
+                color: #365F2D;
+                font-size: 9px;
+                min-height: 22px;
+                padding: 4px 7px;
+            }
+
+            .sb-route-detail .sb-feed-chip-help {
+                height: 23px;
+                width: 23px;
+            }
+
+            .sb-route-actions {
+                align-items: center;
+                background:
+                    linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent 38%),
+                    linear-gradient(135deg, var(--feed-green), var(--feed-blue));
+                border-radius: 14px;
+                box-shadow: 0 12px 28px rgba(36, 78, 128, 0.18);
+                display: flex;
+                gap: 8px;
+                justify-content: space-between;
+                margin-top: 8px;
+                min-height: 48px;
+                padding: 8px 9px 8px 12px;
+            }
+
+            .sb-route-actions > strong {
+                color: #FFFFFF;
+                font-family: var(--feed-font-display);
+                font-size: 13px;
+                line-height: 1.1;
+            }
+
+            .sb-route-actions > div {
+                display: flex;
+                flex: 0 0 auto;
+                gap: 4px;
+            }
+
+            .sb-route-actions a {
+                background: rgba(5, 15, 4, 0.46);
+                border: 1px solid rgba(255, 255, 255, 0.16);
+                border-radius: 9px;
+                color: #FFFFFF;
+                font-size: 9px;
+                font-weight: 820;
+                padding: 7px 8px;
+                text-decoration: none;
+                white-space: nowrap;
+            }
+
+            .sb-route-actions a:focus-visible {
+                outline: 2px solid #FFFFFF;
+                outline-offset: 2px;
+            }
+
+            .sb-route-address {
+                margin-top: 8px;
+                min-height: 34px;
+                overflow: hidden;
+            }
+
+            .sb-route-address strong {
+                color: var(--feed-soft);
+                display: -webkit-box;
+                font-size: 10px;
+                font-weight: 650;
+                line-height: 1.25;
+                margin-top: 3px;
+                overflow: hidden;
+                overflow-wrap: anywhere;
+                -webkit-box-orient: vertical;
+                -webkit-line-clamp: 2;
+            }
+
+            .leaflet-container {
+                background: #E5F7E3;
+                font-family: var(--feed-font-body);
+            }
+
+            .leaflet-control-attribution {
+                background: rgba(255, 255, 255, 0.76) !important;
+                border-radius: 6px;
+                font-size: 8px !important;
+                opacity: 0.74;
+                padding: 1px 4px !important;
+            }
+
+            .leaflet-top .leaflet-control {
+                margin-top: 52px !important;
+            }
+
+            .leaflet-left .leaflet-control {
+                margin-left: 12px !important;
+            }
+
+            @media (max-width: 430px) {
+                .sb-feed-card {
+                    padding: 0;
+                }
+
+                .sb-route-map-stage {
+                    flex-basis: 222px;
+                    min-height: 222px;
+                }
+
+                .sb-route-detail {
+                    margin-top: -58px;
+                    padding: 13px;
+                }
+
+                .sb-route-journey {
+                    margin-bottom: 7px;
+                }
+
+                .sb-route-journey strong {
+                    font-size: 36px;
+                }
+
+                .sb-route-station {
+                    min-height: 52px;
+                    padding: 7px 9px;
+                }
+
+                .sb-route-station strong {
+                    font-size: 13px;
+                }
+
+                .sb-route-metrics {
+                    gap: 5px;
+                    margin-top: 6px;
+                }
+
+                .sb-route-metrics > div {
+                    min-height: 54px;
+                    padding: 7px 6px;
+                }
+
+                .sb-route-actions {
+                    margin-top: 7px;
+                    padding-left: 10px;
+                }
+
+                .sb-route-actions > strong {
+                    font-size: 12px;
+                }
+
+                .sb-route-actions a {
+                    font-size: 8px;
+                    padding: 7px 6px;
+                }
+
+                .sb-route-address {
+                    margin-top: 7px;
                 }
             }
         </style>
