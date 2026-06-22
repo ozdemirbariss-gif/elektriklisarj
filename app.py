@@ -857,7 +857,6 @@ def surus_ozeti_ciz(arac: str, guvenli_menzil: float, sarj_yuzdesi: int) -> None
                 <strong>{t("home.insight_title", range=guvenli_menzil)}</strong>
                 <p>{kisa_deger(arac, max_len=36)} · {t("summary.safe_range_value", percent=sarj_yuzdesi, range=guvenli_menzil)}</p>
             </div>
-            <b aria-hidden="true">→</b>
         </section>
         """,
         unsafe_allow_html=True,
@@ -887,6 +886,7 @@ def rota_eylem_paneli_ciz(
         else t("location.find_charger")
     )
     with st.container(key="route_action_panel"):
+        surus_ozeti_ciz(arac, guvenli_menzil, sarj_yuzdesi)
         if st.button(
             cta_metni,
             key="find_route_btn",
@@ -898,7 +898,6 @@ def rota_eylem_paneli_ciz(
                 st.session_state["haritayi_goster"] = True
             st.session_state["rota_goster"] = True
             st.rerun()
-        surus_ozeti_ciz(arac, guvenli_menzil, sarj_yuzdesi)
 
 
 def rota_linki_olustur(istasyon: Dict[str, Any], user_lat: float, user_lon: float) -> str:
