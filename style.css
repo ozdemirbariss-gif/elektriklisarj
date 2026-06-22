@@ -2564,6 +2564,48 @@ div.st-key-quick_map button p {
     white-space: nowrap !important;
 }
 
+div.st-key-route_action_panel {
+    background:
+        linear-gradient(105deg, rgba(157, 223, 142, 0.16), rgba(36, 78, 128, 0.14)),
+        rgba(255, 255, 255, 0.74) !important;
+    border: 1px solid rgba(36, 78, 128, 0.13) !important;
+    border-radius: 22px !important;
+    box-shadow: 0 16px 38px rgba(5, 15, 4, 0.10) !important;
+    gap: 0 !important;
+    margin: 1.1rem 0 1.3rem !important;
+    overflow: hidden;
+    padding: 0.4rem !important;
+}
+
+div.st-key-route_action_panel > div[data-testid="stVerticalBlock"] {
+    gap: 0 !important;
+}
+
+div.st-key-route_action_panel div.st-key-find_route_btn,
+div.st-key-route_action_panel div[data-testid="stElementContainer"]:has(.sb-smart-insight) {
+    margin: 0 !important;
+}
+
+div.st-key-route_action_panel div[data-testid="stElementContainer"]:has(.sb-smart-insight) {
+    padding-bottom: 1rem !important;
+}
+
+div.st-key-route_action_panel div.st-key-find_route_btn button {
+    border-radius: 17px 17px 10px 10px !important;
+    box-shadow: none !important;
+    min-height: 58px !important;
+}
+
+div.st-key-route_action_panel .sb-smart-insight {
+    background: transparent;
+    border: 0;
+    border-radius: 0 0 17px 17px;
+    border-top: 1px solid rgba(36, 78, 128, 0.10);
+    box-shadow: none;
+    margin: 0;
+    padding: 1rem 0.85rem 0.9rem;
+}
+
 .sb-smart-insight {
     align-items: center;
     background:
@@ -2598,6 +2640,10 @@ div.st-key-quick_map button p {
     margin: 0;
 }
 
+.sb-smart-copy {
+    min-width: 0;
+}
+
 .sb-smart-copy span {
     color: var(--sb-text-muted) !important;
     font-size: 10px;
@@ -2610,6 +2656,7 @@ div.st-key-quick_map button p {
     font-weight: 850;
     line-height: 1.2;
     margin-top: 0.12rem;
+    overflow-wrap: anywhere;
 }
 
 .sb-smart-copy p {
@@ -2730,6 +2777,20 @@ div.st-key-bottom_account button p {
         gap: 0.68rem;
         grid-template-columns: 42px minmax(0, 1fr) auto;
         padding: 0.88rem;
+    }
+
+    div.st-key-route_action_panel {
+        border-radius: 20px !important;
+        padding: 0.32rem !important;
+    }
+
+    div.st-key-route_action_panel div.st-key-find_route_btn button {
+        border-radius: 15px 15px 9px 9px !important;
+        min-height: 54px !important;
+    }
+
+    div.st-key-route_action_panel .sb-smart-insight {
+        padding: 0.85rem 0.65rem 0.75rem;
     }
 
     .sb-smart-icon {

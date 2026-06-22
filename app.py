@@ -432,7 +432,7 @@ def sarj_gostergesi_ciz(sarj_yuzdesi: int) -> None:
     )
 
 
-def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tuple[
+def arac_katalogu_ciz(operator_secenekleri: List[str]) -> Tuple[
     str, float, int, float, int, str, int, List[str], str, List[str], bool, bool, bool, str
 ]:
     secilen_baslangic = secili_arac_getir()
@@ -590,24 +590,6 @@ def arac_katalogu_ciz(konum_hazir: bool, operator_secenekleri: List[str]) -> Tup
             on_change=rota_sonucunu_sifirla,
         )
         haritayi_goster = st.checkbox(t("filters.show_map"), key="haritayi_goster", on_change=rota_sonucunu_sifirla)
-
-    if not konum_hazir:
-        st.markdown(
-            f"""
-            <div class="sb-inline-hint">
-                <strong>{t("location.waiting")}</strong>
-                <span>{t("location.enable_hint")}</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    cta_metni = t("home.plan_route") if st.session_state.get("home_mode") == "route" else t("location.find_charger")
-    if st.button(cta_metni, key="find_route_btn", use_container_width=True, disabled=not konum_hazir, type="primary"):
-        if st.session_state.get("home_mode") == "route":
-            st.session_state["haritayi_goster"] = True
-        st.session_state["rota_goster"] = True
-        st.rerun()
 
     guvenlik_marji = int(st.session_state.get("guvenlik_marji", 25))
     return (
@@ -903,6 +885,43 @@ def surus_ozeti_ciz(arac: str, guvenli_menzil: float, sarj_yuzdesi: int) -> None
         """,
         unsafe_allow_html=True,
     )
+
+
+def rota_eylem_paneli_ciz(
+    arac: str,
+    guvenli_menzil: float,
+    sarj_yuzdesi: int,
+    konum_hazir: bool,
+) -> None:
+    if not konum_hazir:
+        st.markdown(
+            f"""
+            <div class="sb-inline-hint">
+                <strong>{t("location.waiting")}</strong>
+                <span>{t("location.enable_hint")}</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    cta_metni = (
+        t("home.plan_route")
+        if st.session_state.get("home_mode") == "route"
+        else t("location.find_charger")
+    )
+    with st.container(key="route_action_panel"):
+        if st.button(
+            cta_metni,
+            key="find_route_btn",
+            use_container_width=True,
+            disabled=not konum_hazir,
+            type="primary",
+        ):
+            if st.session_state.get("home_mode") == "route":
+                st.session_state["haritayi_goster"] = True
+            st.session_state["rota_goster"] = True
+            st.rerun()
+        surus_ozeti_ciz(arac, guvenli_menzil, sarj_yuzdesi)
 
 
 def rota_linki_olustur(istasyon: Dict[str, Any], user_lat: float, user_lon: float) -> str:
@@ -2159,11 +2178,11 @@ else:
         haritayi_goster,
         menzil_filtresi,
         arama_metni,
-    ) = arac_katalogu_ciz(konum_hazir, operator_secenekleri)
+    ) = arac_katalogu_ciz(operator_secenekleri)
 
 guvenli_menzil = ((batarya * (sarj_yuzdesi / 100.0) / tuketim) * 100.0) * (1 - guvenlik_marji / 100.0)
 if not rota_modu:
-    surus_ozeti_ciz(secilen_arac, guvenli_menzil, sarj_yuzdesi)
+    rota_eylem_paneli_ciz(secilen_arac, guvenli_menzil, sarj_yuzdesi, konum_hazir)
 
 if not konum_hazir:
     st.markdown(
