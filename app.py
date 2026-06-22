@@ -666,8 +666,14 @@ SABIT_KONUMLAR: Dict[str, Tuple[float, float]] = {
     "Samsun (Atakum)": (41.3452, 36.2496),
 }
 
+KONUM_KAYNAGI_TARAYICI = "browser"
+KONUM_KAYNAGI_MANUEL = "manual"
 
-def konumu_sessiona_yaz(lat: float, lon: float) -> Tuple[float, float]:
+
+def konumu_sessiona_yaz(lat: float, lon: float, kaynak: str | None = None) -> Tuple[float, float]:
+    if kaynak:
+        st.session_state["konum_kaynagi"] = kaynak
+
     onceki_lat = st.session_state.get("last_valid_lat")
     onceki_lon = st.session_state.get("last_valid_lon")
     if konum_gecerli_mi(onceki_lat, onceki_lon):
@@ -684,7 +690,7 @@ def manuel_konum_degisti() -> None:
     if manuel not in SABIT_KONUMLAR:
         return
     secili_lat, secili_lon = SABIT_KONUMLAR[manuel]
-    konumu_sessiona_yaz(secili_lat, secili_lon)
+    konumu_sessiona_yaz(secili_lat, secili_lon, KONUM_KAYNAGI_MANUEL)
     rota_sonucunu_sifirla()
 
 
@@ -710,7 +716,7 @@ def koordinat_girdisi_ciz() -> None:
         )
         if st.button(t("location.use"), key="use_coordinates", use_container_width=True):
             if konum_gecerli_mi(lat, lon):
-                konumu_sessiona_yaz(float(lat), float(lon))
+                konumu_sessiona_yaz(float(lat), float(lon), KONUM_KAYNAGI_MANUEL)
                 rota_sonucunu_sifirla()
                 st.rerun()
             else:
@@ -2091,7 +2097,11 @@ try:
     if isinstance(konum_verisi, dict) and "coords" in konum_verisi:
         if konum_gecerli_mi(konum_verisi["coords"].get("latitude"), konum_verisi["coords"].get("longitude")):
             user_lat, user_lon = float(konum_verisi["coords"]["latitude"]), float(konum_verisi["coords"]["longitude"])
-            user_lat, user_lon = konumu_sessiona_yaz(user_lat, user_lon)
+            user_lat, user_lon = konumu_sessiona_yaz(
+                user_lat,
+                user_lon,
+                KONUM_KAYNAGI_TARAYICI,
+            )
 except Exception as e:
     logger.warning("Tarayıcı konumu okunamadı: %s", e, exc_info=True)
 
@@ -2099,6 +2109,9 @@ if user_lat is None: user_lat = st.session_state.get("last_valid_lat")
 if user_lon is None: user_lon = st.session_state.get("last_valid_lon")
 
 konum_hazir = user_lat is not None and user_lon is not None
+manuel_konum_karti_goster = not (
+    konum_hazir and st.session_state.get("konum_kaynagi") == KONUM_KAYNAGI_TARAYICI
+)
 
 alt_navigasyon_ciz(konum_hazir)
 if st.session_state.get("account_panel_open"):
@@ -2108,7 +2121,8 @@ if st.session_state.get("account_panel_open"):
 
 if not rota_modu:
     ana_mod_secici_ciz()
-    ana_konum_arama_ciz(konum_hazir, user_lat, user_lon)
+    if manuel_konum_karti_goster:
+        ana_konum_arama_ciz(konum_hazir, user_lat, user_lon)
     hizli_islemler_ciz(konum_hazir)
 
 # 3. Araç Kataloğu ve Katmanlı Arama
