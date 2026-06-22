@@ -265,43 +265,20 @@ def giris_ekrani_ciz() -> None:
 
 def ust_bilgi_ciz() -> None:
     oturumlu = "auth_token" in st.session_state
-    hesap_metni = st.session_state.get("auth_email") if oturumlu else t("nav.guest")
     rota_aktif = st.session_state.get("rota_goster") is True
-    adim_metni = t("nav.route_step") if rota_aktif else t("nav.vehicle_step")
-    ilerleme = 100 if rota_aktif else 66
     geri_yardimi = t("nav.back_vehicle") if rota_aktif else t("nav.back_entry")
 
     st.markdown('<div class="sb-top-nav-anchor" aria-hidden="true"></div>', unsafe_allow_html=True)
-    geri_col, durum_col, dil_col = st.columns([0.13, 0.64, 0.23], gap="small")
-
-    with geri_col:
-        if st.button("←", key="top_nav_back", help=geri_yardimi, use_container_width=True):
-            if rota_aktif:
-                st.session_state["rota_goster"] = False
-                st.rerun()
-            if oturumlu:
-                oturumu_temizle()
-            st.session_state["sb_access_granted"] = False
-            st.session_state["sb_guest_mode"] = False
+    if st.button("←", key="top_nav_back", help=geri_yardimi):
+        if rota_aktif:
             st.session_state["rota_goster"] = False
             st.rerun()
-
-    with durum_col:
-        st.markdown(
-            f"""
-            <div class="sb-flow-top">
-                <div class="sb-progress-track"><span style="width: {ilerleme}%"></span></div>
-                <div class="sb-flow-meta">
-                    <span>{adim_metni}</span>
-                    <strong>{guvenli_metin(hesap_metni, 80)}</strong>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    with dil_col:
-        dil_secici_ciz("language_top")
+        if oturumlu:
+            oturumu_temizle()
+        st.session_state["sb_access_granted"] = False
+        st.session_state["sb_guest_mode"] = False
+        st.session_state["rota_goster"] = False
+        st.rerun()
 
 
 def ana_mod_degisti() -> None:

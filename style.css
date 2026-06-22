@@ -2906,6 +2906,16 @@ div[data-testid="stElementContainer"]:has(.sb-top-nav-anchor) + div[data-testid=
     top: calc(env(safe-area-inset-top, 0px) + 0.5rem) !important;
 }
 
+div[data-testid="stElementContainer"]:has(.sb-top-nav-anchor) + div.st-key-top_nav_back {
+    align-items: center;
+    display: flex !important;
+    margin: 0 0 1rem !important;
+    position: sticky;
+    top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
+    width: 52px !important;
+    z-index: 40;
+}
+
 div[data-testid="stHorizontalBlock"]:has(.sb-flow-top) {
     left: auto !important;
     position: static !important;
