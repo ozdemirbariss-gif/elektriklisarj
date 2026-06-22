@@ -58,7 +58,7 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "nav.back_vehicle": "Araç ve rota ekranına dön",
         "nav.back_entry": "Giriş ekranına dön",
         "home.kicker": "Elektrikli yolculuk",
-        "home.title": "Nereye şarj olmak istiyorsun?",
+        "home.title": "Nerede şarj etmek istiyorsun?",
         "home.subtitle": "Konumunu seç; menziline ve tercihine en uygun durağı birlikte bulalım.",
         "home.mode_label": "Arama modu",
         "home.mode_charger": "Şarj Bul",
