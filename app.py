@@ -971,7 +971,6 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             "price": t("feed.price"),
             "openRoute": t("feed.open_route"),
             "googleMaps": t("feed.google_maps"),
-            "goToStation": t("feed.go_to_station", index="{index}"),
         },
         ensure_ascii=False,
     ).replace("</", "<\\/")
@@ -985,10 +984,6 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                     <div class="sb-feed-spacer" id="station-bottom-spacer"></div>
                 </div>
             </div>
-            <div class="sb-feed-controls" aria-label="__FEED_CONTROLS__">
-                <div class="sb-feed-dots" id="station-dots" aria-label="__FEED_POSITION__"></div>
-                <div class="sb-feed-hint" aria-hidden="true">__FEED_HINT__</div>
-            </div>
         </section>
         <script>
             const stations = __STATIONS_JSON__;
@@ -998,7 +993,6 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             const windowEl = document.getElementById("station-window");
             const topSpacer = document.getElementById("station-top-spacer");
             const bottomSpacer = document.getElementById("station-bottom-spacer");
-            const dots = document.getElementById("station-dots");
             const visibleWindowSize = Math.min(9, Math.max(1, stations.length));
             const windowBuffer = Math.min(4, Math.floor(visibleWindowSize / 2));
             let activeIndex = 0;
@@ -1102,21 +1096,6 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 `;
             }
 
-            function renderDots() {
-                const maxDots = Math.min(7, stations.length);
-                const dotStart = Math.max(0, Math.min(visibleIndex - Math.floor(maxDots / 2), stations.length - maxDots));
-                dots.innerHTML = Array.from({ length: maxDots }, (_, offset) => {
-                    const index = dotStart + offset;
-                    const classes = [
-                        "sb-feed-dot",
-                        index === visibleIndex ? "is-active" : "",
-                        index === 0 || index === stations.length - 1 ? "is-edge" : ""
-                    ].filter(Boolean).join(" ");
-                    const dotLabel = labels.goToStation.replace("{index}", String(index + 1));
-                    return `<button class="${classes}" type="button" data-target="${index}" aria-label="${esc(dotLabel)}"></button>`;
-                }).join("");
-            }
-
             function paintActiveSlide() {
                 const slides = Array.from(windowEl.querySelectorAll(".sb-feed-slide"));
                 slides.forEach((slide) => {
@@ -1130,7 +1109,6 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                         card.toggleAttribute("aria-current", isActive);
                     }
                 });
-                renderDots();
             }
 
             function syncMotion() {
@@ -1260,12 +1238,6 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 }
             });
 
-            dots.addEventListener("click", (event) => {
-                const button = event.target.closest("button[data-target]");
-                if (!button) return;
-                scrollToIndex(Number(button.dataset.target));
-            });
-
             window.addEventListener("resize", () => {
                 updateSpacers();
                 viewport.scrollTop = activeIndex * frameHeight();
@@ -1284,7 +1256,6 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 --feed-green: #9DDF8E;
                 --feed-blue: #244E80;
                 --feed-frame-height: 640px;
-                --feed-controls-height: 44px;
                 --feed-font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
                 --feed-font-body: "Inter", system-ui, sans-serif;
             }
@@ -1306,16 +1277,13 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
 
             .sb-feed-shell {
                 background: linear-gradient(160deg, rgba(229, 247, 227, 0.98), rgba(157, 223, 142, 0.24) 58%, rgba(36, 78, 128, 0.14));
-                display: grid;
-                grid-template-rows: var(--feed-frame-height) var(--feed-controls-height);
-                height: calc(var(--feed-frame-height) + var(--feed-controls-height));
+                height: var(--feed-frame-height);
                 overflow: hidden;
                 position: relative;
                 width: 100%;
             }
 
             .sb-feed-viewport {
-                grid-row: 1;
                 height: var(--feed-frame-height);
                 outline: 0;
                 overflow-x: hidden;
@@ -1776,84 +1744,12 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 text-align: right;
             }
 
-            .sb-feed-controls {
-                align-items: center;
-                background: rgba(229, 247, 227, 0.88);
-                border-top: 1px solid rgba(36, 78, 128, 0.10);
-                display: flex;
-                gap: 12px;
-                grid-row: 2;
-                justify-content: space-between;
-                min-width: 0;
-                padding: 7px 14px;
-                position: relative;
-                z-index: 6;
-            }
-
-            .sb-feed-dots {
-                align-items: center;
-                display: flex;
-                gap: 8px;
-                justify-content: flex-start;
-                pointer-events: auto;
-            }
-
-            .sb-feed-dot {
-                appearance: none;
-                background: rgba(5, 15, 4, 0.32);
-                border: 1px solid rgba(255, 255, 255, 0.38);
-                border-radius: 999px;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-                cursor: pointer;
-                height: 8px;
-                opacity: 0.92;
-                padding: 0;
-                transition: background 180ms ease, box-shadow 180ms ease, transform 180ms ease, width 180ms ease;
-                width: 8px;
-            }
-
-            .sb-feed-dot.is-edge {
-                opacity: 0.48;
-                transform: scale(0.82);
-            }
-
-            .sb-feed-dot.is-active {
-                background: linear-gradient(90deg, var(--feed-green), var(--feed-blue));
-                box-shadow: 0 0 18px rgba(157, 223, 142, 0.45);
-                opacity: 1;
-                transform: scale(1);
-                width: 30px;
-            }
-
-            .sb-feed-hint {
-                background: rgba(255, 255, 255, 0.68);
-                border: 1px solid rgba(36, 78, 128, 0.12);
-                border-radius: 999px;
-                color: var(--feed-soft);
-                font-size: 11px;
-                font-weight: 850;
-                padding: 7px 12px;
-                pointer-events: none;
-                white-space: nowrap;
-            }
-
-            @keyframes sbHintFloat {
-                0%, 100% { transform: translateY(0); }
-                50% { transform: translateY(-2px); }
-            }
-
-            .sb-feed-hint {
-                animation: sbHintFloat 2.2s ease-in-out infinite;
-            }
-
             @media (prefers-reduced-motion: reduce) {
                 .sb-feed-viewport {
                     scroll-behavior: auto;
                 }
 
-                .sb-feed-card,
-                .sb-feed-dot,
-                .sb-feed-hint {
+                .sb-feed-card {
                     animation: none;
                     transition: none;
                 }
@@ -1921,15 +1817,12 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
         feed_html
         .replace("__LABELS_JSON__", labels_json)
         .replace("__FEED_ARIA__", guvenli_metin(t("feed.aria"), 80))
-        .replace("__FEED_CONTROLS__", guvenli_metin(t("feed.controls"), 80))
-        .replace("__FEED_POSITION__", guvenli_metin(t("feed.position"), 80))
-        .replace("__FEED_HINT__", guvenli_metin(t("feed.swipe_hint"), 50))
     )
 
     st.markdown('<div class="sb-route-feed-mode" aria-hidden="true"></div>', unsafe_allow_html=True)
     components.html(
         feed_html,
-        height=692,
+        height=640,
         scrolling=False,
     )
 
@@ -2280,16 +2173,6 @@ if uygun_istasyonlar:
     if "auth_token" in st.session_state:
         ist_id = istasyon_id_getir(en_iyi)
         istasyon_aksiyonlari_ciz(en_iyi, ist_id, en_iyi_key, ayar_yaricap)
-    else:
-        st.markdown(
-            f"""
-            <div class="sb-step-panel">
-                <strong>{t("route.guest_action")}</strong>
-                <span>{t("route.guest_hint")}</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
 
 else:
     st.markdown(
