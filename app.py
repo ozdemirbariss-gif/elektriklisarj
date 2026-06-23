@@ -1141,7 +1141,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                     zoomControl: false
                 });
 
-                L.control.attribution({ position: "topleft", prefix: false }).addTo(map);
+                L.control.attribution({ position: "bottomright", prefix: false }).addTo(map);
                 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
                     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
                     maxZoom: 19
@@ -1361,7 +1361,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 --feed-muted: rgba(5, 15, 4, 0.46);
                 --feed-green: #9DDF8E;
                 --feed-blue: #244E80;
-                --feed-frame-height: 640px;
+                --feed-frame-height: 590px;
                 --feed-font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
                 --feed-font-body: "Inter", system-ui, sans-serif;
             }
@@ -1382,7 +1382,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             }
 
             .sb-feed-shell {
-                background: linear-gradient(160deg, rgba(229, 247, 227, 0.98), rgba(157, 223, 142, 0.24) 58%, rgba(36, 78, 128, 0.14));
+                background: transparent;
                 height: var(--feed-frame-height);
                 overflow: hidden;
                 position: relative;
@@ -1429,7 +1429,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 display: flex;
                 height: var(--feed-frame-height);
                 justify-content: center;
-                padding: 10px 0 18px;
+                padding: 4px 0 14px;
                 scroll-snap-align: center;
                 scroll-snap-stop: always;
             }
@@ -1439,15 +1439,16 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 --sb-card-scale: 0.92;
                 --sb-card-shift: 24px;
                 background:
-                    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.72)),
-                    linear-gradient(160deg, rgba(229, 247, 227, 0.98), rgba(229, 247, 227, 0.96));
-                border: 1px solid rgba(36, 78, 128, 0.15);
-                border-radius: 22px;
-                box-shadow: 0 24px 58px rgba(5, 15, 4, 0.12), 0 16px 42px rgba(157, 223, 142, 0.10);
+                    radial-gradient(circle at 18% -8%, rgba(157, 223, 142, 0.20), transparent 34%),
+                    linear-gradient(180deg, rgba(250, 254, 251, 0.98), rgba(239, 249, 243, 0.97));
+                border: 1px solid rgba(36, 78, 128, 0.10);
+                border-radius: 26px;
+                box-shadow: 0 18px 44px rgba(5, 15, 4, 0.11);
                 color: var(--feed-text);
                 display: flex;
                 flex-direction: column;
-                height: calc(var(--feed-frame-height) - 28px);
+                height: calc(var(--feed-frame-height) - 18px);
+                isolation: isolate;
                 outline: 0;
                 overflow: hidden;
                 padding: 24px 20px 18px;
@@ -1470,11 +1471,11 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             }
 
             .sb-feed-slide.is-near .sb-feed-card {
-                box-shadow: 0 18px 44px rgba(5, 15, 4, 0.10), 0 12px 32px rgba(157, 223, 142, 0.08);
+                box-shadow: 0 14px 34px rgba(5, 15, 4, 0.08);
             }
 
             .sb-feed-card.is-featured {
-                box-shadow: 0 26px 62px rgba(5, 15, 4, 0.14), 0 18px 48px rgba(157, 223, 142, 0.14);
+                box-shadow: 0 20px 48px rgba(5, 15, 4, 0.12);
             }
 
             .sb-feed-glow {
@@ -1867,11 +1868,11 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 }
 
                 .sb-feed-slide {
-                    padding: 8px 0 12px;
+                    padding: 4px 0 10px;
                 }
 
                 .sb-feed-card {
-                    height: calc(var(--feed-frame-height) - 20px);
+                    height: calc(var(--feed-frame-height) - 14px);
                     padding: 18px 16px 16px;
                 }
 
@@ -1919,12 +1920,14 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             }
 
             .sb-feed-card {
-                background: rgba(247, 252, 248, 0.96);
+                background:
+                    radial-gradient(circle at 18% -6%, rgba(157, 223, 142, 0.16), transparent 32%),
+                    linear-gradient(180deg, rgba(250, 254, 251, 0.98), rgba(239, 249, 243, 0.97));
                 padding: 0;
             }
 
             .sb-route-map-stage {
-                background: #E5F7E3;
+                background: #F7FCF8;
                 flex: 0 0 238px;
                 min-height: 238px;
                 overflow: hidden;
@@ -1933,8 +1936,8 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
 
             .sb-route-map {
                 background:
-                    linear-gradient(135deg, rgba(157, 223, 142, 0.34), rgba(36, 78, 128, 0.22)),
-                    #E5F7E3;
+                    linear-gradient(135deg, rgba(157, 223, 142, 0.18), rgba(36, 78, 128, 0.12)),
+                    #F7FCF8;
                 height: 100%;
                 pointer-events: none;
                 width: 100%;
@@ -1944,14 +1947,14 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             .sb-route-map.is-fallback {
                 background:
                     linear-gradient(36deg, transparent 47%, rgba(255, 255, 255, 0.78) 48% 52%, transparent 53%),
-                    linear-gradient(144deg, transparent 46%, rgba(36, 78, 128, 0.10) 47% 50%, transparent 51%),
-                    linear-gradient(135deg, rgba(157, 223, 142, 0.42), rgba(36, 78, 128, 0.18)),
-                    #E5F7E3;
+                    linear-gradient(144deg, transparent 46%, rgba(36, 78, 128, 0.08) 47% 50%, transparent 51%),
+                    linear-gradient(135deg, rgba(157, 223, 142, 0.22), rgba(36, 78, 128, 0.12)),
+                    #F7FCF8;
                 background-size: 90px 90px, 118px 118px, auto, auto;
             }
 
             .sb-route-map-fade {
-                background: linear-gradient(180deg, transparent 46%, rgba(229, 247, 227, 0.94) 100%);
+                background: linear-gradient(180deg, transparent 42%, rgba(250, 254, 251, 0.88) 86%, rgba(250, 254, 251, 0.98) 100%);
                 inset: 0;
                 pointer-events: none;
                 position: absolute;
@@ -1962,10 +1965,10 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             .sb-route-map-rank {
                 align-items: baseline;
                 backdrop-filter: blur(14px);
-                background: rgba(255, 255, 255, 0.82);
-                border: 1px solid rgba(36, 78, 128, 0.14);
+                background: rgba(250, 254, 251, 0.72);
+                border: 1px solid rgba(36, 78, 128, 0.08);
                 border-radius: 999px;
-                box-shadow: 0 10px 24px rgba(5, 15, 4, 0.12);
+                box-shadow: 0 8px 18px rgba(5, 15, 4, 0.07);
                 display: flex;
                 gap: 4px;
                 padding: 7px 10px;
@@ -2000,11 +2003,11 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
 
             .sb-route-detail {
                 backdrop-filter: blur(22px);
-                background: rgba(247, 252, 248, 0.95);
-                border: 1px solid rgba(36, 78, 128, 0.13);
-                border-bottom: 0;
-                border-radius: 24px 24px 0 0;
-                box-shadow: 0 -18px 44px rgba(5, 15, 4, 0.14);
+                background:
+                    linear-gradient(180deg, rgba(250, 254, 251, 0.96), rgba(247, 252, 248, 0.98));
+                border: 0;
+                border-radius: 22px 22px 0 0;
+                box-shadow: 0 -14px 32px rgba(5, 15, 4, 0.08);
                 display: flex;
                 flex: 1 1 auto;
                 flex-direction: column;
@@ -2038,9 +2041,10 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             }
 
             .sb-route-station {
-                background: rgba(255, 255, 255, 0.68);
-                border: 1px solid rgba(36, 78, 128, 0.13);
+                background: rgba(255, 255, 255, 0.58);
+                border: 1px solid rgba(36, 78, 128, 0.07);
                 border-radius: 13px;
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
                 min-height: 56px;
                 padding: 8px 10px;
             }
@@ -2085,9 +2089,10 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             }
 
             .sb-route-metrics > div {
-                background: rgba(255, 255, 255, 0.64);
-                border: 1px solid rgba(36, 78, 128, 0.13);
+                background: rgba(255, 255, 255, 0.54);
+                border: 1px solid rgba(36, 78, 128, 0.07);
                 border-radius: 13px;
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
                 min-height: 58px;
                 padding: 8px;
             }
@@ -2131,10 +2136,10 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             .sb-route-actions {
                 align-items: center;
                 background:
-                    linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent 38%),
+                    linear-gradient(90deg, rgba(255, 255, 255, 0.14), transparent 38%),
                     linear-gradient(135deg, var(--feed-green), var(--feed-blue));
                 border-radius: 14px;
-                box-shadow: 0 12px 28px rgba(36, 78, 128, 0.18);
+                box-shadow: 0 10px 22px rgba(36, 78, 128, 0.15);
                 display: flex;
                 gap: 8px;
                 justify-content: space-between;
@@ -2174,9 +2179,11 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             }
 
             .sb-route-address {
-                margin-top: 8px;
+                border-top: 1px solid rgba(36, 78, 128, 0.08);
+                margin-top: auto;
                 min-height: 34px;
                 overflow: hidden;
+                padding-top: 8px;
             }
 
             .sb-route-address strong {
@@ -2193,24 +2200,30 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             }
 
             .leaflet-container {
-                background: #E5F7E3;
+                background: #F7FCF8;
                 font-family: var(--feed-font-body);
             }
 
+            .leaflet-tile {
+                filter: saturate(0.82) contrast(0.94) opacity(0.76);
+            }
+
             .leaflet-control-attribution {
-                background: rgba(255, 255, 255, 0.76) !important;
-                border-radius: 6px;
-                font-size: 8px !important;
-                opacity: 0.74;
-                padding: 1px 4px !important;
+                background: rgba(250, 254, 251, 0.58) !important;
+                border-radius: 999px;
+                color: rgba(5, 15, 4, 0.42) !important;
+                font-size: 7px !important;
+                opacity: 0.48;
+                padding: 1px 5px !important;
             }
 
-            .leaflet-top .leaflet-control {
-                margin-top: 52px !important;
+            .leaflet-control-attribution a {
+                color: rgba(36, 78, 128, 0.52) !important;
             }
 
-            .leaflet-left .leaflet-control {
-                margin-left: 12px !important;
+            .leaflet-bottom .leaflet-control {
+                margin-bottom: 72px !important;
+                margin-right: 12px !important;
             }
 
             @media (max-width: 430px) {
@@ -2270,7 +2283,8 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 }
 
                 .sb-route-address {
-                    margin-top: 7px;
+                    margin-top: auto;
+                    padding-top: 7px;
                 }
             }
         </style>
