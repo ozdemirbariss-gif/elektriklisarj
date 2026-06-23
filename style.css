@@ -2331,6 +2331,17 @@ div.st-key-social_twitter button::before {
     padding-bottom: calc(7.4rem + env(safe-area-inset-bottom, 0px)) !important;
 }
 
+.block-container:has(.sb-lounge-shell) {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 4.35rem) !important;
+}
+
+@media (min-width: 561px) {
+    div[data-testid="stElementContainer"]:has(.sb-lounge-game-anchor) + div[data-testid="stElementContainer"]:has(iframe.stIFrame),
+    div[data-testid="stElementContainer"]:has(.sb-lounge-game-anchor) + div[data-testid="stElementContainer"] iframe.stIFrame {
+        height: 478px !important;
+    }
+}
+
 .sb-home-intro {
     margin: 1.25rem 0 0.75rem;
     padding: 0 0.2rem;
@@ -2757,6 +2768,35 @@ div.st-key-bottom_account button p {
     white-space: nowrap !important;
 }
 
+div.st-key-bottom_map button p {
+    font-size: 9px !important;
+    line-height: 1.05 !important;
+    text-align: center !important;
+    white-space: normal !important;
+}
+
+.sb-lounge-shell {
+    margin: 0.35rem 0 0.9rem;
+    padding: 0 0.15rem 0 4.05rem;
+}
+
+.sb-lounge-shell h1 {
+    color: var(--sb-text) !important;
+    font-family: var(--sb-font-display) !important;
+    font-size: 34px !important;
+    font-weight: 880 !important;
+    line-height: 1.04 !important;
+    margin: 0.32rem 0 0.5rem !important;
+}
+
+.sb-lounge-shell p {
+    color: var(--sb-text-muted) !important;
+    font-size: 13px !important;
+    line-height: 1.45 !important;
+    margin: 0 0 0 -4.05rem !important;
+    max-width: 480px;
+}
+
 @media (max-width: 560px) {
     .sb-home-intro {
         margin-top: 0.75rem;
@@ -2808,6 +2848,11 @@ div.st-key-bottom_account button p {
         border-radius: 19px !important;
         width: calc(100vw - 1rem);
     }
+
+    .sb-lounge-shell h1 {
+        font-size: 29px !important;
+    }
+
 }
 
 .sb-live-region {
