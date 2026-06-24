@@ -2797,6 +2797,31 @@ div.st-key-bottom_map button p {
     max-width: 480px;
 }
 
+.sb-action-target {
+    background: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(36, 78, 128, 0.12);
+    border-radius: 16px;
+    box-shadow: 0 12px 28px rgba(5, 15, 4, 0.07);
+    margin: 0.5rem 0 0.75rem;
+    padding: 0.72rem 0.82rem;
+}
+
+.sb-action-target span {
+    color: var(--sb-text-muted) !important;
+    display: block;
+    font-size: 11px;
+    font-weight: 740;
+    margin-bottom: 0.18rem;
+}
+
+.sb-action-target strong {
+    color: var(--sb-text) !important;
+    display: block;
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1.25;
+}
+
 @media (max-width: 560px) {
     .sb-home-intro {
         margin-top: 0.75rem;
