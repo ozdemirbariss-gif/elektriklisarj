@@ -7,6 +7,7 @@ from i18n import t
 
 
 TAHMIN_VARSAYILAN_OLASILIK = 0.58
+BILDIRIM_SINIFLARI = {"bos", "mesgul", "belirsiz"}
 
 
 def _normalize(metin: Any) -> str:
@@ -35,7 +36,16 @@ def _tarih_parse(tarih: Any) -> Optional[datetime]:
         return None
 
 
-def _bildirim_sinifi_getir(yorum: Dict[str, Any]) -> str:
+def bildirim_sinifi_getir(yorum: Dict[str, Any]) -> str:
+    kayitli_sinif = _normalize(
+        yorum.get("durum_sinifi")
+        or yorum.get("bildirim_sinifi")
+        or yorum.get("sinif")
+        or ""
+    )
+    if kayitli_sinif in BILDIRIM_SINIFLARI:
+        return kayitli_sinif
+
     metin = _normalize(f"{yorum.get('durum', '')} {yorum.get('yorum', '')}")
     olumlu_guclu = ("sorunsuz", "sorun yok", "uygun", "bos", "musait", "arizasiz")
     olumsuz = ("sorun", "ariza", "arizali", "calismiyor", "dolu", "sira", "bekleme", "risk")
@@ -48,6 +58,10 @@ def _bildirim_sinifi_getir(yorum: Dict[str, Any]) -> str:
     if any(kelime in metin for kelime in olumlu):
         return "bos"
     return "belirsiz"
+
+
+def _bildirim_sinifi_getir(yorum: Dict[str, Any]) -> str:
+    return bildirim_sinifi_getir(yorum)
 
 
 def _yas_agirligi(tarih: datetime, simdi: datetime) -> float:

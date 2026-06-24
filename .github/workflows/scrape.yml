@@ -38,7 +38,15 @@ jobs:
       - name: Scrape kodunu calistir
         run: python scraper.py
 
-      - name: Degisiklik varsa commit et
+      - name: Scrape ciktisini artifact olarak sakla
+        uses: actions/upload-artifact@v5
+        with:
+          name: stations-json
+          path: stations.json
+          retention-days: 14
+
+      - name: Manuel calistirmada degisiklik varsa commit et
+        if: github.event_name == 'workflow_dispatch'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

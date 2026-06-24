@@ -14,6 +14,7 @@ from config import (
     OVERPASS_URLS, OVERPASS_HEADERS, KATEGORI_EMOJILER, MAX_YAKIN_YER, MAX_YORUM_KARAKTER, YORUM_BEKLEME_SURESI
 )
 from i18n import t
+from predictor import bildirim_sinifi_getir
 from utils import (
     istasyon_normalize_et, yorum_tarihi_parse, clean_id_uret,
     auth_uid_hash_getir, cache_temizle_guvenli, guvenli_metin, mesafe_hesapla,
@@ -358,7 +359,18 @@ def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str, ek_bilgi: Optio
     if not sunucu_ok: return False, t("service.wait_seconds", seconds=sunucu_kalan)
 
     clean_id, tarih = clean_id_uret(istasyon_id), utc_isoformat()
-    yeni_yorum = {"kullanici": "Doğrulanmış Sürücü", "yorum": guvenli_metin(yorum_metni or durum, MAX_YORUM_KARAKTER), "durum": guvenli_metin(durum, 60), "tarih": tarih, "uid_hash": uid_hash}
+    yorum_text = guvenli_metin(yorum_metni or durum, MAX_YORUM_KARAKTER)
+    durum_text = guvenli_metin(durum, 60)
+    durum_sinifi = bildirim_sinifi_getir({"yorum": yorum_text, "durum": durum_text})
+    yeni_yorum = {
+        "kullanici": "Doğrulanmış Sürücü",
+        "yorum": yorum_text,
+        "durum": durum_text,
+        "durum_sinifi": durum_sinifi,
+        "sinif_kaynagi": "write_rule_v1",
+        "tarih": tarih,
+        "uid_hash": uid_hash,
+    }
     if ek_bilgi: yeni_yorum["ek_bilgi"] = ek_bilgi
 
     try:

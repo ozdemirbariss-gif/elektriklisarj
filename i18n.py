@@ -6,7 +6,7 @@ import streamlit as st
 
 DEFAULT_LANGUAGE = "tr"
 SUPPORTED_LANGUAGES = ("tr", "en")
-TRANSLATION_SCHEMA_VERSION = 4
+TRANSLATION_SCHEMA_VERSION = 5
 
 
 TRANSLATIONS: Dict[str, Dict[str, str]] = {
@@ -179,6 +179,8 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "feed.apple_maps": "Apple Maps",
         "feed.google_maps": "Google Maps",
         "actions.quick": "Hızlı işlemler",
+        "actions.station_label": "İşlem yapılacak istasyon",
+        "actions.station_help": "Rapor, favori ve çevre aksiyonları seçili istasyona uygulanır.",
         "actions.report": "Durum bildir",
         "actions.login": "Giriş yapın.",
         "actions.available": "Uygun",
@@ -413,6 +415,8 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "feed.apple_maps": "Apple Maps",
         "feed.google_maps": "Google Maps",
         "actions.quick": "Quick actions",
+        "actions.station_label": "Station for actions",
+        "actions.station_help": "Report, save, and nearby actions apply to the selected station.",
         "actions.report": "Report status",
         "actions.login": "Sign in first.",
         "actions.available": "Available",
