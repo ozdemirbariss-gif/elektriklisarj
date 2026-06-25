@@ -10,7 +10,7 @@ from streamlit_folium import st_folium
 
 import i18n as i18n_module
 
-EXPECTED_TRANSLATION_SCHEMA_VERSION = 5
+EXPECTED_TRANSLATION_SCHEMA_VERSION = 7
 if getattr(i18n_module, "TRANSLATION_SCHEMA_VERSION", 0) < EXPECTED_TRANSLATION_SCHEMA_VERSION:
     importlib.reload(i18n_module)
 
@@ -204,10 +204,20 @@ def sosyal_giris_butonlari_ciz() -> None:
 
 
 def auth_form_ciz(caller_context: str, entry_context: bool = False) -> None:
-    login_tab, register_tab, reset_tab = st.tabs([t("auth.login"), t("auth.register"), t("auth.reset")])
     prefix = caller_context.strip().replace(" ", "_") or "auth"
+    secenekler = ("login", "register", "reset")
+    mod_anahtari = f"{prefix}_auth_mode"
+    st.session_state.setdefault(mod_anahtari, "login")
+    auth_mode = st.segmented_control(
+        t("auth.mode_label"),
+        secenekler,
+        key=mod_anahtari,
+        format_func=lambda value: t(f"auth.{value}"),
+        label_visibility="collapsed",
+        width="stretch",
+    )
 
-    with login_tab:
+    if auth_mode == "login":
         if not FIREBASE_ENABLED:
             st.info(t("auth.firebase_login_disabled"))
             st.button(t("auth.continue"), use_container_width=True, key=f"{prefix}_login_disabled", disabled=True)
@@ -222,7 +232,7 @@ def auth_form_ciz(caller_context: str, entry_context: bool = False) -> None:
                     st.rerun()
                 bildirim_goster(t("auth.login_failed"), basarili=False)
 
-    with register_tab:
+    if auth_mode == "register":
         if not FIREBASE_ENABLED:
             st.info(t("auth.firebase_register_disabled"))
         else:
@@ -236,7 +246,7 @@ def auth_form_ciz(caller_context: str, entry_context: bool = False) -> None:
                     st.rerun()
                 bildirim_goster(t("auth.register_failed"), basarili=False)
 
-    with reset_tab:
+    if auth_mode == "reset":
         if not FIREBASE_ENABLED:
             st.info(t("auth.firebase_reset_disabled"))
         else:
@@ -263,12 +273,18 @@ def giris_ekrani_ciz() -> None:
     st.markdown('<div class="sb-entry-language">', unsafe_allow_html=True)
     dil_secici_ciz("language_entry")
     st.markdown('</div>', unsafe_allow_html=True)
+    hero_subtitle = t("auth.hero_subtitle")
+    subtitle_html = (
+        f"<p>{guvenli_metin(hero_subtitle, 140)}</p>"
+        if hero_subtitle and hero_subtitle != "auth.hero_subtitle"
+        else ""
+    )
     st.markdown(
         f"""
         <section class="sb-entry-hero">
-            <div class="sb-entry-mark">SarjBul</div>
+            <div class="sb-entry-mark"><span></span>ŞarjBul</div>
             <h1>{t("auth.hero_title")}</h1>
-            <p>{t("auth.hero_subtitle")}</p>
+            {subtitle_html}
         </section>
         """,
         unsafe_allow_html=True,
@@ -743,10 +759,10 @@ def ana_konum_arama_ciz(konum_hazir: bool, user_lat: Any, user_lon: Any) -> None
 
 def harita_rengi_getir(skor: int) -> str:
     if skor >= 80:
-        return "#9DDF8E"
+        return "#C8FF2E"
     if skor >= 60:
-        return "#244E80"
-    return "#4C41CA"
+        return "#0E1012"
+    return "#9FE000"
 
 
 def harita_popup_html_olustur(istasyon: Dict[str, Any]) -> str:
@@ -758,16 +774,16 @@ def harita_popup_html_olustur(istasyon: Dict[str, Any]) -> str:
     durum = localize_text(kisa_duz_metin(istasyon.get("ArizaEtiketi"), t("common.live_data_none"), 60))
     renk = harita_rengi_getir(skor)
     return f"""
-        <div style="min-width:190px;background:#E5F7E3;border:1px solid rgba(36,78,128,0.28);border-radius:12px;box-shadow:0 18px 40px rgba(5,15,4,0.18);color:#050F04;font-family:Inter,Arial,sans-serif;padding:12px;">
+        <div style="min-width:190px;background:#FFFFFF;border:1px solid rgba(14,16,18,0.28);border-radius:12px;box-shadow:0 18px 40px rgba(14,16,18,0.18);color:#0E1012;font-family:Inter,Arial,sans-serif;padding:12px;">
             <div style="font-size:14px;font-weight:800;line-height:1.2;margin-bottom:4px;">{isim}</div>
-            <div style="font-size:12px;color:rgba(36,78,128,0.72);margin-bottom:8px;">{operator}</div>
+            <div style="font-size:12px;color:rgba(14,16,18,0.72);margin-bottom:8px;">{operator}</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-                <div style="background:rgba(157,223,142,0.24);border:1px solid rgba(36,78,128,0.14);border-radius:8px;padding:6px;">
-                    <div style="font-size:10px;color:rgba(36,78,128,0.72);font-weight:700;">{t("map.score")}</div>
+                <div style="background:rgba(200,255,46,0.24);border:1px solid rgba(14,16,18,0.14);border-radius:8px;padding:6px;">
+                    <div style="font-size:10px;color:rgba(14,16,18,0.72);font-weight:700;">{t("map.score")}</div>
                     <div style="font-size:16px;font-weight:850;color:{renk};">{skor}</div>
                 </div>
-                <div style="background:rgba(157,223,142,0.24);border:1px solid rgba(36,78,128,0.14);border-radius:8px;padding:6px;">
-                    <div style="font-size:10px;color:rgba(36,78,128,0.72);font-weight:700;">{t("map.distance")}</div>
+                <div style="background:rgba(200,255,46,0.24);border:1px solid rgba(14,16,18,0.14);border-radius:8px;padding:6px;">
+                    <div style="font-size:10px;color:rgba(14,16,18,0.72);font-weight:700;">{t("map.distance")}</div>
                     <div style="font-size:16px;font-weight:850;">{mesafe:.1f} km</div>
                 </div>
             </div>
@@ -1169,7 +1185,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
 
                 const originMarker = L.circleMarker(origin, {
                     color: "#FFFFFF",
-                    fillColor: "#9DDF8E",
+                    fillColor: "#C8FF2E",
                     fillOpacity: 1,
                     interactive: false,
                     radius: 8,
@@ -1177,14 +1193,14 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 }).addTo(map);
                 const destinationMarker = L.circleMarker(destination, {
                     color: "#FFFFFF",
-                    fillColor: "#244E80",
+                    fillColor: "#0E1012",
                     fillOpacity: 1,
                     interactive: false,
                     radius: 9,
                     weight: 3
                 }).addTo(map);
                 const routeLine = L.polyline([origin, destination], {
-                    color: "#244E80",
+                    color: "#0E1012",
                     dashArray: "7 7",
                     interactive: false,
                     lineCap: "round",
@@ -1375,12 +1391,12 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
         <style>
             :root {
                 color-scheme: light;
-                --feed-bg: #E5F7E3;
-                --feed-text: #050F04;
-                --feed-soft: rgba(5, 15, 4, 0.68);
-                --feed-muted: rgba(5, 15, 4, 0.46);
-                --feed-green: #9DDF8E;
-                --feed-blue: #244E80;
+                --feed-bg: #FFFFFF;
+                --feed-text: #0E1012;
+                --feed-soft: rgba(14, 16, 18, 0.68);
+                --feed-muted: rgba(14, 16, 18, 0.46);
+                --feed-green: #C8FF2E;
+                --feed-blue: #0E1012;
                 --feed-frame-height: 590px;
                 --feed-font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
                 --feed-font-body: "Inter", system-ui, sans-serif;
@@ -1459,11 +1475,11 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 --sb-card-scale: 0.92;
                 --sb-card-shift: 24px;
                 background:
-                    radial-gradient(circle at 18% -8%, rgba(157, 223, 142, 0.20), transparent 34%),
+                    radial-gradient(circle at 18% -8%, rgba(200, 255, 46, 0.20), transparent 34%),
                     linear-gradient(180deg, rgba(250, 254, 251, 0.98), rgba(239, 249, 243, 0.97));
-                border: 1px solid rgba(36, 78, 128, 0.10);
+                border: 1px solid rgba(14, 16, 18, 0.10);
                 border-radius: 26px;
-                box-shadow: 0 18px 44px rgba(5, 15, 4, 0.11);
+                box-shadow: 0 18px 44px rgba(14, 16, 18, 0.11);
                 color: var(--feed-text);
                 display: flex;
                 flex-direction: column;
@@ -1491,16 +1507,16 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             }
 
             .sb-feed-slide.is-near .sb-feed-card {
-                box-shadow: 0 14px 34px rgba(5, 15, 4, 0.08);
+                box-shadow: 0 14px 34px rgba(14, 16, 18, 0.08);
             }
 
             .sb-feed-card.is-featured {
-                box-shadow: 0 20px 48px rgba(5, 15, 4, 0.12);
+                box-shadow: 0 20px 48px rgba(14, 16, 18, 0.12);
             }
 
             .sb-feed-glow {
                 background:
-                    linear-gradient(90deg, transparent, rgba(157, 223, 142, 0.54), rgba(36, 78, 128, 0.42), transparent);
+                    linear-gradient(90deg, transparent, rgba(200, 255, 46, 0.54), rgba(14, 16, 18, 0.42), transparent);
                 filter: blur(13px);
                 height: 18px;
                 left: 14%;
@@ -1531,10 +1547,10 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
 
             .sb-feed-head-score {
                 align-items: center;
-                background: linear-gradient(135deg, rgba(157, 223, 142, 0.24), rgba(36, 78, 128, 0.20));
-                border: 1px solid rgba(157, 223, 142, 0.32);
+                background: linear-gradient(135deg, rgba(200, 255, 46, 0.24), rgba(14, 16, 18, 0.20));
+                border: 1px solid rgba(200, 255, 46, 0.32);
                 border-radius: 16px;
-                box-shadow: 0 10px 24px rgba(157, 223, 142, 0.14);
+                box-shadow: 0 10px 24px rgba(200, 255, 46, 0.14);
                 color: var(--feed-text);
                 display: flex;
                 gap: 6px;
@@ -1559,7 +1575,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             .sb-feed-bookmark {
                 align-items: center;
                 background: rgba(255, 255, 255, 0.62);
-                border: 1px solid rgba(36, 78, 128, 0.13);
+                border: 1px solid rgba(14, 16, 18, 0.13);
                 border-radius: 999px;
                 color: var(--feed-green);
                 display: flex;
@@ -1658,8 +1674,8 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 align-items: center;
                 background: linear-gradient(135deg, var(--feed-green), var(--feed-blue));
                 border-radius: 18px;
-                box-shadow: 0 14px 28px rgba(157, 223, 142, 0.22);
-                color: #050F04;
+                box-shadow: 0 14px 28px rgba(200, 255, 46, 0.22);
+                color: #0E1012;
                 display: flex;
                 flex: 0 0 auto;
                 flex-direction: column;
@@ -1684,7 +1700,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             .sb-feed-status {
                 align-items: center;
                 background: rgba(255, 255, 255, 0.58);
-                border: 1px solid rgba(36, 78, 128, 0.13);
+                border: 1px solid rgba(14, 16, 18, 0.13);
                 border-radius: 18px;
                 color: var(--feed-soft);
                 display: flex;
@@ -1706,7 +1722,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             .sb-feed-grid div {
                 align-items: flex-start;
                 background: rgba(255, 255, 255, 0.58);
-                border: 1px solid rgba(36, 78, 128, 0.13);
+                border: 1px solid rgba(14, 16, 18, 0.13);
                 border-radius: 18px;
                 display: flex;
                 flex-direction: column;
@@ -1751,8 +1767,8 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             }
 
             .sb-feed-chip {
-                background: rgba(157, 223, 142, 0.18);
-                border: 1px solid rgba(157, 223, 142, 0.34);
+                background: rgba(200, 255, 46, 0.18);
+                border: 1px solid rgba(200, 255, 46, 0.34);
                 border-radius: 999px;
                 color: var(--feed-green);
                 font-size: 11px;
@@ -1774,15 +1790,15 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             }
 
             .sb-feed-chip.sb-chip-info {
-                background: rgba(36, 78, 128, 0.16);
-                border-color: rgba(36, 78, 128, 0.34);
-                color: #244E80;
+                background: rgba(14, 16, 18, 0.16);
+                border-color: rgba(14, 16, 18, 0.34);
+                color: #0E1012;
             }
 
             .sb-feed-chip-help {
                 appearance: none;
                 background: rgba(255, 255, 255, 0.68);
-                border: 1px solid rgba(36, 78, 128, 0.15);
+                border: 1px solid rgba(14, 16, 18, 0.15);
                 border-radius: 999px;
                 color: var(--feed-soft);
                 cursor: help;
@@ -1804,7 +1820,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
 
             .sb-feed-comments div {
                 background: rgba(255, 255, 255, 0.58);
-                border: 1px solid rgba(36, 78, 128, 0.13);
+                border: 1px solid rgba(14, 16, 18, 0.13);
                 border-radius: 18px;
                 min-height: 48px;
                 padding: 8px 10px;
@@ -1843,8 +1859,8 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                     linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent 30%, transparent 70%, rgba(255, 255, 255, 0.14)),
                     linear-gradient(135deg, var(--feed-green), var(--feed-blue));
                 border-radius: 18px;
-                box-shadow: 0 18px 36px rgba(157, 223, 142, 0.24), 0 8px 24px rgba(36, 78, 128, 0.18);
-                color: #050F04;
+                box-shadow: 0 18px 36px rgba(200, 255, 46, 0.24), 0 8px 24px rgba(14, 16, 18, 0.18);
+                color: #0E1012;
                 display: flex;
                 gap: 12px;
                 justify-content: space-between;
@@ -1941,7 +1957,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
 
             .sb-feed-card {
                 background:
-                    radial-gradient(circle at 18% -6%, rgba(157, 223, 142, 0.16), transparent 32%),
+                    radial-gradient(circle at 18% -6%, rgba(200, 255, 46, 0.16), transparent 32%),
                     linear-gradient(180deg, rgba(250, 254, 251, 0.98), rgba(239, 249, 243, 0.97));
                 padding: 0;
             }
@@ -1956,7 +1972,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
 
             .sb-route-map {
                 background:
-                    linear-gradient(135deg, rgba(157, 223, 142, 0.18), rgba(36, 78, 128, 0.12)),
+                    linear-gradient(135deg, rgba(200, 255, 46, 0.18), rgba(14, 16, 18, 0.12)),
                     #F7FCF8;
                 height: 100%;
                 pointer-events: none;
@@ -1967,8 +1983,8 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             .sb-route-map.is-fallback {
                 background:
                     linear-gradient(36deg, transparent 47%, rgba(255, 255, 255, 0.78) 48% 52%, transparent 53%),
-                    linear-gradient(144deg, transparent 46%, rgba(36, 78, 128, 0.08) 47% 50%, transparent 51%),
-                    linear-gradient(135deg, rgba(157, 223, 142, 0.22), rgba(36, 78, 128, 0.12)),
+                    linear-gradient(144deg, transparent 46%, rgba(14, 16, 18, 0.08) 47% 50%, transparent 51%),
+                    linear-gradient(135deg, rgba(200, 255, 46, 0.22), rgba(14, 16, 18, 0.12)),
                     #F7FCF8;
                 background-size: 90px 90px, 118px 118px, auto, auto;
             }
@@ -1986,9 +2002,9 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 align-items: baseline;
                 backdrop-filter: blur(14px);
                 background: rgba(250, 254, 251, 0.72);
-                border: 1px solid rgba(36, 78, 128, 0.08);
+                border: 1px solid rgba(14, 16, 18, 0.08);
                 border-radius: 999px;
-                box-shadow: 0 8px 18px rgba(5, 15, 4, 0.07);
+                box-shadow: 0 8px 18px rgba(14, 16, 18, 0.07);
                 display: flex;
                 gap: 4px;
                 padding: 7px 10px;
@@ -2027,7 +2043,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                     linear-gradient(180deg, rgba(250, 254, 251, 0.96), rgba(247, 252, 248, 0.98));
                 border: 0;
                 border-radius: 22px 22px 0 0;
-                box-shadow: 0 -14px 32px rgba(5, 15, 4, 0.08);
+                box-shadow: 0 -14px 32px rgba(14, 16, 18, 0.08);
                 display: flex;
                 flex: 1 1 auto;
                 flex-direction: column;
@@ -2062,7 +2078,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
 
             .sb-route-station {
                 background: rgba(255, 255, 255, 0.58);
-                border: 1px solid rgba(36, 78, 128, 0.07);
+                border: 1px solid rgba(14, 16, 18, 0.07);
                 border-radius: 13px;
                 box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
                 min-height: 56px;
@@ -2110,7 +2126,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
 
             .sb-route-metrics > div {
                 background: rgba(255, 255, 255, 0.54);
-                border: 1px solid rgba(36, 78, 128, 0.07);
+                border: 1px solid rgba(14, 16, 18, 0.07);
                 border-radius: 13px;
                 box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
                 min-height: 58px;
@@ -2159,7 +2175,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                     linear-gradient(90deg, rgba(255, 255, 255, 0.14), transparent 38%),
                     linear-gradient(135deg, var(--feed-green), var(--feed-blue));
                 border-radius: 14px;
-                box-shadow: 0 10px 22px rgba(36, 78, 128, 0.15);
+                box-shadow: 0 10px 22px rgba(14, 16, 18, 0.15);
                 display: flex;
                 gap: 8px;
                 justify-content: space-between;
@@ -2182,7 +2198,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             }
 
             .sb-route-actions a {
-                background: rgba(5, 15, 4, 0.46);
+                background: rgba(14, 16, 18, 0.46);
                 border: 1px solid rgba(255, 255, 255, 0.16);
                 border-radius: 9px;
                 color: #FFFFFF;
@@ -2199,7 +2215,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             }
 
             .sb-route-address {
-                border-top: 1px solid rgba(36, 78, 128, 0.08);
+                border-top: 1px solid rgba(14, 16, 18, 0.08);
                 margin-top: auto;
                 min-height: 34px;
                 overflow: hidden;
@@ -2231,14 +2247,14 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             .leaflet-control-attribution {
                 background: rgba(250, 254, 251, 0.58) !important;
                 border-radius: 999px;
-                color: rgba(5, 15, 4, 0.42) !important;
+                color: rgba(14, 16, 18, 0.42) !important;
                 font-size: 7px !important;
                 opacity: 0.48;
                 padding: 1px 5px !important;
             }
 
             .leaflet-control-attribution a {
-                color: rgba(36, 78, 128, 0.52) !important;
+                color: rgba(14, 16, 18, 0.52) !important;
             }
 
             .leaflet-bottom .leaflet-control {
