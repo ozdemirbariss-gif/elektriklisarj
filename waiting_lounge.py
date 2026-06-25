@@ -236,7 +236,7 @@ def bekleme_salonu_ciz() -> None:
                 if (deadTimer || finishTimer) return;
                 deaths += 1;
                 deadTimer = 0.72;
-                burst(player.x + player.w / 2, player.y + player.h / 2, "#4C41CA");
+                burst(player.x + player.w / 2, player.y + player.h / 2, "#9FE000");
             }
 
             function completeLevel() {
@@ -244,7 +244,7 @@ def bekleme_salonu_ciz() -> None:
                 finishTimer = 0.58;
                 charge = Math.round(((levelIndex + 1) / baseLevels.length) * 100);
                 updateHud();
-                burst(level.goal.x + 12, level.goal.y + 18, "#9DDF8E");
+                burst(level.goal.x + 12, level.goal.y + 18, "#C8FF2E");
             }
 
             function triggerTraps() {
@@ -255,7 +255,7 @@ def bekleme_salonu_ciz() -> None:
                         const spike = level.spikes[trap.spike];
                         if (spike) {
                             spike.active = true;
-                            burst(spike.x + spike.w / 2, spike.y - 6, "#244E80");
+                            burst(spike.x + spike.w / 2, spike.y - 6, "#0E1012");
                         }
                     }
                     if (trap.type === "platformDrop") {
@@ -265,7 +265,7 @@ def bekleme_salonu_ciz() -> None:
                     if (trap.type === "goalShift") {
                         level.goal.x += trap.dx;
                         level.goal.y += trap.dy;
-                        burst(level.goal.x + 12, level.goal.y + 18, "#9DDF8E");
+                        burst(level.goal.x + 12, level.goal.y + 18, "#C8FF2E");
                     }
                 });
             }
@@ -306,7 +306,7 @@ def bekleme_salonu_ciz() -> None:
                 if (keys.jump && !pressed.jump && player.grounded) {
                     player.vy = -318;
                     player.grounded = false;
-                    burst(player.x + player.w / 2, player.y + player.h, "#9DDF8E");
+                    burst(player.x + player.w / 2, player.y + player.h, "#C8FF2E");
                 }
                 pressed.jump = keys.jump;
                 player.vy += 740 * dt;
@@ -343,7 +343,7 @@ def bekleme_salonu_ciz() -> None:
                         coin.done = true;
                         charge = Math.min(99, charge + 3);
                         updateHud();
-                        burst(coin.x, coin.y, "#9DDF8E");
+                        burst(coin.x, coin.y, "#C8FF2E");
                     }
                 });
 
@@ -360,8 +360,8 @@ def bekleme_salonu_ciz() -> None:
 
             function drawPlatform(platform) {
                 if (!platform.active) return;
-                ctx.fillStyle = platform.fall || platform.touched ? "rgba(76,65,202,0.72)" : "rgba(255,255,255,0.92)";
-                ctx.strokeStyle = "rgba(36,78,128,0.18)";
+                ctx.fillStyle = platform.fall || platform.touched ? "rgba(159,224,0,0.72)" : "rgba(255,255,255,0.92)";
+                ctx.strokeStyle = "rgba(14,16,18,0.18)";
                 ctx.lineWidth = 1;
                 roundRect(platform.x, platform.y, platform.w, platform.h, 6);
                 ctx.fill();
@@ -372,7 +372,7 @@ def bekleme_salonu_ciz() -> None:
                 if (!spike.active) return;
                 const count = Math.max(1, Math.floor(spike.w / 12));
                 const width = spike.w / count;
-                ctx.fillStyle = "#4C41CA";
+                ctx.fillStyle = "#9FE000";
                 for (let i = 0; i < count; i += 1) {
                     const x = spike.x + i * width;
                     ctx.beginPath();
@@ -397,14 +397,14 @@ def bekleme_salonu_ciz() -> None:
             function draw() {
                 ctx.clearRect(0, 0, W, H);
                 const gradient = ctx.createLinearGradient(0, 0, W, H);
-                gradient.addColorStop(0, "#E5F7E3");
-                gradient.addColorStop(0.55, "#9DDF8E");
-                gradient.addColorStop(1, "#244E80");
+                gradient.addColorStop(0, "#FFFFFF");
+                gradient.addColorStop(0.55, "#C8FF2E");
+                gradient.addColorStop(1, "#0E1012");
                 ctx.fillStyle = gradient;
                 ctx.fillRect(0, 0, W, H);
 
                 ctx.globalAlpha = 0.28;
-                ctx.strokeStyle = "#050F04";
+                ctx.strokeStyle = "#0E1012";
                 ctx.lineWidth = 1;
                 for (let x = -30; x < W; x += 34) {
                     ctx.beginPath();
@@ -415,7 +415,7 @@ def bekleme_salonu_ciz() -> None:
                 ctx.globalAlpha = 1;
 
                 if (level.reverseZone) {
-                    ctx.fillStyle = "rgba(76,65,202,0.15)";
+                    ctx.fillStyle = "rgba(159,224,0,0.15)";
                     ctx.fillRect(level.reverseZone.x, 0, level.reverseZone.w, H);
                 }
 
@@ -427,16 +427,16 @@ def bekleme_salonu_ciz() -> None:
                     ctx.save();
                     ctx.translate(coin.x, coin.y);
                     ctx.rotate(performance.now() / 420);
-                    ctx.fillStyle = "#9DDF8E";
+                    ctx.fillStyle = "#C8FF2E";
                     roundRect(-7, -7, 14, 14, 5);
                     ctx.fill();
                     ctx.restore();
                 });
 
-                ctx.fillStyle = "rgba(5,15,4,0.72)";
+                ctx.fillStyle = "rgba(14,16,18,0.72)";
                 roundRect(level.goal.x, level.goal.y, level.goal.w, level.goal.h, 8);
                 ctx.fill();
-                ctx.fillStyle = "#9DDF8E";
+                ctx.fillStyle = "#C8FF2E";
                 ctx.fillRect(level.goal.x + 6, level.goal.y + 9, level.goal.w - 12, level.goal.h - 18);
 
                 particles.forEach((p) => {
@@ -450,14 +450,14 @@ def bekleme_salonu_ciz() -> None:
 
                 if (deadTimer > 0) {
                     ctx.globalAlpha = 0.34;
-                    ctx.fillStyle = "#4C41CA";
+                    ctx.fillStyle = "#9FE000";
                     ctx.fillRect(0, 0, W, H);
                     ctx.globalAlpha = 1;
                 } else {
-                    ctx.fillStyle = "#050F04";
+                    ctx.fillStyle = "#0E1012";
                     roundRect(player.x, player.y, player.w, player.h, 7);
                     ctx.fill();
-                    ctx.fillStyle = "#9DDF8E";
+                    ctx.fillStyle = "#C8FF2E";
                     ctx.fillRect(player.x + 5, player.y + 5, player.w - 10, 5);
                 }
             }
@@ -483,7 +483,7 @@ def bekleme_salonu_ciz() -> None:
                     player.vy = -318;
                     player.grounded = false;
                     pressed.jump = true;
-                    burst(player.x + player.w / 2, player.y + player.h, "#9DDF8E");
+                    burst(player.x + player.w / 2, player.y + player.h, "#C8FF2E");
                 }
             }
 
@@ -541,16 +541,16 @@ def bekleme_salonu_ciz() -> None:
                 touch-action: manipulation;
             }
             body {
-                color: #050F04;
+                color: #0E1012;
                 font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
             }
             .sb-lounge-game {
                 background:
-                    radial-gradient(circle at 22% 6%, rgba(157, 223, 142, 0.50), transparent 32%),
+                    radial-gradient(circle at 22% 6%, rgba(200, 255, 46, 0.50), transparent 32%),
                     linear-gradient(150deg, rgba(255, 255, 255, 0.92), rgba(229, 247, 227, 0.94));
-                border: 1px solid rgba(36, 78, 128, 0.12);
+                border: 1px solid rgba(14, 16, 18, 0.12);
                 border-radius: 26px;
-                box-shadow: 0 22px 54px rgba(5, 15, 4, 0.13);
+                box-shadow: 0 22px 54px rgba(14, 16, 18, 0.13);
                 height: 540px;
                 margin: 0 auto;
                 max-width: 520px;
@@ -567,14 +567,14 @@ def bekleme_salonu_ciz() -> None:
             }
             .sb-lounge-head span,
             .sb-lounge-meter small {
-                color: rgba(36, 78, 128, 0.66);
+                color: rgba(14, 16, 18, 0.66);
                 display: block;
                 font-size: 10px;
                 font-weight: 820;
                 text-transform: uppercase;
             }
             .sb-lounge-head strong {
-                color: #050F04;
+                color: #0E1012;
                 display: block;
                 font-size: 24px;
                 font-weight: 900;
@@ -585,7 +585,7 @@ def bekleme_salonu_ciz() -> None:
                 min-width: 142px;
             }
             .sb-lounge-meter i {
-                background: rgba(36, 78, 128, 0.14);
+                background: rgba(14, 16, 18, 0.14);
                 border-radius: 999px;
                 display: block;
                 height: 10px;
@@ -593,7 +593,7 @@ def bekleme_salonu_ciz() -> None:
                 overflow: hidden;
             }
             .sb-lounge-meter b {
-                background: linear-gradient(90deg, #9DDF8E, #244E80);
+                background: linear-gradient(90deg, #C8FF2E, #0E1012);
                 border-radius: inherit;
                 display: block;
                 height: 100%;
@@ -602,7 +602,7 @@ def bekleme_salonu_ciz() -> None:
             }
             .sb-game-stage {
                 background: rgba(255, 255, 255, 0.62);
-                border: 1px solid rgba(36, 78, 128, 0.10);
+                border: 1px solid rgba(14, 16, 18, 0.10);
                 border-radius: 22px;
                 box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.76);
                 overflow: hidden;
@@ -640,7 +640,7 @@ def bekleme_salonu_ciz() -> None:
                 display: flex;
             }
             .sb-game-overlay strong {
-                color: #050F04;
+                color: #0E1012;
                 font-size: 28px;
                 font-weight: 920;
             }
@@ -652,10 +652,10 @@ def bekleme_salonu_ciz() -> None:
                 font-family: inherit;
             }
             .sb-game-overlay button {
-                background: linear-gradient(135deg, #9DDF8E, #244E80);
+                background: linear-gradient(135deg, #C8FF2E, #0E1012);
                 border-radius: 18px;
-                box-shadow: 0 14px 30px rgba(36, 78, 128, 0.18);
-                color: #050F04;
+                box-shadow: 0 14px 30px rgba(14, 16, 18, 0.18);
+                color: #0E1012;
                 font-size: 15px;
                 font-weight: 900;
                 min-width: 148px;
@@ -669,20 +669,20 @@ def bekleme_salonu_ciz() -> None:
             }
             .ctrl {
                 background: rgba(255, 255, 255, 0.70);
-                border: 1px solid rgba(36, 78, 128, 0.12);
+                border: 1px solid rgba(14, 16, 18, 0.12);
                 border-radius: 18px;
-                box-shadow: 0 12px 26px rgba(5, 15, 4, 0.08);
-                color: #050F04;
+                box-shadow: 0 12px 26px rgba(14, 16, 18, 0.08);
+                color: #0E1012;
                 font-size: 24px;
                 font-weight: 900;
                 min-height: 62px;
             }
             .ctrl:active {
-                background: #9DDF8E;
+                background: #C8FF2E;
                 transform: translateY(1px);
             }
             .ctrl-jump {
-                background: linear-gradient(145deg, #244E80, #4C41CA);
+                background: linear-gradient(145deg, #0E1012, #9FE000);
                 color: #FFFFFF;
                 font-size: 28px;
             }
