@@ -360,7 +360,7 @@ def bekleme_salonu_ciz() -> None:
 
             function drawPlatform(platform) {
                 if (!platform.active) return;
-                ctx.fillStyle = platform.fall || platform.touched ? "rgba(159,224,0,0.72)" : "rgba(255,255,255,0.92)";
+                ctx.fillStyle = platform.fall || platform.touched ? "rgba(200,255,46,0.78)" : "rgba(255,255,255,0.94)";
                 ctx.strokeStyle = "rgba(14,16,18,0.18)";
                 ctx.lineWidth = 1;
                 roundRect(platform.x, platform.y, platform.w, platform.h, 6);
@@ -398,8 +398,8 @@ def bekleme_salonu_ciz() -> None:
                 ctx.clearRect(0, 0, W, H);
                 const gradient = ctx.createLinearGradient(0, 0, W, H);
                 gradient.addColorStop(0, "#FFFFFF");
-                gradient.addColorStop(0.55, "#C8FF2E");
-                gradient.addColorStop(1, "#0E1012");
+                gradient.addColorStop(0.58, "#F4F5F2");
+                gradient.addColorStop(1, "#EEF9D6");
                 ctx.fillStyle = gradient;
                 ctx.fillRect(0, 0, W, H);
 
@@ -415,7 +415,7 @@ def bekleme_salonu_ciz() -> None:
                 ctx.globalAlpha = 1;
 
                 if (level.reverseZone) {
-                    ctx.fillStyle = "rgba(159,224,0,0.15)";
+                    ctx.fillStyle = "rgba(200,255,46,0.18)";
                     ctx.fillRect(level.reverseZone.x, 0, level.reverseZone.w, H);
                 }
 
@@ -546,8 +546,8 @@ def bekleme_salonu_ciz() -> None:
             }
             .sb-lounge-game {
                 background:
-                    radial-gradient(circle at 22% 6%, rgba(200, 255, 46, 0.50), transparent 32%),
-                    linear-gradient(150deg, rgba(255, 255, 255, 0.92), rgba(229, 247, 227, 0.94));
+                    radial-gradient(circle at 22% 6%, rgba(200, 255, 46, 0.24), transparent 34%),
+                    linear-gradient(150deg, rgba(255, 255, 255, 0.98), rgba(244, 245, 242, 0.94));
                 border: 1px solid rgba(14, 16, 18, 0.12);
                 border-radius: 26px;
                 box-shadow: 0 22px 54px rgba(14, 16, 18, 0.13);
@@ -593,7 +593,7 @@ def bekleme_salonu_ciz() -> None:
                 overflow: hidden;
             }
             .sb-lounge-meter b {
-                background: linear-gradient(90deg, #C8FF2E, #0E1012);
+                background: linear-gradient(90deg, #C8FF2E, #9FE000);
                 border-radius: inherit;
                 display: block;
                 height: 100%;
@@ -601,7 +601,7 @@ def bekleme_salonu_ciz() -> None:
                 width: 0%;
             }
             .sb-game-stage {
-                background: rgba(255, 255, 255, 0.62);
+                background: rgba(255, 255, 255, 0.84);
                 border: 1px solid rgba(14, 16, 18, 0.10);
                 border-radius: 22px;
                 box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.76);
@@ -628,7 +628,7 @@ def bekleme_salonu_ciz() -> None:
             .sb-game-overlay {
                 align-items: center;
                 backdrop-filter: blur(14px);
-                background: rgba(229, 247, 227, 0.72);
+                background: rgba(255, 255, 255, 0.78);
                 display: none;
                 flex-direction: column;
                 gap: 14px;
@@ -652,9 +652,10 @@ def bekleme_salonu_ciz() -> None:
                 font-family: inherit;
             }
             .sb-game-overlay button {
-                background: linear-gradient(135deg, #C8FF2E, #0E1012);
+                background: #C8FF2E;
+                border: 1px solid rgba(159, 224, 0, 0.42);
                 border-radius: 18px;
-                box-shadow: 0 14px 30px rgba(14, 16, 18, 0.18);
+                box-shadow: 0 16px 34px rgba(200, 255, 46, 0.24), 0 10px 22px rgba(14, 16, 18, 0.08);
                 color: #0E1012;
                 font-size: 15px;
                 font-weight: 900;
@@ -668,7 +669,7 @@ def bekleme_salonu_ciz() -> None:
                 margin-top: 12px;
             }
             .ctrl {
-                background: rgba(255, 255, 255, 0.70);
+                background: rgba(255, 255, 255, 0.92);
                 border: 1px solid rgba(14, 16, 18, 0.12);
                 border-radius: 18px;
                 box-shadow: 0 12px 26px rgba(14, 16, 18, 0.08);
@@ -682,8 +683,10 @@ def bekleme_salonu_ciz() -> None:
                 transform: translateY(1px);
             }
             .ctrl-jump {
-                background: linear-gradient(145deg, #0E1012, #9FE000);
-                color: #FFFFFF;
+                background: #C8FF2E;
+                border-color: rgba(159, 224, 0, 0.42);
+                box-shadow: 0 16px 34px rgba(200, 255, 46, 0.26), 0 12px 26px rgba(14, 16, 18, 0.08);
+                color: #0E1012;
                 font-size: 28px;
             }
             @media (max-width: 430px) {
