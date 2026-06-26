@@ -2374,38 +2374,6 @@ div.st-key-social_twitter button::before {
     max-width: 480px;
 }
 
-div.st-key-home_mode {
-    margin-bottom: 1rem !important;
-}
-
-div.st-key-home_mode [data-testid="stSegmentedControl"] {
-    background: rgba(255, 255, 255, 0.46) !important;
-    border: 0 !important;
-    border-bottom: 1px solid rgba(14, 16, 18, 0.14) !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    gap: 0 !important;
-    padding: 0 !important;
-}
-
-div.st-key-home_mode [data-testid="stSegmentedControl"] button {
-    background: transparent !important;
-    border: 0 !important;
-    border-bottom: 3px solid transparent !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    color: var(--sb-text-muted) !important;
-    font-size: 15px !important;
-    font-weight: 760 !important;
-    min-height: 52px !important;
-}
-
-div.st-key-home_mode [data-testid="stSegmentedControl"] button[kind="segmented_controlActive"] {
-    background: rgba(159, 224, 0, 0.08) !important;
-    border-bottom-color: #9FE000 !important;
-    color: #9FE000 !important;
-}
-
 div.st-key-home_location_search {
     background: rgba(255, 255, 255, 0.88) !important;
     border: 1px solid rgba(14, 16, 18, 0.12) !important;

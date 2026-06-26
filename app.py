@@ -346,14 +346,7 @@ def ust_bilgi_ciz() -> None:
         st.rerun()
 
 
-def ana_mod_degisti() -> None:
-    rota_sonucunu_sifirla()
-    bekleme_salonunu_kapat()
-    st.session_state["haritayi_goster"] = st.session_state.get("home_mode") == "route"
-
-
 def ana_mod_secici_ciz() -> None:
-    st.session_state.setdefault("home_mode", "charger")
     st.markdown(
         f"""
         <section class="sb-home-intro">
@@ -363,15 +356,6 @@ def ana_mod_secici_ciz() -> None:
         </section>
         """,
         unsafe_allow_html=True,
-    )
-    st.segmented_control(
-        t("home.mode_label"),
-        ["charger", "route"],
-        key="home_mode",
-        format_func=lambda value: t(f"home.mode_{value}"),
-        on_change=ana_mod_degisti,
-        label_visibility="collapsed",
-        width="stretch",
     )
 
 
@@ -1077,22 +1061,15 @@ def rota_eylem_paneli_ciz(
             unsafe_allow_html=True,
         )
 
-    cta_metni = (
-        t("home.plan_route")
-        if st.session_state.get("home_mode") == "route"
-        else t("location.find_charger")
-    )
     with st.container(key="route_action_panel"):
         surus_ozeti_ciz(arac, guvenli_menzil, sarj_yuzdesi)
         if st.button(
-            cta_metni,
+            t("location.find_charger"),
             key="find_route_btn",
             use_container_width=True,
             disabled=not konum_hazir,
             type="primary",
         ):
-            if st.session_state.get("home_mode") == "route":
-                st.session_state["haritayi_goster"] = True
             st.session_state["rota_goster"] = True
             st.rerun()
 
