@@ -2751,25 +2751,28 @@ div.st-key-bottom_map button p {
 }
 
 .sb-lounge-shell {
-    margin: 0.35rem 0 0.9rem;
-    padding: 0 0.15rem 0 4.05rem;
+    margin: 0.35rem 0 0.85rem;
+    overflow: hidden;
+    padding: 1.05rem 1.15rem 1.1rem;
 }
 
 .sb-lounge-shell h1 {
     color: var(--sb-text) !important;
     font-family: var(--sb-font-display) !important;
-    font-size: 34px !important;
+    font-size: 30px !important;
     font-weight: 880 !important;
-    line-height: 1.04 !important;
-    margin: 0.32rem 0 0.5rem !important;
+    line-height: 1.02 !important;
+    margin: 0.28rem 0 0.42rem !important;
 }
 
 .sb-lounge-shell p {
     color: var(--sb-text-muted) !important;
-    font-size: 13px !important;
-    line-height: 1.45 !important;
-    margin: 0 0 0 -4.05rem !important;
-    max-width: 480px;
+    font-size: 12px !important;
+    font-weight: 680 !important;
+    line-height: 1.35 !important;
+    margin: 0 !important;
+    max-width: 100%;
+    overflow-wrap: anywhere;
 }
 
 .sb-action-target {
@@ -2850,7 +2853,7 @@ div.st-key-bottom_map button p {
     }
 
     .sb-lounge-shell h1 {
-        font-size: 29px !important;
+        font-size: 27px !important;
     }
 
 }
