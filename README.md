@@ -9,7 +9,7 @@ SarjBul, elektrikli araclar icin yakin ve mantikli sarj duragini onerir. Streaml
 - Skor, rota, hiz, fiyat, soket ve operator bilgileri
 - Firebase etkinse hesap, favori ve istasyon bildirimi
 - Firebase Auth refresh token yenileme ile daha uzun oturum deneyimi
-- Pydeck haritasinda skor rengine gore istasyon noktalarini gosterme
+- Folium haritasinda skor rengine gore istasyon noktalarini ve popup detaylarini gosterme
 - Konum izni yoksa genis sehir listesi veya manuel koordinat girisi
 - Arayuz genelinde aninda degisen Turkce ve Ingilizce dil destegi
 - ChargeIQ, OSM, OpenChargeMap ve opsiyonel operator API kaynakli veri toplama
@@ -79,9 +79,10 @@ Kalite kapilari ortam degiskenleriyle ayarlanabilir:
 
 - `MIN_SCRAPER_SOURCE_COUNT`: Cikti yazmak icin gereken minimum basarili kaynak sayisi.
 - `MIN_SCRAPER_RECORD_COUNT`: Cikti yazmak icin gereken minimum kayit sayisi.
+- `MIN_SCRAPER_PREVIOUS_RATIO`: Mevcut `stations.json` kaydina gore kabul edilen minimum oran.
 - `FAIL_ON_SOURCE_ERROR`: `1` ise herhangi bir kaynak hatasi scrape'i basarisiz yapar.
 
-GitHub Actions her gun 08:00 Istanbul saatinde scrape calistirir ve yalnizca `stations.json` degistiyse commit eder.
+GitHub Actions her gun 08:00 Istanbul saatinde scrape calistirir ve yalnizca `stations.json` degistiyse commit eder. Kaynak hatasi veya onceki veriye gore buyuk kayit dususu olursa workflow basarisiz olur; boylece eski veri sessizce kalmaz.
 
 ## Akilli Tahmin Motoru
 

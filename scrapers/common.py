@@ -83,9 +83,14 @@ def temiz_tokenlar(metin_degeri: Any) -> List[str]:
         "sarz",
         "charging",
         "charger",
+        "charge",
         "station",
         "istasyon",
         "istasyonu",
+        "nokta",
+        "noktasi",
+        "noktas",
+        "point",
         "ev",
         "dc",
         "ac",
@@ -217,12 +222,25 @@ def nokta_anahtari(istasyon: Istasyon, grid: float = 0.002) -> Tuple[int, int]:
 
 
 def token_benzer_mi(a: Istasyon, b: Istasyon) -> bool:
-    a_tokens = set(temiz_tokenlar(f"{a.get('isim', '')} {a.get('operator', '')}"))
-    b_tokens = set(temiz_tokenlar(f"{b.get('isim', '')} {b.get('operator', '')}"))
+    a_isim = set(temiz_tokenlar(a.get("isim", "")))
+    b_isim = set(temiz_tokenlar(b.get("isim", "")))
+    a_operator = set(temiz_tokenlar(a.get("operator", "")))
+    b_operator = set(temiz_tokenlar(b.get("operator", "")))
+    a_tokens = a_isim | a_operator
+    b_tokens = b_isim | b_operator
     if not a_tokens or not b_tokens:
         return False
+
     ortak = a_tokens & b_tokens
-    return len(ortak) >= 1 or (len(ortak) / max(len(a_tokens), len(b_tokens))) >= 0.34
+    if len(ortak) >= 2:
+        return True
+
+    isim_ortak = a_isim & b_isim
+    operator_ortak = a_operator & b_operator
+    if isim_ortak and operator_ortak:
+        return True
+
+    return len(ortak) / max(len(a_tokens), len(b_tokens)) >= 0.50
 
 
 def duplicate_mi(a: Istasyon, b: Istasyon, mesafe_m: int) -> bool:

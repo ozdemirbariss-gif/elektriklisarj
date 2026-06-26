@@ -13,6 +13,7 @@ from config import (
     ORTALAMA_SEYIR_HIZI_KMH, YOL_UZAMA_KATSAYISI, ARIZA_GECERLILIK_SAATI, 
     ARIZA_RISK_ESIGI, TOKEN_OMUR_DK, YORUM_BEKLEME_SURESI, MAX_SON_YORUM
 )
+from predictor import bildirim_sinifi_getir
 
 def guvenli_metin(metin: Any, max_len: Optional[int] = None) -> str:
     text = html.escape(str(metin or "").strip())
@@ -217,8 +218,8 @@ def ariza_skoru_hesapla(yorumlar: List[Dict[str, Any]]) -> Dict[str, Any]:
     baslangic = simdi - timedelta(hours=ARIZA_GECERLILIK_SAATI)
     aktif_yorumlar = [y for y in yorumlar if yorum_tarihi_parse(y.get("tarih", "")) >= baslangic]
 
-    arizali = sum(1 for y in aktif_yorumlar if any(k in str(y.get("durum", "")) for k in ("Arızalı", "Sorun")))
-    sorunsuz = sum(1 for y in aktif_yorumlar if any(k in str(y.get("durum", "")) for k in ("Sorunsuz", "Uygun")))
+    arizali = sum(1 for y in aktif_yorumlar if bildirim_sinifi_getir(y) == "mesgul")
+    sorunsuz = sum(1 for y in aktif_yorumlar if bildirim_sinifi_getir(y) == "bos")
     skor = arizali - sorunsuz
 
     if skor >= ARIZA_RISK_ESIGI:

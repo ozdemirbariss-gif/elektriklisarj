@@ -12,9 +12,10 @@ jobs:
   scrape:
     runs-on: ubuntu-latest
     env:
-      FAIL_ON_SOURCE_ERROR: "0"
+      FAIL_ON_SOURCE_ERROR: "1"
       MIN_SCRAPER_RECORD_COUNT: "1000"
       MIN_SCRAPER_SOURCE_COUNT: "1"
+      MIN_SCRAPER_PREVIOUS_RATIO: "0.70"
 
     steps:
       - name: Repo kodunu indir
@@ -45,8 +46,7 @@ jobs:
           path: stations.json
           retention-days: 14
 
-      - name: Manuel calistirmada degisiklik varsa commit et
-        if: github.event_name == 'workflow_dispatch'
+      - name: Degisiklik varsa commit et
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

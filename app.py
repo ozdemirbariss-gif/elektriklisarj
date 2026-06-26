@@ -1,5 +1,6 @@
 import importlib
 import json
+import math
 import streamlit as st
 import folium
 from datetime import datetime, timedelta
@@ -29,13 +30,22 @@ from utils import (
 )
 from services import (
     firebase_login, firebase_register, firebase_sifre_sifirla, oturumu_temizle,
-    istasyonlari_yukle, durum_ozetleri_getir,
+    istasyonlari_yukle, durum_ozetleri_getir, tahmin_yorumlari_getir,
     favorileri_getir, favori_guncelle, yorum_gonder, yakin_cevre_getir,
     oturum_bilgilerini_kaydet, oturum_gecerli_tut
 )
 from predictor import bosluk_tahmini_hesapla, tahmin_skoru_getir
 from scoring import istasyon_rozetleri_getir, istasyon_skoru_hesapla
 from waiting_lounge import bekleme_salonu_ciz
+
+
+HAM_ADAY_LIMITI = 240
+ZENGIN_ADAY_LIMITI = 80
+TAHMIN_GECMISI_LIMITI = 24
+TAHMIN_GECMISI_YORUM_LIMITI = 120
+VARSAYILAN_ADAY_YARICAP_KM = 80.0
+MAX_ADAY_YARICAP_KM = 900.0
+KONUM_JS_TTL_SN = 120
 
 
 def kisa_deger(deger: Any, varsayilan: str = "Bilinmiyor", max_len: int = 80) -> str:
@@ -52,6 +62,22 @@ def secili_arac_getir() -> str:
     varsayilan = list(ARAC_KATALOGU.keys())[0]
     secili = st.session_state.get("secilen_arac")
     return secili if secili in ARAC_KATALOGU else varsayilan
+
+
+def tarayici_konumu_okunmali_mi() -> bool:
+    if st.session_state.get("konum_kaynagi") != KONUM_KAYNAGI_TARAYICI:
+        return True
+    if st.session_state.get("last_valid_lat") is None or st.session_state.get("last_valid_lon") is None:
+        return True
+
+    son_okuma = st.session_state.get("browser_location_checked_at")
+    if not son_okuma:
+        return True
+    try:
+        son = datetime.fromisoformat(str(son_okuma).replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    return (utc_simdi() - son).total_seconds() > KONUM_JS_TTL_SN
 
 
 def bildirim_goster(metin: str, basarili: bool = True) -> None:
@@ -856,6 +882,151 @@ def istasyon_tahminini_guncelle(istasyon: Dict[str, Any], yorumlar: List[Dict[st
     istasyon["TahminSkoru"] = tahmin_skoru_getir(tahmin)
     istasyon["Skor"] = istasyon_skoru_hesapla(istasyon)
     istasyon["Rozetler"] = istasyon_rozetleri_getir(istasyon)
+
+
+def istasyon_veri_fingerprint_getir(istasyonlar: List[Dict[str, Any]]) -> Tuple[int, str, str]:
+    if not istasyonlar:
+        return (0, "", "")
+    ilk = str(istasyonlar[0].get("_station_key") or istasyon_id_getir(istasyonlar[0]))
+    son = str(istasyonlar[-1].get("_station_key") or istasyon_id_getir(istasyonlar[-1]))
+    return (len(istasyonlar), ilk, son)
+
+
+def yaricap_kademeleri_getir(menzil_filtresi: bool, guvenli_menzil: float) -> Tuple[float, ...]:
+    baslangic = max(20.0, guvenli_menzil if menzil_filtresi else VARSAYILAN_ADAY_YARICAP_KM)
+    kademeler: List[float] = []
+    yaricap = baslangic
+    while yaricap <= MAX_ADAY_YARICAP_KM:
+        kademeler.append(round(yaricap, 1))
+        yaricap *= 2
+    if not kademeler or kademeler[-1] < MAX_ADAY_YARICAP_KM:
+        kademeler.append(MAX_ADAY_YARICAP_KM)
+    return tuple(dict.fromkeys(kademeler))
+
+
+def koordinat_kutusu_icinde_mi(
+    istasyon: Dict[str, Any],
+    user_lat: float,
+    user_lon: float,
+    yaricap_km: float,
+) -> bool:
+    lat_delta = yaricap_km / 111.0
+    cos_lat = max(0.18, abs(math.cos(math.radians(user_lat))))
+    lon_delta = yaricap_km / (111.0 * cos_lat)
+    enlem = float(istasyon.get("enlem", 0.0) or 0.0)
+    boylam = float(istasyon.get("boylam", 0.0) or 0.0)
+    return abs(enlem - user_lat) <= lat_delta and abs(boylam - user_lon) <= lon_delta
+
+
+def kaba_aday_siralama_anahtari(istasyon: Dict[str, Any], siralama_modu: str) -> Tuple:
+    mesafe = float(istasyon.get("Mesafe", 9999.0) or 9999.0)
+    if siralama_modu == "Fiyat":
+        return (float(istasyon.get("_fiyat_sayi", 9999.0)), mesafe)
+    if siralama_modu == "Hız":
+        return (-float(istasyon.get("_hiz_sayi", 0.0)), mesafe)
+    if siralama_modu == "Mesafe":
+        return (mesafe,)
+    return (mesafe, -float(istasyon.get("_hiz_sayi", 0.0)), float(istasyon.get("_fiyat_sayi", 9999.0)))
+
+
+@st.cache_data(ttl=90, show_spinner=False)
+def istasyon_adaylarini_hazirla(
+    _istasyonlar: List[Dict[str, Any]],
+    veri_fingerprint: Tuple[int, str, str],
+    user_lat: float,
+    user_lon: float,
+    menzil_filtresi: bool,
+    guvenli_menzil: float,
+    sarj_yuzdesi: int,
+    batarya: float,
+    tuketim: float,
+    soket_filtreleri: Tuple[str, ...],
+    hiz_filtresi: str,
+    operator_filtreleri: Tuple[str, ...],
+    sadece_24_saat: bool,
+    arama_norm: str,
+    siralama_modu: str,
+) -> List[Dict[str, Any]]:
+    del veri_fingerprint
+    adaylar: List[Dict[str, Any]] = []
+    hiz_esigi = HIZ_ESIK_MAP.get(hiz_filtresi, 0.0)
+    operator_set = set(operator_filtreleri)
+    soketler = tuple(sf.upper() for sf in soket_filtreleri)
+
+    for yaricap in yaricap_kademeleri_getir(menzil_filtresi, guvenli_menzil):
+        adaylar.clear()
+        for ist in _istasyonlar:
+            if not koordinat_kutusu_icinde_mi(ist, user_lat, user_lon, yaricap):
+                continue
+            if soketler and not any(sf in str(ist.get("_soket_upper", "")).upper() for sf in soketler):
+                continue
+            if hiz_filtresi != "Tümü" and float(ist.get("_hiz_sayi", 0.0) or 0.0) < hiz_esigi:
+                continue
+            if operator_set and str(ist.get("operator")) not in operator_set:
+                continue
+            if sadece_24_saat and not ist.get("_acik_24_saat"):
+                continue
+            if arama_norm and arama_norm not in str(ist.get("_search_text", "")):
+                continue
+
+            kus_ucusu = mesafe_hesapla(user_lat, user_lon, ist["enlem"], ist["boylam"])
+            tahmini = tahmini_yol_mesafesi_km(kus_ucusu)
+            if menzil_filtresi and tahmini > guvenli_menzil:
+                continue
+
+            ist_kopya = ist.copy()
+            ist_kopya.update({
+                "Mesafe": round(tahmini, 1),
+                "KusUcusuMesafe": round(kus_ucusu, 1),
+                "TahminiSureDk": tahmini_sure_dk(tahmini),
+                "VarisSarjYuzdesi": varis_sarj_yuzdesi_hesapla(sarj_yuzdesi, batarya, tuketim, tahmini),
+                "KalanGuvenliMenzil": max(0.0, guvenli_menzil - tahmini),
+            })
+            adaylar.append(ist_kopya)
+
+        if len(adaylar) >= ZENGIN_ADAY_LIMITI or yaricap >= MAX_ADAY_YARICAP_KM:
+            break
+
+    return sorted(adaylar, key=lambda ist: kaba_aday_siralama_anahtari(ist, siralama_modu))[:HAM_ADAY_LIMITI]
+
+
+def istasyonlari_durum_ve_skorla(
+    adaylar: List[Dict[str, Any]],
+    durum_ozetleri: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    zengin_istasyonlar: List[Dict[str, Any]] = []
+    simdi = utc_simdi()
+    for istasyon in adaylar[:ZENGIN_ADAY_LIMITI]:
+        ist_key = str(istasyon.get("_station_key") or clean_id_uret(istasyon_id_getir(istasyon)))
+        ariza = {**durum_ozeti_fallback(), **durum_ozetleri.get(ist_key, {})}
+        hedef_zaman = simdi + timedelta(minutes=int(istasyon.get("TahminiSureDk", 0) or 0))
+        bosluk_tahmini = bosluk_tahmini_hesapla(ariza.get("son_yorumlar", []), hedef_zaman=hedef_zaman, simdi=simdi)
+
+        istasyon.update({
+            "ArizaDurumu": ariza.get("durum"),
+            "ArizaEtiketi": ariza.get("etiket"),
+            "SonYorumlar": ariza.get("son_yorumlar", []),
+            "BoslukTahmini": bosluk_tahmini,
+            "TahminSkoru": tahmin_skoru_getir(bosluk_tahmini),
+        })
+        istasyon["Skor"] = istasyon_skoru_hesapla(istasyon)
+        istasyon["Rozetler"] = istasyon_rozetleri_getir(istasyon)
+        zengin_istasyonlar.append(istasyon)
+    return zengin_istasyonlar
+
+
+def tahmin_gecmisini_top_adaylara_uygula(istasyonlar: List[Dict[str, Any]]) -> None:
+    station_keys = tuple(
+        str(istasyon.get("_station_key") or clean_id_uret(istasyon_id_getir(istasyon)))
+        for istasyon in istasyonlar[:TAHMIN_GECMISI_LIMITI]
+    )
+    if not station_keys:
+        return
+
+    yorum_gecmisi = tahmin_yorumlari_getir(station_keys, limit=TAHMIN_GECMISI_YORUM_LIMITI)
+    for istasyon, station_key in zip(istasyonlar[:TAHMIN_GECMISI_LIMITI], station_keys):
+        yorumlar = yorum_gecmisi.get(station_key) or istasyon.get("SonYorumlar", [])
+        istasyon_tahminini_guncelle(istasyon, yorumlar)
 
 
 def ozet_paneli_ciz(guvenli_menzil: float, sarj_yuzdesi: int, istasyon_sayisi: int) -> None:
@@ -2542,18 +2713,20 @@ operator_secenekleri = sorted({
 
 # 2. Konum Tespiti
 user_lat, user_lon = None, None
-try:
-    konum_verisi = get_geolocation()
-    if isinstance(konum_verisi, dict) and "coords" in konum_verisi:
-        if konum_gecerli_mi(konum_verisi["coords"].get("latitude"), konum_verisi["coords"].get("longitude")):
-            user_lat, user_lon = float(konum_verisi["coords"]["latitude"]), float(konum_verisi["coords"]["longitude"])
-            user_lat, user_lon = konumu_sessiona_yaz(
-                user_lat,
-                user_lon,
-                KONUM_KAYNAGI_TARAYICI,
-            )
-except Exception as e:
-    logger.warning("Tarayıcı konumu okunamadı: %s", e, exc_info=True)
+if tarayici_konumu_okunmali_mi():
+    try:
+        st.session_state["browser_location_checked_at"] = utc_isoformat()
+        konum_verisi = get_geolocation()
+        if isinstance(konum_verisi, dict) and "coords" in konum_verisi:
+            if konum_gecerli_mi(konum_verisi["coords"].get("latitude"), konum_verisi["coords"].get("longitude")):
+                user_lat, user_lon = float(konum_verisi["coords"]["latitude"]), float(konum_verisi["coords"]["longitude"])
+                user_lat, user_lon = konumu_sessiona_yaz(
+                    user_lat,
+                    user_lon,
+                    KONUM_KAYNAGI_TARAYICI,
+                )
+    except Exception as e:
+        logger.warning("Tarayıcı konumu okunamadı: %s", e, exc_info=True)
 
 if user_lat is None: user_lat = st.session_state.get("last_valid_lat")
 if user_lon is None: user_lon = st.session_state.get("last_valid_lon")
@@ -2650,39 +2823,25 @@ siralama_modu = {
 
 # 4. Veri İşleme
 durum_ozetleri = durum_ozetleri_getir()
-uygun_istasyonlar = []
-for ist in istasyonlar_verisi:
-    kus_ucusu = mesafe_hesapla(user_lat, user_lon, ist["enlem"], ist["boylam"])
-    tahmini = tahmini_yol_mesafesi_km(kus_ucusu)
-    if menzil_filtresi and tahmini > guvenli_menzil: continue
-    if soket_filtreleri and not any(sf.upper() in str(ist.get("_soket_upper")).upper() for sf in soket_filtreleri): continue
-    if hiz_filtresi != "Tümü" and float(ist.get("_hiz_sayi", 0.0)) < HIZ_ESIK_MAP.get(hiz_filtresi, 0.0): continue
-    if operator_filtreleri and str(ist.get("operator")) not in operator_filtreleri: continue
-    if sadece_24_saat and not ist.get("_acik_24_saat"): continue
-    if arama_metni and arama_metni_normalize_et(arama_metni) not in str(ist.get("_search_text", "")): continue
-
-    ist_key = str(ist.get("_station_key") or clean_id_uret(istasyon_id_getir(ist)))
-    ariza = {**durum_ozeti_fallback(), **durum_ozetleri.get(ist_key, {})}
-    tahmini_sure = tahmini_sure_dk(tahmini)
-    hedef_zaman = utc_simdi() + timedelta(minutes=tahmini_sure)
-    bosluk_tahmini = bosluk_tahmini_hesapla(ariza.get("son_yorumlar", []), hedef_zaman=hedef_zaman)
-
-    ist_kopya = ist.copy()
-    ist_kopya.update({
-        "Mesafe": round(tahmini, 1),
-        "KusUcusuMesafe": round(kus_ucusu, 1),
-        "TahminiSureDk": tahmini_sure,
-        "VarisSarjYuzdesi": varis_sarj_yuzdesi_hesapla(sarj_yuzdesi, batarya, tuketim, tahmini),
-        "KalanGuvenliMenzil": max(0.0, guvenli_menzil - tahmini),
-        "ArizaDurumu": ariza.get("durum"),
-        "ArizaEtiketi": ariza.get("etiket"),
-        "SonYorumlar": ariza.get("son_yorumlar", []),
-        "BoslukTahmini": bosluk_tahmini,
-        "TahminSkoru": tahmin_skoru_getir(bosluk_tahmini),
-    })
-    ist_kopya["Skor"] = istasyon_skoru_hesapla(ist_kopya)
-    ist_kopya["Rozetler"] = istasyon_rozetleri_getir(ist_kopya)
-    uygun_istasyonlar.append(ist_kopya)
+arama_norm = arama_metni_normalize_et(arama_metni) if arama_metni else ""
+aday_istasyonlar = istasyon_adaylarini_hazirla(
+    istasyonlar_verisi,
+    istasyon_veri_fingerprint_getir(istasyonlar_verisi),
+    round(user_lat, 3),
+    round(user_lon, 3),
+    bool(menzil_filtresi),
+    float(guvenli_menzil),
+    int(sarj_yuzdesi),
+    float(batarya),
+    float(tuketim),
+    tuple(soket_filtreleri),
+    str(hiz_filtresi),
+    tuple(operator_filtreleri),
+    bool(sadece_24_saat),
+    arama_norm,
+    siralama_modu,
+)
+uygun_istasyonlar = istasyonlari_durum_ve_skorla(aday_istasyonlar, durum_ozetleri)
 
 def ist_siralama(i: Dict) -> Tuple:
     risk_sirasi = 1 if i.get("ArizaDurumu") == "riskli" else 0
@@ -2709,8 +2868,7 @@ if "auth_token" in st.session_state and oturum_gecerli_tut():
 
 # 8. Sonuç Kartları Çizimi
 if uygun_istasyonlar:
-    for ist in uygun_istasyonlar:
-        istasyon_tahminini_guncelle(ist, ist.get("SonYorumlar", []))
+    tahmin_gecmisini_top_adaylara_uygula(uygun_istasyonlar)
     uygun_istasyonlar = sorted(uygun_istasyonlar, key=ist_siralama)
 
     en_iyi = uygun_istasyonlar[0]

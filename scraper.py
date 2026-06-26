@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 from pathlib import Path
 from typing import Callable, Dict, List, Tuple
@@ -30,10 +31,28 @@ def env_int(name: str, default: int) -> int:
         return default
 
 
+def env_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+
+
+def onceki_kayit_sayisi_getir(output: Path) -> int:
+    if not output.exists():
+        return 0
+    try:
+        veri = json.loads(output.read_text(encoding="utf-8"))
+    except Exception:
+        return 0
+    return len(veri) if isinstance(veri, list) else 0
+
+
 def veri_kalitesini_dogrula(
     istasyonlar: List[Istasyon],
     kaynak_sayilari: Dict[str, int],
     kaynak_hatalari: List[Tuple[str, str]],
+    onceki_kayit_sayisi: int = 0,
 ) -> None:
     basarili_kaynaklar = [ad for ad, adet in kaynak_sayilari.items() if adet > 0]
     min_kaynak = env_int("MIN_SCRAPER_SOURCE_COUNT", 1)
@@ -51,6 +70,16 @@ def veri_kalitesini_dogrula(
 
     if len(istasyonlar) < min_kayit:
         raise RuntimeError(f"Yetersiz kayıt: {len(istasyonlar)}/{min_kayit}.")
+
+    min_onceki_oran = max(0.0, min(1.0, env_float("MIN_SCRAPER_PREVIOUS_RATIO", 0.70)))
+    if onceki_kayit_sayisi > 0 and min_onceki_oran > 0:
+        min_goreli_kayit = int(onceki_kayit_sayisi * min_onceki_oran)
+        if len(istasyonlar) < min_goreli_kayit:
+            raise RuntimeError(
+                f"Kayıt sayısı önceki çıktıya göre fazla düştü: "
+                f"{len(istasyonlar)}/{onceki_kayit_sayisi} "
+                f"(minimum oran {min_onceki_oran:.2f})."
+            )
 
 
 def kaynaklari_getir() -> Dict[str, SourceFn]:
@@ -80,6 +109,8 @@ def kaynak_sec(kaynaklar: Dict[str, SourceFn], secimler: str) -> Dict[str, Sourc
 
 
 def istasyonlari_kaziyici(kaynak_secimi: str = "", output: str = DEFAULT_OUTPUT) -> None:
+    output_path = Path(output)
+    onceki_kayit_sayisi = onceki_kayit_sayisi_getir(output_path)
     secili_kaynaklar = kaynak_sec(kaynaklari_getir(), kaynak_secimi)
     if not secili_kaynaklar:
         raise RuntimeError("Aktif kaynak bulunamadı. ENABLE_* ayarlarını veya --sources değerini kontrol edin.")
@@ -106,9 +137,9 @@ def istasyonlari_kaziyici(kaynak_secimi: str = "", output: str = DEFAULT_OUTPUT)
 
     mesafe_m = int(os.getenv("DEDUP_DISTANCE_M", "120"))
     temiz_istasyonlar = duplicate_temizle(tum_istasyonlar, mesafe_m=mesafe_m)
-    veri_kalitesini_dogrula(temiz_istasyonlar, kaynak_sayilari, kaynak_hatalari)
+    veri_kalitesini_dogrula(temiz_istasyonlar, kaynak_sayilari, kaynak_hatalari, onceki_kayit_sayisi)
 
-    atomik_json_yaz(temiz_istasyonlar, Path(output))
+    atomik_json_yaz(temiz_istasyonlar, output_path)
     print(f"Toplam ham kayıt: {len(tum_istasyonlar)}")
     print(f"Duplicate sonrası: {len(temiz_istasyonlar)}")
     print(f"Başarılı kaynaklar: {', '.join(ad for ad, adet in kaynak_sayilari.items() if adet > 0)}")
