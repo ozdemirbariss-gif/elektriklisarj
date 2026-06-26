@@ -2080,21 +2080,22 @@ div.st-key-charge_level_panel {
     box-shadow: 0 18px 44px rgba(14, 16, 18, 0.10), 0 10px 26px rgba(200, 255, 46, 0.10);
     margin: 0.85rem 0 1.2rem;
     overflow: hidden;
-    padding: 1rem 1.1rem 1.1rem;
+    padding: 0.95rem 1.05rem 1rem;
 }
 
 div.st-key-charge_level_panel div[data-testid="stSlider"] {
     margin: 0 !important;
-    padding: 0 0.1rem 0.7rem;
+    padding: 0 0.1rem 0.55rem;
 }
 
 .sb-charge-visual {
     align-items: center;
     display: grid;
-    gap: 1rem;
-    grid-template-columns: 104px minmax(0, 1fr);
+    gap: 0.85rem;
+    grid-template-columns: 88px minmax(0, 1fr);
     margin: 0;
-    padding: 0.9rem 0.1rem 0;
+    min-height: 132px;
+    padding: 0.78rem 0.85rem;
     position: relative;
 }
 
@@ -2141,7 +2142,7 @@ div.st-key-charge_level_panel div[data-testid="stSlider"] {
 .sb-charge-ring-core strong {
     color: var(--sb-text) !important;
     font-family: var(--sb-font-display) !important;
-    font-size: 25px;
+    font-size: 23px;
     font-weight: 880;
     line-height: 1;
 }
@@ -2161,9 +2162,9 @@ div.st-key-charge_level_panel div[data-testid="stSlider"] {
     color: var(--sb-text) !important;
     display: block;
     font-family: var(--sb-font-display) !important;
-    font-size: 18px;
+    font-size: 17px;
     font-weight: 820;
-    margin: 0.2rem 0 0.78rem;
+    margin: 0.14rem 0 0.6rem;
 }
 
 .sb-battery-shell {
@@ -2172,10 +2173,10 @@ div.st-key-charge_level_panel div[data-testid="stSlider"] {
     border: 1px solid rgba(14, 16, 18, 0.16);
     border-radius: 16px;
     display: flex;
-    height: 34px;
+    height: 30px;
     padding: 4px;
     position: relative;
-    width: min(100%, 220px);
+    width: min(100%, 190px);
 }
 
 .sb-battery-shell::after {
@@ -2310,27 +2311,26 @@ div.st-key-social_twitter button::before {
 @media (max-width: 560px) {
     div.st-key-charge_level_panel {
         border-radius: 20px;
-        padding: 0.85rem 0.85rem 1rem;
+        padding: 0.8rem 0.8rem 0.9rem;
     }
 
     div.st-key-charge_level_panel div[data-testid="stSlider"] {
-        padding-bottom: 0.6rem;
-    }
-
-    .sb-catalog-meta,
-    .sb-charge-visual {
-        grid-template-columns: 1fr;
+        padding-bottom: 0.45rem;
     }
 
     .sb-charge-visual {
-        justify-items: center;
-        padding-bottom: 0.75rem;
-        row-gap: 0.25rem;
-        text-align: center;
+        grid-template-columns: 82px minmax(0, 1fr);
+    }
+
+    .sb-charge-visual {
+        gap: 0.7rem;
+        min-height: 124px;
+        padding: 0.68rem 0.72rem;
+        text-align: left;
     }
 
     .sb-battery-shell {
-        margin: 0 auto;
+        margin: 0;
     }
 }
 
@@ -2352,24 +2352,24 @@ div.st-key-social_twitter button::before {
 }
 
 .sb-home-intro {
-    margin: 1.25rem 0 0.75rem;
+    margin: 0.85rem 0 0.55rem;
     padding: 0 0.2rem;
 }
 
 .sb-home-intro h1 {
     color: var(--sb-text) !important;
     font-family: var(--sb-font-display) !important;
-    font-size: 38px !important;
-    font-weight: 880 !important;
-    line-height: 1.04 !important;
-    margin: 0.4rem 0 0.65rem !important;
+    font-size: 34px !important;
+    font-weight: 860 !important;
+    line-height: 1.02 !important;
+    margin: 0.28rem 0 0.42rem !important;
     max-width: 520px;
 }
 
 .sb-home-intro p {
     color: var(--sb-text-muted) !important;
     font-size: 14px !important;
-    line-height: 1.55 !important;
+    line-height: 1.42 !important;
     margin: 0 !important;
     max-width: 480px;
 }
@@ -2520,15 +2520,14 @@ div[data-testid="stElementContainer"]:has(.sb-quick-heading) + div[data-testid="
 
 div[data-testid="stElementContainer"]:has(.sb-quick-heading) + div[data-testid="stLayoutWrapper"] div[data-testid="stColumn"] {
     flex: 1 1 0 !important;
-    max-width: 25% !important;
+    max-width: 33.333% !important;
     min-width: 0 !important;
-    width: 25% !important;
+    width: 33.333% !important;
 }
 
 div.st-key-quick_near button,
 div.st-key-quick_fast button,
-div.st-key-quick_value button,
-div.st-key-quick_map button {
+div.st-key-quick_value button {
     align-items: center !important;
     background: rgba(255, 255, 255, 0.82) !important;
     border: 1px solid rgba(14, 16, 18, 0.12) !important;
@@ -2539,8 +2538,8 @@ div.st-key-quick_map button {
     flex-direction: column !important;
     gap: 0.25rem !important;
     justify-content: center !important;
-    min-height: 78px !important;
-    padding: 0.55rem 0.25rem !important;
+    min-height: 66px !important;
+    padding: 0.45rem 0.25rem !important;
 }
 
 div.st-key-quick_near button[kind="primary"],
@@ -2553,8 +2552,7 @@ div.st-key-quick_value button[kind="primary"] {
 
 div.st-key-quick_near button p,
 div.st-key-quick_fast button p,
-div.st-key-quick_value button p,
-div.st-key-quick_map button p {
+div.st-key-quick_value button p {
     color: inherit !important;
     font-size: 11px !important;
     font-weight: 760 !important;
@@ -3279,14 +3277,14 @@ label,
 }
 
 .sb-home-intro {
-    margin: 0.45rem 0 1.2rem !important;
+    margin: 0.35rem 0 0.75rem !important;
 }
 
 .sb-home-intro h1 {
     color: var(--sb-text) !important;
-    font-size: clamp(38px, 11vw, 48px) !important;
+    font-size: clamp(31px, 8.6vw, 38px) !important;
     line-height: 1.02 !important;
-    margin: 0.45rem 0 0.7rem !important;
+    margin: 0.32rem 0 0.45rem !important;
 }
 
 .sb-home-intro p,
@@ -3578,11 +3576,10 @@ div.st-key-language_entry button[data-testid^="stBaseButton-segmented_control"] 
 
 div.st-key-quick_near button,
 div.st-key-quick_fast button,
-div.st-key-quick_value button,
-div.st-key-quick_map button {
+div.st-key-quick_value button {
     background: #FFFFFF !important;
-    border-radius: 22px !important;
-    min-height: 92px !important;
+    border-radius: 16px !important;
+    min-height: 66px !important;
 }
 
 div.st-key-quick_near button[kind="primary"],
@@ -3595,8 +3592,8 @@ div.st-key-quick_value button[kind="primary"] {
 .sb-charge-visual {
     background: rgba(255, 255, 255, 0.90) !important;
     border: 1px solid var(--sb-line) !important;
-    border-radius: 28px !important;
-    box-shadow: var(--sb-shadow-soft) !important;
+    border-radius: 22px !important;
+    box-shadow: 0 12px 30px rgba(14, 16, 18, 0.07) !important;
 }
 
 .sb-charge-ring {
