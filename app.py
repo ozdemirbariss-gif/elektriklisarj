@@ -359,20 +359,20 @@ def ana_mod_secici_ciz() -> None:
     )
 
 
-def hizli_tercih_uygula(niyet: str, hiz: str = "Tümü", harita: bool = False) -> None:
+def hizli_tercih_uygula(niyet: str, hiz: str = "Tümü") -> None:
     st.session_state["niyet"] = niyet
     st.session_state["hiz_filtresi"] = hiz
-    st.session_state["haritayi_goster"] = harita
+    st.session_state["haritayi_goster"] = False
     st.session_state["rota_goster"] = False
     st.session_state["bekleme_salonu_goster"] = False
 
 
-def hizli_islemler_ciz(konum_hazir: bool) -> None:
+def hizli_islemler_ciz() -> None:
     st.markdown(
         f'<div class="sb-quick-heading"><strong>{t("home.quick_title")}</strong><span>{t("home.quick_hint")}</span></div>',
         unsafe_allow_html=True,
     )
-    yakin_col, hizli_col, uygun_col, harita_col = st.columns(4, gap="small")
+    yakin_col, hizli_col, uygun_col = st.columns(3, gap="small")
     niyet = str(st.session_state.get("niyet", "Dengeli"))
     hiz = str(st.session_state.get("hiz_filtresi", "Tümü"))
 
@@ -407,16 +407,6 @@ def hizli_islemler_ciz(konum_hazir: bool) -> None:
             use_container_width=True,
         ):
             hizli_tercih_uygula("Ekonomik")
-            st.rerun()
-
-    with harita_col:
-        if st.button(
-            t("home.quick_map"),
-            key="quick_map",
-            icon=":material/sports_esports:",
-            use_container_width=True,
-        ):
-            bekleme_salonunu_ac()
             st.rerun()
 
 
@@ -2713,7 +2703,7 @@ if not rota_modu:
     ana_mod_secici_ciz()
     if manuel_konum_karti_goster:
         ana_konum_arama_ciz(konum_hazir, user_lat, user_lon)
-    hizli_islemler_ciz(konum_hazir)
+    hizli_islemler_ciz()
 
 # 3. Araç Kataloğu ve Katmanlı Arama
 if rota_modu:
