@@ -534,16 +534,6 @@ def arac_katalogu_ciz(operator_secenekleri: List[str]) -> Tuple[
         batarya = c1.number_input(**batarya_kwargs)
         tuketim = c2.number_input(**tuketim_kwargs)
 
-    st.markdown(
-        f"""
-        <div class="sb-catalog-meta">
-            <div class="sb-catalog-stat"><span>{t("catalog.default_battery")}</span><strong>{float(v["batarya"]):.1f} kWh</strong></div>
-            <div class="sb-catalog-stat"><span>{t("catalog.average_consumption")}</span><strong>{float(v["tuketim"]):.1f} kWh</strong></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
     niyet = "Dengeli"
     ayar_yaricap = YAKIN_CEVRE_VARSAYILAN_M
     soket_filtreleri: List[str] = []
@@ -2803,15 +2793,6 @@ if not konum_hazir:
 user_lat, user_lon = float(user_lat), float(user_lon)
 
 if not st.session_state.get("rota_goster"):
-    st.markdown(
-        f"""
-        <div class="sb-step-panel">
-            <strong>{t("route.ready")}</strong>
-            <span>{t("route.ready_hint")}</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
     st.stop()
 
 siralama_modu = {
