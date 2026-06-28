@@ -48,10 +48,34 @@ traces_sample_rate = 0.10
 ## Firebase Veri Yollari
 
 - `istasyonlar`: normalize edilecek istasyon kayitlari
-- `yorumlar/{station_id}`: kullanici durum bildirimleri
+- `yorumlar/{station_id}`: giris yapmis kullanici durum bildirimleri
 - `station_status/{station_id}`: yorumlardan uretilmis son durum ozeti
-- `favoriler/{uid_hash}`: kullanicinin kaydettigi istasyonlar
-- `kullanici_yorum_meta/{uid_hash}`: yorum bekleme suresi icin son gonderim zamani
+- `favoriler/{auth.uid}`: kullanicinin kaydettigi istasyonlar
+- `kullanici_yorum_meta/{auth.uid}`: yorum bekleme suresi icin son gonderim zamani
+
+## Firebase Guvenlik Kurallari
+
+Repo kokundeki `database.rules.json` Realtime Database icin kilitli varsayilan kurallari icerir:
+
+- Kok `.read` ve `.write` kapali.
+- `istasyonlar` ve `station_status` okunabilir, yazma kapali ya da auth ile sinirli.
+- `yorumlar` sadece giris yapmis kullanicilar tarafindan okunur/yazilir; yorumdaki `uid` degeri `auth.uid` ile eslesmek zorundadir.
+- `favoriler/{auth.uid}` ve `kullanici_yorum_meta/{auth.uid}` sadece ilgili kullanici tarafindan okunup yazilir.
+
+Firebase Console > Realtime Database > Rules ekranina `database.rules.json` icerigini yukleyin. Firebase CLI kullaniyorsan:
+
+```bash
+firebase deploy --only database
+```
+
+Onceki surumlerde favori ve yorum meta kayitlari `uid_hash` ile tutulduysa, bu verileri ilgili kullanicinin `auth.uid` anahtarina tasiyin. Yeni kurallar hash tabanli IDOR riskini kapatmak icin `auth.uid` ile bire bir path eslesmesi bekler.
+
+Firebase Console tarafinda ayrica App Check'i etkinlestirin ve Authentication > Settings altindan e-posta enumerasyon korumasini acin. Bagimlilik denetimi icin:
+
+```bash
+python -m pip install pip-audit
+pip-audit -r requirements.txt
+```
 
 ## Streamlit Cloud Deploy
 

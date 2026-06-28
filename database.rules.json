@@ -1,0 +1,43 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "istasyonlar": {
+      ".read": true,
+      ".write": false
+    },
+    "station_status": {
+      ".read": true,
+      "$stationId": {
+        ".write": "auth != null",
+        ".validate": "newData.hasOnly(['skor', 'durum', 'etiket', 'arizali', 'sorunsuz', 'aktif_yorum_sayisi', 'son_bildirim_tarihi', 'son_yorumlar']) && newData.child('skor').isNumber() && newData.child('durum').isString() && newData.child('etiket').isString() && newData.child('arizali').isNumber() && newData.child('sorunsuz').isNumber() && newData.child('aktif_yorum_sayisi').isNumber() && newData.child('son_bildirim_tarihi').isString()"
+      }
+    },
+    "yorumlar": {
+      "$stationId": {
+        ".read": "auth != null",
+        ".indexOn": ["tarih", "uid"],
+        "$commentId": {
+          ".write": "auth != null && !data.exists() && newData.exists()",
+          ".validate": "newData.hasOnly(['kullanici', 'yorum', 'durum', 'durum_sinifi', 'sinif_kaynagi', 'tarih', 'uid', 'ek_bilgi']) && newData.hasChildren(['kullanici', 'yorum', 'durum', 'durum_sinifi', 'sinif_kaynagi', 'tarih', 'uid']) && newData.child('uid').val() == auth.uid && newData.child('kullanici').isString() && newData.child('yorum').isString() && newData.child('yorum').val().length <= 600 && newData.child('durum').isString() && newData.child('durum').val().length <= 80 && newData.child('durum_sinifi').isString() && newData.child('sinif_kaynagi').isString() && newData.child('tarih').isString()"
+        }
+      }
+    },
+    "favoriler": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+        "$stationId": {
+          ".validate": "newData.isBoolean()"
+        }
+      }
+    },
+    "kullanici_yorum_meta": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+        ".validate": "newData.hasOnly(['son_yorum_zamani']) && newData.child('son_yorum_zamani').isString()"
+      }
+    }
+  }
+}
