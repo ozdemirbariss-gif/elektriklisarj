@@ -24,7 +24,7 @@ from config import (
 from i18n import get_language, localize_text, set_language, t
 from utils import (
     guvenli_metin, arama_metni_normalize_et, clean_id_uret, istasyon_id_getir,
-    auth_uid_hash_getir, tahmini_sure_dk, varis_sarj_yuzdesi_hesapla, 
+    auth_uid_getir, tahmini_sure_dk, varis_sarj_yuzdesi_hesapla,
     mesafe_hesapla, tahmini_yol_mesafesi_km, konum_gecerli_mi,
     durum_metni_sadelestir, durum_ozeti_fallback, utc_simdi, utc_isoformat
 )
@@ -760,8 +760,8 @@ def harita_popup_html_olustur(istasyon: Dict[str, Any]) -> str:
     operator = kisa_deger(istasyon.get("operator"), t("common.operator_unknown"), 70)
     skor = int(istasyon.get("Skor", 0) or 0)
     mesafe = float(istasyon.get("Mesafe", 0.0) or 0.0)
-    guc = localize_text(kisa_duz_metin(istasyon.get("hiz"), t("common.power_unknown"), 42))
-    durum = localize_text(kisa_duz_metin(istasyon.get("ArizaEtiketi"), t("common.live_data_none"), 60))
+    guc = localize_text(kisa_deger(istasyon.get("hiz"), t("common.power_unknown"), 42))
+    durum = localize_text(kisa_deger(istasyon.get("ArizaEtiketi"), t("common.live_data_none"), 60))
     renk = harita_rengi_getir(skor)
     return f"""
         <div style="min-width:190px;background:#FFFFFF;border:1px solid rgba(14,16,18,0.28);border-radius:12px;box-shadow:0 18px 40px rgba(14,16,18,0.18);color:#0E1012;font-family:Inter,Arial,sans-serif;padding:12px;">
@@ -987,7 +987,8 @@ def tahmin_gecmisini_top_adaylara_uygula(istasyonlar: List[Dict[str, Any]]) -> N
     if not station_keys:
         return
 
-    yorum_gecmisi = tahmin_yorumlari_getir(station_keys, limit=TAHMIN_GECMISI_YORUM_LIMITI)
+    yorum_token = str(st.session_state.get("auth_token", "")) if oturum_gecerli_tut() else ""
+    yorum_gecmisi = tahmin_yorumlari_getir(station_keys, limit=TAHMIN_GECMISI_YORUM_LIMITI, token=yorum_token)
     for istasyon, station_key in zip(istasyonlar[:TAHMIN_GECMISI_LIMITI], station_keys):
         yorumlar = yorum_gecmisi.get(station_key) or istasyon.get("SonYorumlar", [])
         istasyon_tahminini_guncelle(istasyon, yorumlar)
@@ -1101,7 +1102,7 @@ def istasyon_akis_verisi_hazirla(
                 "distance": f"{float(istasyon.get('Mesafe', 0.0) or 0.0):.1f} km",
                 "duration": f"{int(istasyon.get('TahminiSureDk', 0) or 0)} {t('feed.minute')}",
                 "arrival": f"%{float(istasyon.get('VarisSarjYuzdesi', 0.0) or 0.0):.0f}",
-                "power": localize_text(kisa_duz_metin(istasyon.get("hiz"), t("common.power_unknown"), 42)),
+                "power": localize_text(kisa_deger(istasyon.get("hiz"), t("common.power_unknown"), 42)),
                 "socket": localize_text(kisa_duz_metin(istasyon.get("soket"), t("common.socket_unknown"), 42)),
                 "price": localize_text(kisa_duz_metin(istasyon.get("fiyat"), t("common.price_missing"), 42)),
                 "score": int(istasyon.get("Skor", 0) or 0),
@@ -2806,12 +2807,12 @@ uygun_istasyonlar = sorted(uygun_istasyonlar, key=ist_siralama)
 # 7. Favoriler
 if "favoriler" not in st.session_state: st.session_state["favoriler"] = set()
 if "auth_token" in st.session_state and oturum_gecerli_tut():
-    uid_hash = auth_uid_hash_getir()
+    uid = auth_uid_getir()
     favoriler_yuklu = st.session_state.get("favoriler_yuklendi") is True
-    favoriler_kullanici_ayni = st.session_state.get("favoriler_uid_hash") == uid_hash
+    favoriler_kullanici_ayni = st.session_state.get("favoriler_uid") == uid
     if not favoriler_yuklu or not favoriler_kullanici_ayni:
-        st.session_state["favoriler"] = set(favorileri_getir(uid_hash, st.session_state["auth_token"]))
-        st.session_state["favoriler_uid_hash"] = uid_hash
+        st.session_state["favoriler"] = set(favorileri_getir(uid, st.session_state["auth_token"]))
+        st.session_state["favoriler_uid"] = uid
         st.session_state["favoriler_yuklendi"] = True
 
 # 8. Sonuç Kartları Çizimi

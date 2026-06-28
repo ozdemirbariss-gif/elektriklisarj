@@ -59,9 +59,9 @@ def istasyon_id_getir(istasyon: Dict[str, Any]) -> str:
     fallback = f"{isim}_{enlem}_{boylam}".strip("_")
     return fallback or "bilinmeyen_istasyon"
 
-def auth_uid_hash_getir() -> str:
+def auth_uid_getir() -> str:
     uid = str(st.session_state.get("auth_uid", "")).strip()
-    return hashlib.sha256(uid.encode()).hexdigest()[:16] if uid else ""
+    return uid
 
 def hiz_sayisi_ayikla(hiz: Any) -> float:
     hiz_val = str(hiz or "").replace(",", ".")
@@ -238,7 +238,15 @@ def ariza_skoru_hesapla(yorumlar: List[Dict[str, Any]]) -> Dict[str, Any]:
 def yorumlardan_durum_ozeti_uret(yorumlar: List[Dict[str, Any]]) -> Dict[str, Any]:
     sirali = sorted(yorumlar, key=lambda x: yorum_tarihi_parse(x.get("tarih", "")), reverse=True)
     ariza = ariza_skoru_hesapla(sirali)
-    ariza["son_yorumlar"] = sirali[:MAX_SON_YORUM]
+    ariza["son_yorumlar"] = [
+        {
+            "yorum": guvenli_metin(y.get("yorum", ""), 160),
+            "durum": guvenli_metin(y.get("durum", ""), 60),
+            "durum_sinifi": guvenli_metin(y.get("durum_sinifi", ""), 24),
+            "tarih": guvenli_metin(y.get("tarih", ""), 32),
+        }
+        for y in sirali[:MAX_SON_YORUM]
+    ]
     return ariza
 
 def durum_ozeti_fallback() -> Dict[str, Any]:

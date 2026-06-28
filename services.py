@@ -17,7 +17,7 @@ from i18n import t
 from predictor import bildirim_sinifi_getir
 from utils import (
     istasyon_normalize_et, yorum_tarihi_parse, clean_id_uret,
-    auth_uid_hash_getir, cache_temizle_guvenli, guvenli_metin, mesafe_hesapla,
+    auth_uid_getir, cache_temizle_guvenli, guvenli_metin, mesafe_hesapla,
     token_yenileme_gerekli_mi, yorum_gonderilebilir_mi, yorumlardan_durum_ozeti_uret,
     utc_simdi, utc_isoformat
 )
@@ -163,7 +163,7 @@ def oturum_gecerli_tut() -> bool:
 def oturumu_temizle() -> None:
     for key in (
         "auth_token", "auth_refresh_token", "auth_email", "auth_uid",
-        "auth_login_time", "auth_expires_at", "favoriler_uid_hash",
+        "auth_login_time", "auth_expires_at", "favoriler_uid",
         "favoriler_yuklendi", "favoriler",
     ):
         st.session_state.pop(key, None)
@@ -220,13 +220,15 @@ def istasyonlari_yukle() -> List[Dict[str, Any]]:
         return []
 
 @st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
-def istasyon_yorumlari_getir(istasyon_id: str, limit: int = MAX_SON_YORUM) -> List[Dict[str, Any]]:
+def istasyon_yorumlari_getir(istasyon_id: str, limit: int = MAX_SON_YORUM, token: str = "") -> List[Dict[str, Any]]:
     if not FIREBASE_ENABLED:
         return []
     clean_id = clean_id_uret(istasyon_id)
     try:
+        params = {"auth": token} if token else None
         res = get_session().get(
             f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json",
+            params=params,
             timeout=FIREBASE_TIMEOUT_S,
         )
         if res.status_code == 200 and res.json():
@@ -254,39 +256,39 @@ def durum_ozetleri_getir() -> Dict[str, Dict[str, Any]]:
     return {}
 
 @st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
-def gorunen_yorumlari_getir(station_keys: Tuple[str, ...]) -> Dict[str, List[Dict[str, Any]]]:
-    return {key: istasyon_yorumlari_getir(key, MAX_SON_YORUM) for key in station_keys}
+def gorunen_yorumlari_getir(station_keys: Tuple[str, ...], token: str = "") -> Dict[str, List[Dict[str, Any]]]:
+    return {key: istasyon_yorumlari_getir(key, MAX_SON_YORUM, token) for key in station_keys}
 
 @st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
-def tahmin_yorumlari_getir(station_keys: Tuple[str, ...], limit: int = 120) -> Dict[str, List[Dict[str, Any]]]:
+def tahmin_yorumlari_getir(station_keys: Tuple[str, ...], limit: int = 120, token: str = "") -> Dict[str, List[Dict[str, Any]]]:
     if not FIREBASE_ENABLED:
         return {}
-    return {key: istasyon_yorumlari_getir(key, limit) for key in station_keys}
+    return {key: istasyon_yorumlari_getir(key, limit, token) for key in station_keys}
 
 @st.cache_data(ttl=YORUM_CACHE_TTL, show_spinner=False)
-def kullanici_son_yorum_zamani_getir(uid_hash: str, token: str) -> Optional[str]:
-    if not FIREBASE_ENABLED or not uid_hash or not token: return None
+def kullanici_son_yorum_zamani_getir(uid: str, token: str) -> Optional[str]:
+    if not FIREBASE_ENABLED or not uid or not token: return None
     try:
-        res = get_session().get(f"{FIREBASE_DB_URL}kullanici_yorum_meta/{uid_hash}.json", params={"auth": token}, timeout=FIREBASE_TIMEOUT_S)
+        res = get_session().get(f"{FIREBASE_DB_URL}kullanici_yorum_meta/{uid}.json", params={"auth": token}, timeout=FIREBASE_TIMEOUT_S)
         if res.status_code == 200 and isinstance(res.json(), dict):
             return str(res.json().get("son_yorum_zamani", "")) or None
     except Exception as e:
         _hata_bildir("Kullanıcı yorum metası alınamadı", e)
     return None
 
-def sunucu_tarafli_hizli_cooldown_kontrol(uid_hash: str, token: str) -> Tuple[bool, int]:
-    son_str = kullanici_son_yorum_zamani_getir(uid_hash, token)
+def sunucu_tarafli_hizli_cooldown_kontrol(uid: str, token: str) -> Tuple[bool, int]:
+    son_str = kullanici_son_yorum_zamani_getir(uid, token)
     if not son_str: return True, 0
     son = yorum_tarihi_parse(son_str)
     kalan = YORUM_BEKLEME_SURESI - int((utc_simdi() - son).total_seconds())
     return kalan <= 0, max(0, kalan)
 
-def kullanici_yorum_meta_guncelle(uid_hash: str, token: str, tarih: str) -> None:
+def kullanici_yorum_meta_guncelle(uid: str, token: str, tarih: str) -> None:
     if not FIREBASE_ENABLED:
         return
     try:
-        get_session().patch(f"{FIREBASE_DB_URL}kullanici_yorum_meta/{uid_hash}.json", params={"auth": token}, json={"son_yorum_zamani": tarih}, timeout=FIREBASE_TIMEOUT_S)
-        cache_temizle_guvenli(kullanici_son_yorum_zamani_getir, uid_hash, token)
+        get_session().patch(f"{FIREBASE_DB_URL}kullanici_yorum_meta/{uid}.json", params={"auth": token}, json={"son_yorum_zamani": tarih}, timeout=FIREBASE_TIMEOUT_S)
+        cache_temizle_guvenli(kullanici_son_yorum_zamani_getir, uid, token)
     except Exception as e:
         _hata_bildir("Kullanıcı yorum metası güncellenemedi", e)
 
@@ -300,15 +302,15 @@ def istasyon_durum_ozetini_guncelle(clean_id: str, token: str) -> None:
             get_session().patch(f"{FIREBASE_DB_URL}station_status/{clean_id}.json", params={"auth": token}, json=ozet, timeout=FIREBASE_TIMEOUT_S)
             cache_temizle_guvenli(durum_ozetleri_getir)
             cache_temizle_guvenli(gorunen_yorumlari_getir)
-            cache_temizle_guvenli(istasyon_yorumlari_getir, clean_id, MAX_SON_YORUM)
+            cache_temizle_guvenli(istasyon_yorumlari_getir)
     except Exception as e:
         _hata_bildir("İstasyon durum özeti güncellenemedi", e)
 
 @st.cache_data(ttl=ISTASYON_CACHE_TTL, show_spinner=False)
-def favorileri_getir(uid_hash: str, token: str) -> List[str]:
-    if not FIREBASE_ENABLED or not uid_hash or not token: return []
+def favorileri_getir(uid: str, token: str) -> List[str]:
+    if not FIREBASE_ENABLED or not uid or not token: return []
     try:
-        res = get_session().get(f"{FIREBASE_DB_URL}favoriler/{uid_hash}.json", params={"auth": token}, timeout=FIREBASE_TIMEOUT_S)
+        res = get_session().get(f"{FIREBASE_DB_URL}favoriler/{uid}.json", params={"auth": token}, timeout=FIREBASE_TIMEOUT_S)
         if res.status_code == 200 and isinstance(res.json(), dict):
             return [str(k) for k, v in res.json().items() if v]
     except Exception as e:
@@ -316,13 +318,13 @@ def favorileri_getir(uid_hash: str, token: str) -> List[str]:
     return []
 
 def favori_guncelle(ist_key: str, favori_mi: bool) -> Tuple[bool, str]:
-    token, uid_hash = st.session_state.get("auth_token"), auth_uid_hash_getir()
+    token, uid = st.session_state.get("auth_token"), auth_uid_getir()
     favoriler = st.session_state.setdefault("favoriler", set())
     if not isinstance(favoriler, set):
         favoriler = set(favoriler)
         st.session_state["favoriler"] = favoriler
 
-    if not FIREBASE_ENABLED or not token or not uid_hash:
+    if not FIREBASE_ENABLED or not token or not uid:
         favoriler.add(ist_key) if favori_mi else favoriler.discard(ist_key)
         return True, t("service.session_only")
 
@@ -330,14 +332,14 @@ def favori_guncelle(ist_key: str, favori_mi: bool) -> Tuple[bool, str]:
         oturumu_temizle()
         return False, t("service.session_refresh_failed")
 
-    token, uid_hash = st.session_state.get("auth_token"), auth_uid_hash_getir()
+    token, uid = st.session_state.get("auth_token"), auth_uid_getir()
     try:
-        url = f"{FIREBASE_DB_URL}favoriler/{uid_hash}/{ist_key}.json"
+        url = f"{FIREBASE_DB_URL}favoriler/{uid}/{ist_key}.json"
         res = get_session().put(url, params={"auth": token}, json=True, timeout=FIREBASE_TIMEOUT_S) if favori_mi else get_session().delete(url, params={"auth": token}, timeout=FIREBASE_TIMEOUT_S)
         if res.status_code in (200, 204):
-            cache_temizle_guvenli(favorileri_getir, uid_hash, token)
+            cache_temizle_guvenli(favorileri_getir, uid, token)
             favoriler.add(ist_key) if favori_mi else favoriler.discard(ist_key)
-            st.session_state["favoriler_uid_hash"] = uid_hash
+            st.session_state["favoriler_uid"] = uid
             st.session_state["favoriler_yuklendi"] = True
             return True, t("service.favorites_updated")
         logger.warning("Favori güncelleme başarısız: %s %s", res.status_code, res.text[:180])
@@ -352,10 +354,10 @@ def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str, ek_bilgi: Optio
         return False, t("service.session_refresh_failed")
     gonderilebilir, kalan = yorum_gonderilebilir_mi()
     if not gonderilebilir: return False, t("service.wait_seconds", seconds=kalan)
-    token, uid_hash = st.session_state.get("auth_token"), auth_uid_hash_getir()
+    token, uid = st.session_state.get("auth_token"), auth_uid_getir()
     if not token: return False, t("service.login_required")
 
-    sunucu_ok, sunucu_kalan = sunucu_tarafli_hizli_cooldown_kontrol(uid_hash, token)
+    sunucu_ok, sunucu_kalan = sunucu_tarafli_hizli_cooldown_kontrol(uid, token)
     if not sunucu_ok: return False, t("service.wait_seconds", seconds=sunucu_kalan)
 
     clean_id, tarih = clean_id_uret(istasyon_id), utc_isoformat()
@@ -369,7 +371,7 @@ def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str, ek_bilgi: Optio
         "durum_sinifi": durum_sinifi,
         "sinif_kaynagi": "write_rule_v1",
         "tarih": tarih,
-        "uid_hash": uid_hash,
+        "uid": uid,
     }
     if ek_bilgi: yeni_yorum["ek_bilgi"] = ek_bilgi
 
@@ -377,7 +379,7 @@ def yorum_gonder(istasyon_id: str, yorum_metni: str, durum: str, ek_bilgi: Optio
         r = get_session().post(f"{FIREBASE_DB_URL}yorumlar/{clean_id}.json", params={"auth": token}, json=yeni_yorum, timeout=FIREBASE_TIMEOUT_S)
         if r.status_code in (200, 201):
             st.session_state["son_yorum_zamani"] = utc_simdi()
-            kullanici_yorum_meta_guncelle(uid_hash, token, tarih)
+            kullanici_yorum_meta_guncelle(uid, token, tarih)
             istasyon_durum_ozetini_guncelle(clean_id, token)
             return True, t("service.report_saved")
         logger.warning("Yorum gönderme başarısız: %s %s", r.status_code, r.text[:180])
