@@ -10,7 +10,50 @@
       ".read": true,
       "$stationId": {
         ".write": "auth != null",
-        ".validate": "newData.hasOnly(['skor', 'durum', 'etiket', 'arizali', 'sorunsuz', 'aktif_yorum_sayisi', 'son_bildirim_tarihi', 'son_yorumlar']) && newData.child('skor').isNumber() && newData.child('durum').isString() && newData.child('etiket').isString() && newData.child('arizali').isNumber() && newData.child('sorunsuz').isNumber() && newData.child('aktif_yorum_sayisi').isNumber() && newData.child('son_bildirim_tarihi').isString()"
+        ".validate": "newData.hasChildren(['skor', 'durum', 'etiket', 'arizali', 'sorunsuz', 'aktif_yorum_sayisi', 'son_bildirim_tarihi'])",
+        "skor": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+        },
+        "durum": {
+          ".validate": "newData.isString() && newData.val().length <= 80"
+        },
+        "etiket": {
+          ".validate": "newData.isString() && newData.val().length <= 80"
+        },
+        "arizali": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+        "sorunsuz": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+        "aktif_yorum_sayisi": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+        "son_bildirim_tarihi": {
+          ".validate": "newData.isString() && newData.val().length <= 40"
+        },
+        "son_yorumlar": {
+          "$idx": {
+            "yorum": {
+              ".validate": "newData.isString() && newData.val().length <= 160"
+            },
+            "durum": {
+              ".validate": "newData.isString() && newData.val().length <= 60"
+            },
+            "durum_sinifi": {
+              ".validate": "newData.isString() && newData.val().length <= 24"
+            },
+            "tarih": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
       }
     },
     "yorumlar": {
@@ -19,7 +62,34 @@
         ".indexOn": ["tarih", "uid"],
         "$commentId": {
           ".write": "auth != null && !data.exists() && newData.exists()",
-          ".validate": "newData.hasOnly(['kullanici', 'yorum', 'durum', 'durum_sinifi', 'sinif_kaynagi', 'tarih', 'uid', 'ek_bilgi']) && newData.hasChildren(['kullanici', 'yorum', 'durum', 'durum_sinifi', 'sinif_kaynagi', 'tarih', 'uid']) && newData.child('uid').val() == auth.uid && newData.child('kullanici').isString() && newData.child('yorum').isString() && newData.child('yorum').val().length <= 600 && newData.child('durum').isString() && newData.child('durum').val().length <= 80 && newData.child('durum_sinifi').isString() && newData.child('sinif_kaynagi').isString() && newData.child('tarih').isString()"
+          ".validate": "newData.hasChildren(['kullanici', 'yorum', 'durum', 'durum_sinifi', 'sinif_kaynagi', 'tarih', 'uid']) && newData.child('uid').val() == auth.uid",
+          "kullanici": {
+            ".validate": "newData.isString() && newData.val().length <= 120"
+          },
+          "yorum": {
+            ".validate": "newData.isString() && newData.val().length <= 600"
+          },
+          "durum": {
+            ".validate": "newData.isString() && newData.val().length <= 80"
+          },
+          "durum_sinifi": {
+            ".validate": "newData.isString() && newData.val().length <= 32"
+          },
+          "sinif_kaynagi": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "tarih": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "uid": {
+            ".validate": "newData.isString() && newData.val() == auth.uid"
+          },
+          "ek_bilgi": {
+            ".validate": true
+          },
+          "$other": {
+            ".validate": false
+          }
         }
       }
     },
@@ -36,7 +106,13 @@
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
         ".write": "auth != null && auth.uid == $uid",
-        ".validate": "newData.hasOnly(['son_yorum_zamani']) && newData.child('son_yorum_zamani').isString()"
+        ".validate": "newData.hasChildren(['son_yorum_zamani'])",
+        "son_yorum_zamani": {
+          ".validate": "newData.isString() && newData.val().length <= 40"
+        },
+        "$other": {
+          ".validate": false
+        }
       }
     }
   }
