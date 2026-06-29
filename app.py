@@ -11,7 +11,7 @@ from streamlit_folium import st_folium
 
 import i18n as i18n_module
 
-EXPECTED_TRANSLATION_SCHEMA_VERSION = 8
+EXPECTED_TRANSLATION_SCHEMA_VERSION = 9
 if getattr(i18n_module, "TRANSLATION_SCHEMA_VERSION", 0) < EXPECTED_TRANSLATION_SCHEMA_VERSION:
     importlib.reload(i18n_module)
 
@@ -216,25 +216,27 @@ def uygulama_girisini_ac(misafir: bool = False) -> None:
     st.session_state["bekleme_salonu_goster"] = False
 
 
-def sosyal_giris_butonlari_ciz() -> None:
-    st.markdown('<div class="sb-social-icons" aria-hidden="true"></div>', unsafe_allow_html=True)
-    sosyal1, sosyal2, sosyal3 = st.columns(3)
-    sosyal_butonlar = (
-        (sosyal1, "Google", "social_google"),
-        (sosyal2, "Apple", "social_apple"),
-        (sosyal3, "Twitter", "social_twitter"),
-    )
-    for kolon, metin, anahtar in sosyal_butonlar:
-        with kolon:
-            if st.button(metin, key=anahtar, help=t("auth.social_help", provider=metin), use_container_width=True):
-                bildirim_goster(t("auth.social_soon", provider=metin), basarili=False)
-
-
 def auth_form_ciz(caller_context: str, entry_context: bool = False) -> None:
+    if not FIREBASE_ENABLED:
+        return
+
     prefix = caller_context.strip().replace(" ", "_") or "auth"
-    secenekler = ("login", "register", "reset")
+    secenekler = ("login", "register")
     mod_anahtari = f"{prefix}_auth_mode"
-    st.session_state.setdefault(mod_anahtari, "login")
+    if st.session_state.get(mod_anahtari) not in secenekler:
+        st.session_state[mod_anahtari] = "login"
+    hata_anahtari = f"{prefix}_auth_error"
+    basari_anahtari = f"{prefix}_auth_success"
+
+    st.markdown(
+        f"""
+        <div class="sb-auth-card-head">
+            <strong>{t("auth.card_title")}</strong>
+            <span>{t("auth.card_hint")}</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     auth_mode = st.segmented_control(
         t("auth.mode_label"),
         secenekler,
@@ -245,55 +247,118 @@ def auth_form_ciz(caller_context: str, entry_context: bool = False) -> None:
     )
 
     if auth_mode == "login":
-        if not FIREBASE_ENABLED:
-            st.info(t("auth.firebase_login_disabled"))
-            st.button(t("auth.continue"), use_container_width=True, key=f"{prefix}_login_disabled", disabled=True)
-        else:
+        login_feedback = False
+        with st.form(f"{prefix}_login_form", clear_on_submit=False):
             email = st.text_input(t("auth.email"), key=f"{prefix}_login_email", placeholder=t("auth.email_placeholder"))
             password = st.text_input(t("auth.password"), type="password", key=f"{prefix}_login_password", placeholder=t("auth.password_placeholder"))
-            if st.button(t("auth.continue"), use_container_width=True, key=f"{prefix}_login_btn", type="primary"):
-                user_data = firebase_login(email, password)
-                if user_data and oturum_bilgilerini_kaydet(user_data):
-                    if entry_context:
-                        uygulama_girisini_ac(misafir=False)
-                    st.rerun()
-                bildirim_goster(t("auth.login_failed"), basarili=False)
+            submitted = st.form_submit_button(t("auth.continue"), use_container_width=True, type="primary")
+            if submitted:
+                login_feedback = True
+                st.session_state.pop(hata_anahtari, None)
+                st.session_state.pop(basari_anahtari, None)
+                if not email.strip() or not password:
+                    st.session_state[hata_anahtari] = t("auth.fill_fields")
+                else:
+                    with st.spinner(t("auth.login_loading")):
+                        user_data = firebase_login(email, password)
+                    if user_data and oturum_bilgilerini_kaydet(user_data):
+                        if entry_context:
+                            uygulama_girisini_ac(misafir=False)
+                        st.rerun()
+                    st.session_state[hata_anahtari] = t("auth.login_failed")
+
+        if login_feedback and st.session_state.get(hata_anahtari):
+            st.markdown(
+                f'<div class="sb-inline-form-error" aria-live="polite">{guvenli_metin(st.session_state[hata_anahtari], 180)}</div>',
+                unsafe_allow_html=True,
+            )
+
+        reset_feedback = False
+        with st.expander(t("auth.forgot_password"), expanded=False):
+            st.caption(t("auth.reset_hint"))
+            with st.form(f"{prefix}_reset_form", clear_on_submit=False):
+                reset_email = st.text_input(
+                    t("auth.reset_email"),
+                    key=f"{prefix}_reset_email",
+                    placeholder=t("auth.email_placeholder"),
+                )
+                reset_submitted = st.form_submit_button(t("auth.reset_action"), use_container_width=True)
+                if reset_submitted:
+                    reset_feedback = True
+                    st.session_state.pop(hata_anahtari, None)
+                    st.session_state.pop(basari_anahtari, None)
+                    if not reset_email.strip():
+                        st.session_state[hata_anahtari] = t("auth.reset_email_required")
+                    else:
+                        with st.spinner(t("auth.reset_loading")):
+                            ok, msg = firebase_sifre_sifirla(reset_email)
+                        st.session_state[basari_anahtari if ok else hata_anahtari] = msg
+
+        if reset_feedback and st.session_state.get(hata_anahtari):
+            st.markdown(
+                f'<div class="sb-inline-form-error" aria-live="polite">{guvenli_metin(st.session_state[hata_anahtari], 180)}</div>',
+                unsafe_allow_html=True,
+            )
+
+        if st.session_state.get(basari_anahtari):
+            st.markdown(
+                f'<div class="sb-inline-form-success" aria-live="polite">{guvenli_metin(st.session_state[basari_anahtari], 180)}</div>',
+                unsafe_allow_html=True,
+            )
 
     if auth_mode == "register":
-        if not FIREBASE_ENABLED:
-            st.info(t("auth.firebase_register_disabled"))
-        else:
-            reg_email = st.text_input(t("auth.new_email"), key=f"{prefix}_register_email")
-            reg_password = st.text_input(t("auth.new_password"), type="password", key=f"{prefix}_register_password")
-            if st.button(t("auth.register_action"), use_container_width=True, key=f"{prefix}_register_btn"):
-                user_data = firebase_register(reg_email, reg_password)
-                if user_data and oturum_bilgilerini_kaydet(user_data):
-                    if entry_context:
-                        uygulama_girisini_ac(misafir=False)
-                    st.rerun()
-                bildirim_goster(t("auth.register_failed"), basarili=False)
+        register_feedback = False
+        with st.form(f"{prefix}_register_form", clear_on_submit=False):
+            reg_email = st.text_input(t("auth.new_email"), key=f"{prefix}_register_email", placeholder=t("auth.email_placeholder"))
+            reg_password = st.text_input(t("auth.new_password"), type="password", key=f"{prefix}_register_password", placeholder=t("auth.password_placeholder"))
+            submitted = st.form_submit_button(t("auth.register_action"), use_container_width=True, type="primary")
+            if submitted:
+                register_feedback = True
+                st.session_state.pop(hata_anahtari, None)
+                st.session_state.pop(basari_anahtari, None)
+                if not reg_email.strip() or not reg_password:
+                    st.session_state[hata_anahtari] = t("auth.fill_fields")
+                else:
+                    with st.spinner(t("auth.register_loading")):
+                        user_data = firebase_register(reg_email, reg_password)
+                    if user_data and oturum_bilgilerini_kaydet(user_data):
+                        if entry_context:
+                            uygulama_girisini_ac(misafir=False)
+                        st.rerun()
+                    st.session_state[hata_anahtari] = t("auth.register_failed")
 
-    if auth_mode == "reset":
-        if not FIREBASE_ENABLED:
-            st.info(t("auth.firebase_reset_disabled"))
-        else:
-            reset_email = st.text_input(t("auth.reset_email"), key=f"{prefix}_reset_email")
-            if st.button(t("auth.reset_action"), use_container_width=True, key=f"{prefix}_reset_btn"):
-                ok, msg = firebase_sifre_sifirla(reset_email)
-                bildirim_goster(msg, ok)
+        if register_feedback and st.session_state.get(hata_anahtari):
+            st.markdown(
+                f'<div class="sb-inline-form-error" aria-live="polite">{guvenli_metin(st.session_state[hata_anahtari], 180)}</div>',
+                unsafe_allow_html=True,
+            )
 
 
 def giris_formlari_ciz() -> None:
-    st.markdown('<section class="sb-entry-panel">', unsafe_allow_html=True)
-    auth_form_ciz("entry", entry_context=True)
+    with st.container(key="entry_fast_path_card"):
+        st.markdown(
+            f"""
+            <section class="sb-entry-fast-path">
+                <strong>{t("auth.guest_primary_title")}</strong>
+                <span>{t("auth.guest_primary_hint")}</span>
+            </section>
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button(t("auth.guest_primary_action"), key="guest_continue", use_container_width=True, type="primary"):
+            uygulama_girisini_ac(misafir=True)
+            st.rerun()
 
-    if st.button(t("auth.guest_continue"), key="guest_continue", use_container_width=True):
-        uygulama_girisini_ac(misafir=True)
-        st.rerun()
-
-    st.markdown(f'<div class="sb-social-separator"><span>{t("auth.or")}</span></div>', unsafe_allow_html=True)
-    sosyal_giris_butonlari_ciz()
-    st.markdown('</section>', unsafe_allow_html=True)
+    if FIREBASE_ENABLED:
+        with st.container(key="entry_auth_card"):
+            st.markdown('<section class="sb-entry-panel">', unsafe_allow_html=True)
+            auth_form_ciz("entry", entry_context=True)
+            st.markdown('</section>', unsafe_allow_html=True)
+    else:
+        st.markdown(
+            f'<div class="sb-auth-muted-note">{t("auth.firebase_login_disabled")}</div>',
+            unsafe_allow_html=True,
+        )
 
 
 def giris_ekrani_ciz() -> None:

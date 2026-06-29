@@ -6,7 +6,7 @@ import streamlit as st
 
 DEFAULT_LANGUAGE = "tr"
 SUPPORTED_LANGUAGES = ("tr", "en")
-TRANSLATION_SCHEMA_VERSION = 8
+TRANSLATION_SCHEMA_VERSION = 9
 
 
 TRANSLATIONS: Dict[str, Dict[str, str]] = {
@@ -53,6 +53,18 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "auth.social_soon": "{provider} girişi yakında aktif olacak.",
         "auth.hero_title": "Akımı<br><em>yakala.</em>",
         "auth.hero_subtitle": "",
+        "auth.card_title": "Hesabınla devam et",
+        "auth.card_hint": "Favoriler ve bildirimler hesabına kaydedilir.",
+        "auth.fill_fields": "E-posta ve şifre alanlarını doldur.",
+        "auth.login_loading": "Giriş yapılıyor...",
+        "auth.register_loading": "Hesap oluşturuluyor...",
+        "auth.forgot_password": "Şifremi unuttum",
+        "auth.reset_hint": "E-postanı yaz, sıfırlama bağlantısını gönderelim.",
+        "auth.reset_loading": "Bağlantı hazırlanıyor...",
+        "auth.reset_email_required": "Sıfırlama için e-posta adresini yaz.",
+        "auth.guest_primary_title": "En yakın şarjı hemen bul",
+        "auth.guest_primary_hint": "Üyelik gerekmez. Konumunu seçip rotanı oluşturabilirsin.",
+        "auth.guest_primary_action": "Hemen başla",
         "nav.guest": "Misafir kullanım",
         "nav.route_step": "3 / 3 · Rota",
         "nav.vehicle_step": "2 / 3 · Araç ve rota",
@@ -294,6 +306,18 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "auth.social_soon": "{provider} sign-in is coming soon.",
         "auth.hero_title": "Catch<br><em>the charge.</em>",
         "auth.hero_subtitle": "",
+        "auth.card_title": "Continue with your account",
+        "auth.card_hint": "Favorites and reports are saved to your account.",
+        "auth.fill_fields": "Enter your email and password.",
+        "auth.login_loading": "Signing in...",
+        "auth.register_loading": "Creating account...",
+        "auth.forgot_password": "Forgot password",
+        "auth.reset_hint": "Enter your email and we will send a reset link.",
+        "auth.reset_loading": "Preparing link...",
+        "auth.reset_email_required": "Enter your email to reset your password.",
+        "auth.guest_primary_title": "Find a charger right away",
+        "auth.guest_primary_hint": "No membership required. Choose your location and build your route.",
+        "auth.guest_primary_action": "Start now",
         "nav.guest": "Guest mode",
         "nav.route_step": "3 / 3 · Route",
         "nav.vehicle_step": "2 / 3 · Vehicle & route",
