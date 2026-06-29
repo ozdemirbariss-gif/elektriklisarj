@@ -38,12 +38,18 @@ Firebase ve Sentry kullanmak icin `.streamlit/secrets.toml.example` dosyasini `.
 db_url = "https://PROJECT_ID-default-rtdb.firebaseio.com"
 api_key = "FIREBASE_WEB_API_KEY"
 
+[map]
+tile_url = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+tile_attribution = "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> &copy; <a href=\"https://carto.com/attributions\">CARTO</a>"
+tile_subdomains = "abcd"
+routing_url_template = ""
+
 [sentry]
 dsn = ""
 traces_sample_rate = 0.10
 ```
 
-`firebase.db_url` ve `firebase.api_key` hesap, favori ve bildirim ozellikleri icin gereklidir. `sentry` blogu opsiyoneldir.
+`firebase.db_url` ve `firebase.api_key` hesap, favori ve bildirim ozellikleri icin gereklidir. `map.routing_url_template` bos ise uygulama public OSRM demo sunucusuna istek atmaz; kartta "yaklasik rota" gosterir. Mapbox, OpenRouteService veya kendi OSRM endpoint'in icin `{origin_lon}`, `{origin_lat}`, `{dest_lon}`, `{dest_lat}` placeholder'larini kullanan GeoJSON koordinatli bir URL verebilirsin. `sentry` blogu opsiyoneldir.
 
 ## Firebase Veri Yollari
 
