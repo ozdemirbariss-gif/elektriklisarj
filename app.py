@@ -11,7 +11,7 @@ from streamlit_folium import st_folium
 
 import i18n as i18n_module
 
-EXPECTED_TRANSLATION_SCHEMA_VERSION = 7
+EXPECTED_TRANSLATION_SCHEMA_VERSION = 8
 if getattr(i18n_module, "TRANSLATION_SCHEMA_VERSION", 0) < EXPECTED_TRANSLATION_SCHEMA_VERSION:
     importlib.reload(i18n_module)
 
@@ -19,7 +19,8 @@ from config import (
     sentry_init, load_css, logger,
     ARAC_KATALOGU, HIZ_ESIK_MAP, KONUM_DOGRULAMA_ESIGI_KM,
     FIREBASE_ENABLED, YAKIN_CEVRE_MIN_M,
-    YAKIN_CEVRE_VARSAYILAN_M, YAKIN_CEVRE_MAX_M, YAKIN_CEVRE_ADIM_M
+    YAKIN_CEVRE_VARSAYILAN_M, YAKIN_CEVRE_MAX_M, YAKIN_CEVRE_ADIM_M,
+    MAP_TILE_URL, MAP_TILE_ATTRIBUTION, MAP_TILE_SUBDOMAINS, ROUTING_URL_TEMPLATE
 )
 from i18n import get_language, localize_text, set_language, t
 from utils import (
@@ -1102,6 +1103,7 @@ def istasyon_akis_verisi_hazirla(
                 "distance": f"{float(istasyon.get('Mesafe', 0.0) or 0.0):.1f} km",
                 "duration": f"{int(istasyon.get('TahminiSureDk', 0) or 0)} {t('feed.minute')}",
                 "arrival": f"%{float(istasyon.get('VarisSarjYuzdesi', 0.0) or 0.0):.0f}",
+                "deviation": f"+{max(0.0, float(istasyon.get('Mesafe', 0.0) or 0.0) - float(istasyon.get('KusUcusuMesafe', 0.0) or 0.0)):.1f} km",
                 "power": localize_text(kisa_deger(istasyon.get("hiz"), t("common.power_unknown"), 42)),
                 "socket": localize_text(kisa_duz_metin(istasyon.get("soket"), t("common.socket_unknown"), 42)),
                 "price": localize_text(kisa_duz_metin(istasyon.get("fiyat"), t("common.price_missing"), 42)),
@@ -1126,9 +1128,20 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
         istasyon_akis_verisi_hazirla(istasyonlar, user_lat, user_lon),
         ensure_ascii=False,
     ).replace("</", "<\\/")
+    map_config_json = json.dumps(
+        {
+            "tileUrl": MAP_TILE_URL,
+            "tileAttribution": MAP_TILE_ATTRIBUTION,
+            "tileSubdomains": MAP_TILE_SUBDOMAINS,
+            "routingUrlTemplate": ROUTING_URL_TEMPLATE,
+        },
+        ensure_ascii=False,
+    ).replace("</", "<\\/")
     labels_json = json.dumps(
         {
             "arrival": t("feed.arrival"),
+            "arrivalCharge": t("feed.arrival_charge"),
+            "deviation": t("feed.deviation"),
             "badgeHelp": t("feed.badge_help"),
             "badgeAria": t("feed.badge_aria"),
             "score": t("feed.score"),
@@ -1140,6 +1153,12 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             "openRoute": t("feed.open_route"),
             "appleMaps": t("feed.apple_maps"),
             "googleMaps": t("feed.google_maps"),
+            "routeLoading": t("feed.route_loading"),
+            "routeReady": t("feed.route_ready"),
+            "routeApproximate": t("feed.route_approximate"),
+            "expandMap": t("feed.expand_map"),
+            "closeMap": t("feed.close_map"),
+            "swipeHint": t("feed.swipe_hint"),
         },
         ensure_ascii=False,
     ).replace("</", "<\\/")
@@ -1168,6 +1187,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
         <script>
             const stations = __STATIONS_JSON__;
             const labels = __LABELS_JSON__;
+            const mapConfig = __MAP_CONFIG_JSON__;
             const viewport = document.getElementById("station-feed");
             const track = document.getElementById("station-track");
             const windowEl = document.getElementById("station-window");
@@ -1181,6 +1201,8 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             let observer = null;
             let scrollTimer = null;
             let motionFrame = null;
+            let lastPaintedIndex = -1;
+            const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
             const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
                 "&": "&amp;",
@@ -1227,9 +1249,18 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                         data-card-index="${index}"
                         aria-label="${esc(station.name)}"
                     >
-                        <div class="sb-route-map-stage" aria-hidden="true">
+                        <div class="sb-route-map-stage">
                             <div class="sb-route-map" data-map-index="${index}"></div>
+                            <div class="sb-route-map-skeleton" aria-hidden="true"></div>
                             <div class="sb-route-map-fade"></div>
+                            <button
+                                class="sb-route-map-expand"
+                                type="button"
+                                title="${esc(labels.expandMap)}"
+                                aria-label="${esc(labels.expandMap)}"
+                                data-expand-index="${index}"
+                            >↗</button>
+                            <div class="sb-route-map-status" data-route-status>${esc(labels.routeLoading)}</div>
                             <div class="sb-route-map-score">
                                 <strong>${station.score}</strong><span>${esc(labels.score)}</span>
                             </div>
@@ -1241,6 +1272,10 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                             <div class="sb-route-journey">
                                 <strong>${esc(station.distance)}</strong>
                                 <span>${esc(station.duration)} · ${esc(labels.arrival)} ${esc(station.arrival)}</span>
+                                <div class="sb-route-ev-row">
+                                    <em>${esc(labels.arrivalCharge)} ${esc(station.arrival)}</em>
+                                    <em>${esc(labels.deviation)} ${esc(station.deviation)}</em>
+                                </div>
                             </div>
                             <div class="sb-route-station">
                                 <span>${esc(labels.detailCard)}</span>
@@ -1264,12 +1299,64 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                                 <span>${esc(labels.address)}</span>
                                 <strong>${esc(station.address)}</strong>
                             </div>
+                            ${index === 0 && station.total > 1 ? `<div class="sb-route-swipe-hint"><span>⌃</span>${esc(labels.swipeHint)}</div>` : ""}
                         </div>
                     </article>
                 `;
             }
 
             const stationMaps = new WeakMap();
+            const routeCache = new Map();
+
+            function routeKey(station) {
+                return [
+                    Number(station.originLat).toFixed(6),
+                    Number(station.originLon).toFixed(6),
+                    Number(station.latitude).toFixed(6),
+                    Number(station.longitude).toFixed(6)
+                ].join(":");
+            }
+
+            function buildRoutingUrl(station) {
+                const template = String(mapConfig.routingUrlTemplate || "").trim();
+                if (!template) return "";
+                const replacements = {
+                    origin_lat: station.originLat,
+                    origin_lon: station.originLon,
+                    dest_lat: station.latitude,
+                    dest_lon: station.longitude
+                };
+                return template.replace(/\\{(origin_lat|origin_lon|dest_lat|dest_lon)\\}/g, (_, key) => (
+                    encodeURIComponent(String(replacements[key]))
+                ));
+            }
+
+            function coordinatesFromRouteResponse(data) {
+                const osrmCoords = data?.routes?.[0]?.geometry?.coordinates;
+                if (Array.isArray(osrmCoords) && osrmCoords.length > 1) return osrmCoords;
+                const orsCoords = data?.features?.[0]?.geometry?.coordinates;
+                if (Array.isArray(orsCoords) && orsCoords.length > 1) return orsCoords;
+                return [];
+            }
+
+            function setRouteStatus(slide, text, mode) {
+                const badge = slide?.querySelector("[data-route-status]");
+                if (!badge) return;
+                badge.textContent = text;
+                badge.dataset.mode = mode;
+            }
+
+            function animateRouteLine(routeLine) {
+                if (reducedMotion) return;
+                const path = routeLine?._path;
+                if (!path || typeof path.getTotalLength !== "function") return;
+                const length = path.getTotalLength();
+                path.style.strokeDasharray = `${length}`;
+                path.style.strokeDashoffset = `${length}`;
+                path.style.transition = "stroke-dashoffset 980ms cubic-bezier(.22,.78,.18,1)";
+                path.getBoundingClientRect();
+                path.style.strokeDashoffset = "0";
+            }
 
             function fitRoute(map, bounds) {
                 if (!bounds || !bounds.isValid()) return;
@@ -1287,6 +1374,8 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 if (!canvas || stationMaps.has(canvas)) return;
                 if (!window.L) {
                     canvas.classList.add("is-fallback");
+                    canvas.closest(".sb-route-map-stage")?.classList.add("is-ready");
+                    setRouteStatus(slide, labels.routeApproximate, "approximate");
                     return;
                 }
 
@@ -1307,12 +1396,15 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 });
 
                 L.control.attribution({ position: "bottomright", prefix: false }).addTo(map);
-                L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-                    maxZoom: 19
+                L.tileLayer(mapConfig.tileUrl, {
+                    attribution: mapConfig.tileAttribution,
+                    maxZoom: 19,
+                    subdomains: mapConfig.tileSubdomains || "abcd",
+                    detectRetina: true
                 }).addTo(map);
 
                 const originMarker = L.circleMarker(origin, {
+                    className: "sb-origin-pulse",
                     color: "#FFFFFF",
                     fillColor: "#C8FF2E",
                     fillOpacity: 1,
@@ -1321,6 +1413,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                     weight: 3
                 }).addTo(map);
                 const destinationMarker = L.circleMarker(destination, {
+                    className: "sb-destination-pin",
                     color: "#FFFFFF",
                     fillColor: "#0E1012",
                     fillOpacity: 1,
@@ -1338,25 +1431,81 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 }).addTo(map);
                 const initialBounds = L.featureGroup([originMarker, destinationMarker, routeLine]).getBounds();
                 fitRoute(map, initialBounds);
-                stationMaps.set(canvas, { map, routeLine });
-                window.requestAnimationFrame(() => map.invalidateSize(false));
+                stationMaps.set(canvas, { map, routeLine, slide, expanded: false });
+                window.requestAnimationFrame(() => {
+                    map.invalidateSize(false);
+                    canvas.closest(".sb-route-map-stage")?.classList.add("is-ready");
+                });
 
-                const routeEndpoint = (
-                    `https://router.project-osrm.org/route/v1/driving/`
-                    + `${station.originLon},${station.originLat};${station.longitude},${station.latitude}`
-                    + `?overview=full&geometries=geojson&steps=false`
-                );
+                const cacheKey = routeKey(station);
+                const applyRoutePoints = (routePoints) => {
+                    routeLine.setLatLngs(routePoints);
+                    routeLine.setStyle({ dashArray: null, opacity: 0.96 });
+                    fitRoute(map, routeLine.getBounds());
+                    window.requestAnimationFrame(() => animateRouteLine(routeLine));
+                    setRouteStatus(slide, labels.routeReady, "ready");
+                };
+
+                if (routeCache.has(cacheKey)) {
+                    applyRoutePoints(routeCache.get(cacheKey));
+                    return;
+                }
+
+                const routeEndpoint = buildRoutingUrl(station);
+                if (!routeEndpoint) {
+                    canvas.classList.add("is-fallback");
+                    setRouteStatus(slide, labels.routeApproximate, "approximate");
+                    return;
+                }
+
                 window.fetch(routeEndpoint)
                     .then((response) => response.ok ? response.json() : Promise.reject(new Error("route")))
                     .then((data) => {
-                        const coordinates = data?.routes?.[0]?.geometry?.coordinates;
-                        if (!Array.isArray(coordinates) || coordinates.length < 2) return;
+                        const coordinates = coordinatesFromRouteResponse(data);
+                        if (!Array.isArray(coordinates) || coordinates.length < 2) {
+                            throw new Error("route-empty");
+                        }
                         const routePoints = coordinates.map(([lon, lat]) => [lat, lon]);
-                        routeLine.setLatLngs(routePoints);
-                        routeLine.setStyle({ dashArray: null, opacity: 0.96 });
-                        fitRoute(map, routeLine.getBounds());
+                        routeCache.set(cacheKey, routePoints);
+                        applyRoutePoints(routePoints);
                     })
-                    .catch(() => {});
+                    .catch(() => {
+                        canvas.classList.add("is-fallback");
+                        setRouteStatus(slide, labels.routeApproximate, "approximate");
+                    });
+            }
+
+            function preloadMapsAround(index) {
+                [index, index + 1, index - 1].forEach((target) => {
+                    const slide = windowEl.querySelector(`.sb-feed-slide[data-index="${clampIndex(target)}"]`);
+                    ensureMapForSlide(slide);
+                });
+            }
+
+            function setMapExpanded(slide, expanded) {
+                if (!slide) return;
+                const canvas = slide.querySelector(".sb-route-map");
+                const state = canvas ? stationMaps.get(canvas) : null;
+                const card = slide.querySelector(".sb-feed-card");
+                const button = slide.querySelector(".sb-route-map-expand");
+                card?.classList.toggle("is-map-expanded", expanded);
+                if (button) {
+                    button.textContent = expanded ? "×" : "↗";
+                    button.title = expanded ? labels.closeMap : labels.expandMap;
+                    button.setAttribute("aria-label", expanded ? labels.closeMap : labels.expandMap);
+                }
+                if (!state) return;
+                state.expanded = expanded;
+                ["dragging", "touchZoom", "doubleClickZoom", "scrollWheelZoom", "boxZoom", "keyboard"].forEach((name) => {
+                    const control = state.map[name];
+                    if (control && typeof control.enable === "function" && typeof control.disable === "function") {
+                        expanded ? control.enable() : control.disable();
+                    }
+                });
+                window.requestAnimationFrame(() => {
+                    state.map.invalidateSize(false);
+                    fitRoute(state.map, state.routeLine.getBounds());
+                });
             }
 
             function paintActiveSlide() {
@@ -1372,7 +1521,11 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                         card.toggleAttribute("aria-current", isActive);
                     }
                 });
-                ensureMapForSlide(windowEl.querySelector(`.sb-feed-slide[data-index="${visibleIndex}"]`));
+                preloadMapsAround(visibleIndex);
+                if (lastPaintedIndex !== -1 && lastPaintedIndex !== visibleIndex && !reducedMotion && navigator.vibrate) {
+                    navigator.vibrate(8);
+                }
+                lastPaintedIndex = visibleIndex;
             }
 
             function syncMotion() {
@@ -1483,7 +1636,25 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 viewport.focus({ preventScroll: true });
             }, { passive: true });
 
+            windowEl.addEventListener("click", (event) => {
+                const button = event.target.closest(".sb-route-map-expand");
+                if (!button) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const slide = button.closest(".sb-feed-slide");
+                const card = slide?.querySelector(".sb-feed-card");
+                setMapExpanded(slide, !card?.classList.contains("is-map-expanded"));
+            });
+
             document.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                    const expandedSlide = windowEl.querySelector(".sb-feed-card.is-map-expanded")?.closest(".sb-feed-slide");
+                    if (expandedSlide) {
+                        event.preventDefault();
+                        setMapExpanded(expandedSlide, false);
+                        return;
+                    }
+                }
                 if (event.key === "ArrowDown" || event.key === "PageDown" || event.key === " ") {
                     event.preventDefault();
                     scrollToIndex(visibleIndex + 1);
@@ -1526,7 +1697,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 --feed-muted: rgba(14, 16, 18, 0.46);
                 --feed-green: #C8FF2E;
                 --feed-blue: #0E1012;
-                --feed-frame-height: 590px;
+                --feed-frame-height: min(590px, calc(100vh - 12px));
                 --feed-font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
                 --feed-font-body: "Inter", system-ui, sans-serif;
             }
@@ -2099,6 +2270,16 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 position: relative;
             }
 
+            .sb-feed-card.is-map-expanded .sb-route-map-stage {
+                border-radius: 28px;
+                box-shadow: 0 22px 70px rgba(14, 16, 18, 0.28);
+                flex-basis: auto;
+                inset: 10px;
+                min-height: 0;
+                position: fixed;
+                z-index: 90;
+            }
+
             .sb-route-map {
                 background:
                     linear-gradient(135deg, rgba(200, 255, 46, 0.18), rgba(14, 16, 18, 0.12)),
@@ -2107,6 +2288,28 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 pointer-events: none;
                 width: 100%;
                 z-index: 1;
+            }
+
+            .sb-feed-card.is-map-expanded .sb-route-map {
+                pointer-events: auto;
+            }
+
+            .sb-route-map-skeleton {
+                animation: sb-route-shimmer 1.35s ease-in-out infinite;
+                background:
+                    linear-gradient(100deg, transparent 22%, rgba(255, 255, 255, 0.78) 38%, transparent 54%),
+                    linear-gradient(135deg, rgba(157, 223, 142, 0.18), rgba(36, 78, 128, 0.12));
+                background-size: 240% 100%, auto;
+                inset: 0;
+                opacity: 1;
+                pointer-events: none;
+                position: absolute;
+                transition: opacity 260ms ease;
+                z-index: 3;
+            }
+
+            .sb-route-map-stage.is-ready .sb-route-map-skeleton {
+                opacity: 0;
             }
 
             .sb-route-map.is-fallback {
@@ -2127,7 +2330,9 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
             }
 
             .sb-route-map-score,
-            .sb-route-map-rank {
+            .sb-route-map-rank,
+            .sb-route-map-status,
+            .sb-route-map-expand {
                 align-items: baseline;
                 backdrop-filter: blur(14px);
                 background: rgba(250, 254, 251, 0.72);
@@ -2140,6 +2345,37 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 position: absolute;
                 top: 12px;
                 z-index: 5;
+            }
+
+            .sb-route-map-expand {
+                align-items: center;
+                appearance: none;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: 900;
+                height: 36px;
+                justify-content: center;
+                line-height: 1;
+                padding: 0;
+                right: 12px;
+                top: 56px;
+                width: 36px;
+            }
+
+            .sb-route-map-status {
+                bottom: 72px;
+                color: var(--feed-blue);
+                font-size: 9px;
+                font-weight: 880;
+                left: 12px;
+                max-width: calc(100% - 24px);
+                padding: 7px 9px;
+                text-transform: uppercase;
+                top: auto;
+            }
+
+            .sb-route-map-status[data-mode="approximate"] {
+                color: #365F2D;
             }
 
             .sb-route-map-score {
@@ -2203,6 +2439,24 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 font-size: 12px;
                 font-weight: 760;
                 margin-top: 6px;
+            }
+
+            .sb-route-ev-row {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                margin-top: 9px;
+            }
+
+            .sb-route-ev-row em {
+                background: rgba(157, 223, 142, 0.20);
+                border: 1px solid rgba(157, 223, 142, 0.34);
+                border-radius: 999px;
+                color: #244E80;
+                font-size: 10px;
+                font-style: normal;
+                font-weight: 850;
+                padding: 5px 8px;
             }
 
             .sb-route-station {
@@ -2364,6 +2618,28 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                 -webkit-line-clamp: 2;
             }
 
+            .sb-route-swipe-hint {
+                align-items: center;
+                align-self: center;
+                background: rgba(255, 255, 255, 0.74);
+                border: 1px solid rgba(14, 16, 18, 0.08);
+                border-radius: 999px;
+                color: var(--feed-soft);
+                display: flex;
+                font-size: 10px;
+                font-weight: 850;
+                gap: 5px;
+                margin-top: 7px;
+                padding: 6px 10px;
+            }
+
+            .sb-route-swipe-hint span {
+                animation: sb-swipe-hint 1.35s ease-in-out infinite;
+                color: var(--feed-blue);
+                font-size: 13px;
+                line-height: 1;
+            }
+
             .leaflet-container {
                 background: #F7FCF8;
                 font-family: var(--feed-font-body);
@@ -2371,6 +2647,15 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
 
             .leaflet-tile {
                 filter: saturate(0.82) contrast(0.94) opacity(0.76);
+            }
+
+            .sb-origin-pulse {
+                animation: sb-origin-pulse 1.8s ease-out infinite;
+                filter: drop-shadow(0 0 12px rgba(200, 255, 46, 0.66));
+            }
+
+            .sb-destination-pin {
+                filter: drop-shadow(0 8px 14px rgba(14, 16, 18, 0.24));
             }
 
             .leaflet-control-attribution {
@@ -2447,9 +2732,47 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                     padding: 7px 6px;
                 }
 
+                .sb-route-map-status {
+                    bottom: 64px;
+                    font-size: 8px;
+                }
+
                 .sb-route-address {
                     margin-top: auto;
                     padding-top: 7px;
+                }
+            }
+
+            @keyframes sb-route-shimmer {
+                from { background-position: 170% 0, 0 0; }
+                to { background-position: -70% 0, 0 0; }
+            }
+
+            @keyframes sb-origin-pulse {
+                0% {
+                    opacity: 1;
+                    stroke-width: 3;
+                }
+                72% {
+                    opacity: 0.66;
+                    stroke-width: 8;
+                }
+                100% {
+                    opacity: 1;
+                    stroke-width: 3;
+                }
+            }
+
+            @keyframes sb-swipe-hint {
+                0%, 100% { transform: translateY(2px); }
+                50% { transform: translateY(-2px); }
+            }
+
+            @media (prefers-reduced-motion: reduce) {
+                .sb-route-map-skeleton,
+                .sb-origin-pulse,
+                .sb-route-swipe-hint span {
+                    animation: none;
                 }
             }
         </style>
@@ -2457,6 +2780,7 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
     feed_html = (
         feed_html
         .replace("__LABELS_JSON__", labels_json)
+        .replace("__MAP_CONFIG_JSON__", map_config_json)
         .replace("__FEED_ARIA__", guvenli_metin(t("feed.aria"), 80))
     )
 

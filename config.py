@@ -37,6 +37,25 @@ except (KeyError, FileNotFoundError):
 FIREBASE_ENABLED = bool(FIREBASE_DB_URL and FIREBASE_API_KEY)
 
 # ==========================================
+# 🗺️ HARİTA VE ROTA SAĞLAYICILARI
+# ==========================================
+DEFAULT_MAP_TILE_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+DEFAULT_MAP_TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+
+try:
+    MAP_TILE_URL = str(st.secrets.get("map", {}).get("tile_url", DEFAULT_MAP_TILE_URL)).strip() or DEFAULT_MAP_TILE_URL
+    MAP_TILE_ATTRIBUTION = str(
+        st.secrets.get("map", {}).get("tile_attribution", DEFAULT_MAP_TILE_ATTRIBUTION)
+    ).strip() or DEFAULT_MAP_TILE_ATTRIBUTION
+    MAP_TILE_SUBDOMAINS = str(st.secrets.get("map", {}).get("tile_subdomains", "abcd")).strip()
+    ROUTING_URL_TEMPLATE = str(st.secrets.get("map", {}).get("routing_url_template", "")).strip()
+except Exception:
+    MAP_TILE_URL = DEFAULT_MAP_TILE_URL
+    MAP_TILE_ATTRIBUTION = DEFAULT_MAP_TILE_ATTRIBUTION
+    MAP_TILE_SUBDOMAINS = "abcd"
+    ROUTING_URL_TEMPLATE = ""
+
+# ==========================================
 # 📐 UYGULAMA SABİTLERİ
 # ==========================================
 OVERPASS_TIMEOUT_S        = 12.0

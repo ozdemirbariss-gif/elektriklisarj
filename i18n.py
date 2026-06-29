@@ -6,7 +6,7 @@ import streamlit as st
 
 DEFAULT_LANGUAGE = "tr"
 SUPPORTED_LANGUAGES = ("tr", "en")
-TRANSLATION_SCHEMA_VERSION = 7
+TRANSLATION_SCHEMA_VERSION = 8
 
 
 TRANSLATIONS: Dict[str, Dict[str, str]] = {
@@ -163,6 +163,8 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "feed.nearby_option": "Yakın seçenek",
         "feed.minute": "dk",
         "feed.arrival": "varış",
+        "feed.arrival_charge": "Varış şarjı",
+        "feed.deviation": "Sapma",
         "feed.badge_help": "Rozetler; canlı durum, menzil, hız ve veri güveni sinyallerini özetler.",
         "feed.badge_aria": "Rozet açıklaması",
         "feed.notification": "Bildirim",
@@ -175,6 +177,12 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "feed.open_route": "Rotayı Aç",
         "feed.apple_maps": "Apple Maps",
         "feed.google_maps": "Google Maps",
+        "feed.route_loading": "Rota hazırlanıyor",
+        "feed.route_ready": "Canlı rota",
+        "feed.route_approximate": "Yaklaşık rota",
+        "feed.expand_map": "Haritayı büyüt",
+        "feed.close_map": "Haritayı kapat",
+        "feed.swipe_hint": "Yukarı kaydır",
         "actions.quick": "Hızlı işlemler",
         "actions.station_label": "İşlem yapılacak istasyon",
         "actions.station_help": "Rapor, favori ve çevre aksiyonları seçili istasyona uygulanır.",
@@ -396,6 +404,8 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "feed.nearby_option": "Nearby option",
         "feed.minute": "min",
         "feed.arrival": "arrival",
+        "feed.arrival_charge": "Arrival charge",
+        "feed.deviation": "Detour",
         "feed.badge_help": "Badges summarize live status, range, speed, and data confidence signals.",
         "feed.badge_aria": "Badge explanation",
         "feed.notification": "Report",
@@ -408,6 +418,12 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "feed.open_route": "Open Route",
         "feed.apple_maps": "Apple Maps",
         "feed.google_maps": "Google Maps",
+        "feed.route_loading": "Preparing route",
+        "feed.route_ready": "Live route",
+        "feed.route_approximate": "Approximate route",
+        "feed.expand_map": "Expand map",
+        "feed.close_map": "Close map",
+        "feed.swipe_hint": "Swipe up",
         "actions.quick": "Quick actions",
         "actions.station_label": "Station for actions",
         "actions.station_help": "Report, save, and nearby actions apply to the selected station.",
