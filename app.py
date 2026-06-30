@@ -489,20 +489,17 @@ def surus_profili_ciz(operator_secenekleri: List[str]) -> Tuple[
         "min_value": 1,
         "max_value": 100,
         "key": "sarj_yuzdesi",
-        "on_change": rota_sonucunu_sifirla,
     }
     if "sarj_yuzdesi" not in st.session_state:
         sarj_kwargs["value"] = 30
-    with st.container(key="charge_level_panel"):
-        sarj_yuzdesi = st.slider(**sarj_kwargs)
-        sarj_gostergesi_ciz(sarj_yuzdesi)
 
     batarya_kwargs = {
         "label": t("catalog.capacity"),
         "min_value": 1.0,
         "max_value": 250.0,
+        "step": 1.0,
+        "format": "%.0f",
         "key": "batarya_kwh",
-        "on_change": rota_sonucunu_sifirla,
     }
     if "batarya_kwh" not in st.session_state:
         batarya_kwargs["value"] = VARSAYILAN_BATARYA_KWH
@@ -511,16 +508,20 @@ def surus_profili_ciz(operator_secenekleri: List[str]) -> Tuple[
         "label": t("catalog.consumption"),
         "min_value": 5.0,
         "max_value": 40.0,
+        "step": 0.1,
+        "format": "%.1f",
         "key": "tuketim_kwh",
-        "on_change": rota_sonucunu_sifirla,
     }
     if "tuketim_kwh" not in st.session_state:
         tuketim_kwargs["value"] = VARSAYILAN_TUKETIM_KWH
 
-    with st.container(key="driving_profile_inputs"):
-        c1, c2 = st.columns(2)
-        batarya = c1.number_input(**batarya_kwargs)
-        tuketim = c2.number_input(**tuketim_kwargs)
+    with st.container(key="charge_level_panel"):
+        sarj_yuzdesi = st.slider(**sarj_kwargs)
+        sarj_gostergesi_ciz(sarj_yuzdesi)
+        with st.container(key="driving_profile_inputs"):
+            c1, c2 = st.columns(2)
+            batarya = c1.number_input(**batarya_kwargs)
+            tuketim = c2.number_input(**tuketim_kwargs)
 
     niyet = "Dengeli"
     ayar_yaricap = YAKIN_CEVRE_VARSAYILAN_M
