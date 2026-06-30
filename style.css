@@ -3617,6 +3617,21 @@ div.st-key-quick_value button {
     min-height: 66px !important;
 }
 
+div.st-key-quick_near,
+div.st-key-quick_fast,
+div.st-key-quick_value {
+    margin-bottom: 1.1rem !important;
+    min-width: 0 !important;
+}
+
+div.st-key-quick_near button,
+div.st-key-quick_fast button,
+div.st-key-quick_value button {
+    padding-left: 0.45rem !important;
+    padding-right: 0.45rem !important;
+    width: 100% !important;
+}
+
 div.st-key-quick_near button[kind="primary"],
 div.st-key-quick_fast button[kind="primary"],
 div.st-key-quick_value button[kind="primary"] {

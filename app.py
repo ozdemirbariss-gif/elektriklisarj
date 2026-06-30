@@ -155,21 +155,7 @@ def aktif_filtre_sayisi_getir() -> int:
 
 
 def veri_guncelleme_metni_ciz() -> None:
-    son_yukleme = st.session_state.get("istasyon_son_yukleme")
-    if not son_yukleme:
-        return
-    try:
-        yukleme_dt = datetime.fromisoformat(str(son_yukleme).replace("Z", "+00:00"))
-        gecen_dk = max(0, int((utc_simdi() - yukleme_dt).total_seconds() // 60))
-    except (TypeError, ValueError) as e:
-        logger.warning("Veri güncelleme zamanı okunamadı: %s", e)
-        return
-
-    gecen = t("data.just_now") if gecen_dk < 1 else t("data.minutes_ago", minutes=gecen_dk)
-    st.markdown(
-        f'<div class="sb-data-freshness">{guvenli_metin(t("data.updated", time=gecen), 80)}</div>',
-        unsafe_allow_html=True,
-    )
+    return
 
 
 def istasyon_hata_state_ciz() -> None:
@@ -408,16 +394,7 @@ def ust_bilgi_ciz() -> None:
 
 
 def ana_mod_secici_ciz() -> None:
-    st.markdown(
-        f"""
-        <section class="sb-home-intro">
-            <div class="sb-kicker">{t("home.kicker")}</div>
-            <h1>{t("home.title")}</h1>
-            <p>{t("home.subtitle")}</p>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
+    return
 
 
 def hizli_tercih_uygula(niyet: str, hiz: str = "Tümü") -> None:
@@ -429,10 +406,6 @@ def hizli_tercih_uygula(niyet: str, hiz: str = "Tümü") -> None:
 
 
 def hizli_islemler_ciz() -> None:
-    st.markdown(
-        f'<div class="sb-quick-heading"><strong>{t("home.quick_title")}</strong><span>{t("home.quick_hint")}</span></div>',
-        unsafe_allow_html=True,
-    )
     yakin_col, hizli_col, uygun_col = st.columns(3, gap="small")
     niyet = str(st.session_state.get("niyet", "Dengeli"))
     hiz = str(st.session_state.get("hiz_filtresi", "Tümü"))
