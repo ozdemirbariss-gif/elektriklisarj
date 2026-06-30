@@ -184,6 +184,7 @@ def uygulama_akisini_hazirla() -> None:
     st.session_state.setdefault("sb_guest_mode", False)
     st.session_state.setdefault("rota_goster", False)
     st.session_state.setdefault("bekleme_salonu_goster", False)
+    st.session_state.setdefault("browser_location_pending", False)
 
     if "auth_token" in st.session_state:
         st.session_state["sb_access_granted"] = True
@@ -667,6 +668,9 @@ KONUM_KAYNAGI_MANUEL = "manual"
 def konumu_sessiona_yaz(lat: float, lon: float, kaynak: str | None = None) -> Tuple[float, float]:
     if kaynak:
         st.session_state["konum_kaynagi"] = kaynak
+        if kaynak == KONUM_KAYNAGI_TARAYICI:
+            st.session_state["manuel_konum_secimi"] = ""
+            st.session_state.pop("browser_location_error", None)
 
     onceki_lat = st.session_state.get("last_valid_lat")
     onceki_lon = st.session_state.get("last_valid_lon")
@@ -3005,24 +3009,34 @@ user_lat, user_lon = None, None
 if tarayici_konumu_okunmali_mi():
     try:
         st.session_state["browser_location_checked_at"] = utc_isoformat()
+        st.session_state["browser_location_pending"] = True
         konum_verisi = get_geolocation()
-        if isinstance(konum_verisi, dict) and "coords" in konum_verisi:
-            if konum_gecerli_mi(konum_verisi["coords"].get("latitude"), konum_verisi["coords"].get("longitude")):
+        if isinstance(konum_verisi, dict):
+            st.session_state["browser_location_pending"] = False
+            if "coords" in konum_verisi and konum_gecerli_mi(
+                konum_verisi["coords"].get("latitude"),
+                konum_verisi["coords"].get("longitude"),
+            ):
                 user_lat, user_lon = float(konum_verisi["coords"]["latitude"]), float(konum_verisi["coords"]["longitude"])
                 user_lat, user_lon = konumu_sessiona_yaz(
                     user_lat,
                     user_lon,
                     KONUM_KAYNAGI_TARAYICI,
                 )
+            elif "error" in konum_verisi:
+                st.session_state["browser_location_error"] = konum_verisi.get("error", {})
     except Exception as e:
+        st.session_state["browser_location_pending"] = False
         logger.warning("Tarayıcı konumu okunamadı: %s", e, exc_info=True)
 
 if user_lat is None: user_lat = st.session_state.get("last_valid_lat")
 if user_lon is None: user_lon = st.session_state.get("last_valid_lon")
 
 konum_hazir = user_lat is not None and user_lon is not None
+tarayici_konumu_aktif = konum_hazir and st.session_state.get("konum_kaynagi") == KONUM_KAYNAGI_TARAYICI
+tarayici_konumu_bekleniyor = bool(st.session_state.get("browser_location_pending"))
 manuel_konum_karti_goster = not (
-    konum_hazir and st.session_state.get("konum_kaynagi") == KONUM_KAYNAGI_TARAYICI
+    tarayici_konumu_aktif or tarayici_konumu_bekleniyor
 )
 
 alt_navigasyon_ciz(konum_hazir)
