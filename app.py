@@ -519,9 +519,8 @@ def arac_katalogu_ciz(operator_secenekleri: List[str]) -> Tuple[
 
     st.markdown(
         f"""
-        <section class="sb-catalog-panel" id="sarj-katalogu">
+        <section class="sb-catalog-heading" id="sarj-katalogu">
             <div class="sb-kicker">{t("catalog.kicker")}</div>
-            <h2>{t("catalog.title")}</h2>
         </section>
         """,
         unsafe_allow_html=True,
