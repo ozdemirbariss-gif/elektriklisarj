@@ -17,10 +17,11 @@ if getattr(i18n_module, "TRANSLATION_SCHEMA_VERSION", 0) < EXPECTED_TRANSLATION_
 
 from config import (
     sentry_init, load_css, logger,
-    ARAC_KATALOGU, HIZ_ESIK_MAP, KONUM_DOGRULAMA_ESIGI_KM,
+    HIZ_ESIK_MAP, KONUM_DOGRULAMA_ESIGI_KM,
     FIREBASE_ENABLED, YAKIN_CEVRE_MIN_M,
     YAKIN_CEVRE_VARSAYILAN_M, YAKIN_CEVRE_MAX_M, YAKIN_CEVRE_ADIM_M,
-    MAP_TILE_URL, MAP_TILE_ATTRIBUTION, MAP_TILE_SUBDOMAINS, ROUTING_URL_TEMPLATE
+    MAP_TILE_URL, MAP_TILE_ATTRIBUTION, MAP_TILE_SUBDOMAINS, ROUTING_URL_TEMPLATE,
+    VARSAYILAN_BATARYA_KWH, VARSAYILAN_TUKETIM_KWH
 )
 from i18n import get_language, localize_text, set_language, t
 from utils import (
@@ -57,12 +58,6 @@ def kisa_deger(deger: Any, varsayilan: str = "Bilinmiyor", max_len: int = 80) ->
 def kisa_duz_metin(deger: Any, varsayilan: str = "Bilinmiyor", max_len: int = 120) -> str:
     text = str(deger or "").strip() or localize_text(varsayilan)
     return text[:max_len]
-
-
-def secili_arac_getir() -> str:
-    varsayilan = list(ARAC_KATALOGU.keys())[0]
-    secili = st.session_state.get("secilen_arac")
-    return secili if secili in ARAC_KATALOGU else varsayilan
 
 
 def tarayici_konumu_okunmali_mi() -> bool:
@@ -476,14 +471,6 @@ def hizli_islemler_ciz() -> None:
             st.rerun()
 
 
-def arac_secimi_degisti() -> None:
-    secilen = st.session_state.get("secilen_arac")
-    if secilen in ARAC_KATALOGU:
-        st.session_state["batarya_kwh"] = float(ARAC_KATALOGU[secilen]["batarya"])
-        st.session_state["tuketim_kwh"] = float(ARAC_KATALOGU[secilen]["tuketim"])
-    rota_sonucunu_sifirla()
-
-
 def sarj_gostergesi_ciz(sarj_yuzdesi: int) -> None:
     yuzde = max(1, min(100, int(sarj_yuzdesi)))
     aci = yuzde * 3.6
@@ -511,12 +498,9 @@ def sarj_gostergesi_ciz(sarj_yuzdesi: int) -> None:
     )
 
 
-def arac_katalogu_ciz(operator_secenekleri: List[str]) -> Tuple[
-    str, float, int, float, int, str, int, List[str], str, List[str], bool, bool, bool, str
+def surus_profili_ciz(operator_secenekleri: List[str]) -> Tuple[
+    float, int, float, int, str, int, List[str], str, List[str], bool, bool, bool, str
 ]:
-    secilen_baslangic = secili_arac_getir()
-    st.session_state.setdefault("secilen_arac", secilen_baslangic)
-
     st.markdown(
         f"""
         <section class="sb-catalog-heading" id="sarj-katalogu">
@@ -525,15 +509,6 @@ def arac_katalogu_ciz(operator_secenekleri: List[str]) -> Tuple[
         """,
         unsafe_allow_html=True,
     )
-
-    secilen_arac = st.selectbox(
-        t("catalog.vehicle"),
-        list(ARAC_KATALOGU.keys()),
-        key="secilen_arac",
-        on_change=arac_secimi_degisti,
-        format_func=lambda value: t("vehicle.manual") if value == "Özel Araç (Manuel)" else value,
-    )
-    v = ARAC_KATALOGU[secilen_arac]
 
     sarj_kwargs = {
         "label": t("catalog.charge_percent"),
@@ -556,7 +531,7 @@ def arac_katalogu_ciz(operator_secenekleri: List[str]) -> Tuple[
         "on_change": rota_sonucunu_sifirla,
     }
     if "batarya_kwh" not in st.session_state:
-        batarya_kwargs["value"] = float(v["batarya"])
+        batarya_kwargs["value"] = VARSAYILAN_BATARYA_KWH
 
     tuketim_kwargs = {
         "label": t("catalog.consumption"),
@@ -566,9 +541,9 @@ def arac_katalogu_ciz(operator_secenekleri: List[str]) -> Tuple[
         "on_change": rota_sonucunu_sifirla,
     }
     if "tuketim_kwh" not in st.session_state:
-        tuketim_kwargs["value"] = float(v["tuketim"])
+        tuketim_kwargs["value"] = VARSAYILAN_TUKETIM_KWH
 
-    with st.expander(t("catalog.advanced"), expanded=False):
+    with st.container(key="driving_profile_inputs"):
         c1, c2 = st.columns(2)
         batarya = c1.number_input(**batarya_kwargs)
         tuketim = c2.number_input(**tuketim_kwargs)
@@ -661,7 +636,6 @@ def arac_katalogu_ciz(operator_secenekleri: List[str]) -> Tuple[
 
     guvenlik_marji = int(st.session_state.get("guvenlik_marji", 25))
     return (
-        secilen_arac,
         float(batarya),
         int(sarj_yuzdesi),
         float(tuketim),
@@ -679,15 +653,12 @@ def arac_katalogu_ciz(operator_secenekleri: List[str]) -> Tuple[
 
 
 def arac_ayarlarini_sessiondan_getir() -> Tuple[
-    str, float, int, float, int, str, int, List[str], str, List[str], bool, bool, bool, str
+    float, int, float, int, str, int, List[str], str, List[str], bool, bool, bool, str
 ]:
-    secilen_arac = secili_arac_getir()
-    v = ARAC_KATALOGU[secilen_arac]
     return (
-        secilen_arac,
-        float(st.session_state.get("batarya_kwh", v["batarya"])),
+        float(st.session_state.get("batarya_kwh", VARSAYILAN_BATARYA_KWH)),
         int(st.session_state.get("sarj_yuzdesi", 30)),
-        float(st.session_state.get("tuketim_kwh", v["tuketim"])),
+        float(st.session_state.get("tuketim_kwh", VARSAYILAN_TUKETIM_KWH)),
         int(st.session_state.get("guvenlik_marji", 25)),
         str(st.session_state.get("niyet", "Dengeli")),
         int(st.session_state.get("ayar_yaricap", YAKIN_CEVRE_VARSAYILAN_M)),
@@ -1084,7 +1055,7 @@ def ozet_paneli_ciz(guvenli_menzil: float, sarj_yuzdesi: int, istasyon_sayisi: i
     )
 
 
-def surus_ozeti_ciz(arac: str, guvenli_menzil: float, sarj_yuzdesi: int) -> None:
+def surus_ozeti_ciz(guvenli_menzil: float, sarj_yuzdesi: int) -> None:
     st.markdown(
         f"""
         <section class="sb-smart-insight">
@@ -1092,7 +1063,7 @@ def surus_ozeti_ciz(arac: str, guvenli_menzil: float, sarj_yuzdesi: int) -> None
             <div class="sb-smart-copy">
                 <span>{t("home.insight_kicker")}</span>
                 <strong>{t("home.insight_title", range=guvenli_menzil)}</strong>
-                <p>{kisa_deger(arac, max_len=36)} · {t("summary.safe_range_value", percent=sarj_yuzdesi, range=guvenli_menzil)}</p>
+                <p>{t("summary.safe_range_value", percent=sarj_yuzdesi, range=guvenli_menzil)}</p>
             </div>
         </section>
         """,
@@ -1101,7 +1072,6 @@ def surus_ozeti_ciz(arac: str, guvenli_menzil: float, sarj_yuzdesi: int) -> None
 
 
 def rota_eylem_paneli_ciz(
-    arac: str,
     guvenli_menzil: float,
     sarj_yuzdesi: int,
     konum_hazir: bool,
@@ -1118,7 +1088,7 @@ def rota_eylem_paneli_ciz(
         )
 
     with st.container(key="route_action_panel"):
-        surus_ozeti_ciz(arac, guvenli_menzil, sarj_yuzdesi)
+        surus_ozeti_ciz(guvenli_menzil, sarj_yuzdesi)
         if st.button(
             t("location.find_charger"),
             key="find_route_btn",
@@ -3094,10 +3064,9 @@ if not rota_modu:
         ana_konum_arama_ciz(konum_hazir, user_lat, user_lon)
     hizli_islemler_ciz()
 
-# 3. Araç Kataloğu ve Katmanlı Arama
+# 3. Sürüş Profili ve Katmanlı Arama
 if rota_modu:
     (
-        secilen_arac,
         batarya,
         sarj_yuzdesi,
         tuketim,
@@ -3114,7 +3083,6 @@ if rota_modu:
     ) = arac_ayarlarini_sessiondan_getir()
 else:
     (
-        secilen_arac,
         batarya,
         sarj_yuzdesi,
         tuketim,
@@ -3128,11 +3096,11 @@ else:
         haritayi_goster,
         menzil_filtresi,
         arama_metni,
-    ) = arac_katalogu_ciz(operator_secenekleri)
+    ) = surus_profili_ciz(operator_secenekleri)
 
 guvenli_menzil = ((batarya * (sarj_yuzdesi / 100.0) / tuketim) * 100.0) * (1 - guvenlik_marji / 100.0)
 if not rota_modu:
-    rota_eylem_paneli_ciz(secilen_arac, guvenli_menzil, sarj_yuzdesi, konum_hazir)
+    rota_eylem_paneli_ciz(guvenli_menzil, sarj_yuzdesi, konum_hazir)
 
 if not konum_hazir:
     st.markdown(
