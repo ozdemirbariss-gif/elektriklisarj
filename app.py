@@ -108,6 +108,12 @@ def rota_sonucunu_sifirla() -> None:
     st.session_state["rota_goster"] = False
 
 
+def rota_modunu_ac() -> None:
+    st.session_state["rota_goster"] = True
+    st.session_state["bekleme_salonu_goster"] = False
+    st.session_state["account_panel_open"] = False
+
+
 def bekleme_salonunu_ac() -> None:
     st.session_state["bekleme_salonu_goster"] = True
     st.session_state["rota_goster"] = False
@@ -1067,15 +1073,14 @@ def rota_eylem_paneli_ciz(
 
     with st.container(key="route_action_panel"):
         surus_ozeti_ciz(guvenli_menzil, sarj_yuzdesi)
-        if st.button(
+        st.button(
             t("location.find_charger"),
             key="find_route_btn",
             use_container_width=True,
             disabled=not konum_hazir,
             type="primary",
-        ):
-            st.session_state["rota_goster"] = True
-            st.rerun()
+            on_click=rota_modunu_ac,
+        )
 
 
 def rota_linki_olustur(istasyon: Dict[str, Any], user_lat: float, user_lon: float) -> str:
@@ -2787,6 +2792,250 @@ def istasyon_akis_ciz(istasyonlar: List[Dict[str, Any]], user_lat: float, user_l
                     animation: none;
                 }
             }
+
+            :root {
+                --feed-bg: #ECEDE7;
+                --feed-text: #07090D;
+                --feed-soft: rgba(7, 9, 13, 0.68);
+                --feed-muted: rgba(7, 9, 13, 0.45);
+                --feed-green: #D9FF24;
+                --feed-blue: #1D211A;
+            }
+
+            .sb-feed-shell {
+                background:
+                    linear-gradient(118deg, rgba(217, 255, 36, 0.16) 0 13%, transparent 13% 68%, rgba(29, 33, 26, 0.05) 68% 100%),
+                    linear-gradient(180deg, rgba(245, 247, 241, 0.96), rgba(232, 235, 225, 0.94));
+                border-radius: 34px;
+                overflow: hidden;
+            }
+
+            .sb-feed-viewport {
+                perspective: 920px;
+            }
+
+            .sb-feed-slide {
+                contain: none;
+                overflow: visible;
+                padding: 54px 7px 17px;
+            }
+
+            .sb-feed-card {
+                background:
+                    linear-gradient(155deg, rgba(255, 255, 255, 0.26), transparent 30%),
+                    linear-gradient(180deg, #DFFF2F 0%, #D7FF27 60%, #D1FA24 100%);
+                border: 1px solid rgba(7, 9, 13, 0.10);
+                border-radius: 34px;
+                box-shadow:
+                    0 -21px 0 -7px rgba(37, 39, 34, 0.92),
+                    0 -42px 0 -16px rgba(37, 39, 34, 0.52),
+                    0 26px 58px rgba(24, 27, 21, 0.20);
+                height: calc(var(--feed-frame-height) - 76px);
+                overflow: hidden;
+                transform-origin: center top;
+            }
+
+            .sb-feed-slide:not(.is-active) .sb-feed-card {
+                background: #252722;
+                border-color: rgba(255, 255, 255, 0.10);
+                box-shadow: 0 16px 36px rgba(24, 27, 21, 0.22);
+                color: #F6F8EF;
+            }
+
+            .sb-feed-slide:not(.is-active) .sb-route-detail,
+            .sb-feed-slide:not(.is-active) .sb-route-station,
+            .sb-feed-slide:not(.is-active) .sb-route-metrics > div {
+                background: rgba(255, 255, 255, 0.08);
+                border-color: rgba(255, 255, 255, 0.10);
+            }
+
+            .sb-feed-slide:not(.is-active) .sb-route-journey strong,
+            .sb-feed-slide:not(.is-active) .sb-route-station strong,
+            .sb-feed-slide:not(.is-active) .sb-route-metrics strong {
+                color: #F6F8EF;
+            }
+
+            .sb-feed-slide:not(.is-active) .sb-route-journey span,
+            .sb-feed-slide:not(.is-active) .sb-route-station span,
+            .sb-feed-slide:not(.is-active) .sb-route-station small,
+            .sb-feed-slide:not(.is-active) .sb-route-metrics span,
+            .sb-feed-slide:not(.is-active) .sb-route-address span,
+            .sb-feed-slide:not(.is-active) .sb-route-address strong {
+                color: rgba(246, 248, 239, 0.64);
+            }
+
+            .sb-route-map-stage {
+                background:
+                    linear-gradient(135deg, rgba(246, 248, 239, 0.58), rgba(29, 33, 26, 0.12)),
+                    #EAF0E4;
+                border-radius: 28px;
+                flex-basis: 218px;
+                margin: 14px 14px 0;
+                min-height: 218px;
+            }
+
+            .sb-route-map {
+                border-radius: 28px;
+                overflow: hidden;
+            }
+
+            .sb-route-map-fade {
+                background:
+                    linear-gradient(180deg, transparent 44%, rgba(217, 255, 36, 0.30) 74%, rgba(217, 255, 36, 0.68) 100%);
+            }
+
+            .sb-route-map-score,
+            .sb-route-map-rank {
+                background: rgba(246, 248, 239, 0.70);
+                border-color: rgba(7, 9, 13, 0.10);
+                box-shadow: 0 10px 24px rgba(24, 27, 21, 0.10);
+            }
+
+            .sb-route-detail {
+                backdrop-filter: none;
+                background: transparent;
+                border-radius: 0;
+                box-shadow: none;
+                margin-top: -34px;
+                padding: 18px;
+            }
+
+            .sb-route-journey {
+                margin-bottom: 13px;
+            }
+
+            .sb-route-journey strong {
+                font-size: 47px;
+                font-weight: 880;
+                letter-spacing: 0;
+            }
+
+            .sb-route-journey span {
+                color: rgba(7, 9, 13, 0.62);
+                font-size: 13px;
+            }
+
+            .sb-route-station {
+                background: rgba(246, 248, 239, 0.38);
+                border: 1px solid rgba(7, 9, 13, 0.09);
+                border-radius: 22px;
+                min-height: 68px;
+                padding: 11px 13px;
+            }
+
+            .sb-route-station strong {
+                font-size: 18px;
+                letter-spacing: 0;
+            }
+
+            .sb-route-metrics {
+                gap: 7px;
+                margin-top: 9px;
+            }
+
+            .sb-route-metrics > div {
+                background: rgba(246, 248, 239, 0.34);
+                border: 1px solid rgba(7, 9, 13, 0.08);
+                border-radius: 999px;
+                min-height: 42px;
+                padding: 8px 10px;
+            }
+
+            .sb-route-metrics span {
+                font-size: 8px;
+            }
+
+            .sb-route-metrics strong {
+                font-size: 10px;
+                margin-top: 3px;
+                white-space: nowrap;
+            }
+
+            .sb-route-detail .sb-feed-chip {
+                background: rgba(7, 9, 13, 0.09);
+                border: 0;
+                color: #1D211A;
+                min-height: 25px;
+                padding: 6px 9px;
+            }
+
+            .sb-route-detail .sb-feed-chip-help {
+                background: rgba(29, 33, 26, 0.18);
+                border: 0;
+                color: #1D211A;
+            }
+
+            .sb-route-actions {
+                background: #07090D;
+                border-radius: 999px;
+                box-shadow: 0 16px 32px rgba(24, 27, 21, 0.20);
+                margin-top: auto;
+                min-height: 56px;
+                padding: 8px 9px 8px 16px;
+            }
+
+            .sb-route-actions > strong {
+                color: #F6F8EF;
+                font-size: 14px;
+            }
+
+            .sb-route-actions a {
+                background: rgba(246, 248, 239, 0.94);
+                border: 0;
+                border-radius: 999px;
+                color: #07090D;
+                min-width: 66px;
+                padding: 8px 9px;
+                text-align: center;
+            }
+
+            .sb-route-address {
+                border-top: 1px dashed rgba(7, 9, 13, 0.17);
+                margin-top: 9px;
+            }
+
+            .leaflet-tile {
+                filter: saturate(0.62) contrast(0.92) opacity(0.66);
+            }
+
+            @media (max-width: 430px) {
+                .sb-feed-slide {
+                    padding: 50px 5px 14px;
+                }
+
+                .sb-feed-card {
+                    height: calc(var(--feed-frame-height) - 70px);
+                }
+
+                .sb-route-map-stage {
+                    flex-basis: 198px;
+                    margin: 12px 12px 0;
+                    min-height: 198px;
+                }
+
+                .sb-route-detail {
+                    margin-top: -30px;
+                    padding: 15px;
+                }
+
+                .sb-route-journey strong {
+                    font-size: 40px;
+                }
+
+                .sb-route-station {
+                    border-radius: 20px;
+                    min-height: 62px;
+                }
+
+                .sb-route-station strong {
+                    font-size: 16px;
+                }
+
+                .sb-route-metrics > div {
+                    border-radius: 18px;
+                    min-height: 48px;
+                }
+            }
         </style>
     """.replace("__STATIONS_JSON__", payload_json)
     feed_html = (
@@ -2941,14 +3190,10 @@ def alt_navigasyon_ciz(konum_hazir: bool) -> None:
             icon=":material/route:",
             type="primary" if rota_aktif else "secondary",
             use_container_width=True,
+            on_click=rota_modunu_ac if konum_hazir else None,
         ):
             if not konum_hazir:
                 bildirim_goster(t("home.location_required"), basarili=False)
-            else:
-                st.session_state["rota_goster"] = True
-                st.session_state["bekleme_salonu_goster"] = False
-                st.session_state["account_panel_open"] = False
-                st.rerun()
 
     with hesap_col:
         if st.button(
