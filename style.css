@@ -925,6 +925,18 @@ p, span, label, .stMarkdown, .stCaption,
     text-transform: uppercase !important;
 }
 
+div.st-key-driving_profile_inputs {
+    margin: 0.75rem 0 1rem !important;
+}
+
+div.st-key-driving_profile_inputs div[data-testid="stHorizontalBlock"] {
+    gap: 0.75rem !important;
+}
+
+div.st-key-driving_profile_inputs div[data-testid="stNumberInput"] {
+    min-width: 0 !important;
+}
+
 .sb-entry-hero {
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.01));
