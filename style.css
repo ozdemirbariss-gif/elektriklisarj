@@ -905,6 +905,26 @@ p, span, label, .stMarkdown, .stCaption,
     letter-spacing: 0 !important;
 }
 
+.sb-catalog-heading {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    margin: 1.1rem 0 0.55rem !important;
+    padding: 0 !important;
+    scroll-margin-top: 18px;
+}
+
+.sb-catalog-heading .sb-kicker {
+    color: var(--sb-primary-deep) !important;
+    display: block;
+    font-family: var(--sb-font-display) !important;
+    font-size: 13px !important;
+    font-weight: 780 !important;
+    letter-spacing: 0 !important;
+    line-height: 1.1;
+    text-transform: uppercase !important;
+}
+
 .sb-entry-hero {
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.01));
